@@ -33,6 +33,12 @@ param imageTag string = 'latest'
 @description('Deploy Container Apps in this run')
 param deployContainerApps bool = true
 
+@description('Comma-separated explicit CORS origins allowed by backend API')
+param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
+
+@description('Comma-separated host suffixes allowed for CORS origins')
+param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -81,6 +87,8 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     containerImage: '${containerRegistry.outputs.acrLoginServer}/${backendImageName}:${imageTag}'
     acrName: containerRegistryName
     appInsightsConnectionString: appInsights.outputs.connectionString
+    corsAllowedOrigins: corsAllowedOrigins
+    corsAllowedOriginSuffixes: corsAllowedOriginSuffixes
     targetPort: 8080
     minReplicas: 1
     maxReplicas: 3

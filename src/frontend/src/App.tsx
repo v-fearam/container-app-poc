@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { appInsights } from './appInsights';
 import { runtimeConfig } from './runtimeConfig';
 
@@ -7,14 +7,55 @@ interface WeatherForecast {
   temperatureC: number;
   temperatureF: number;
   summary: string;
+  userRole: string; // Added: rol del usuario
+}
+
+interface UserInfo {
+  isAuthenticated: boolean;
+  email?: string;
+  name?: string;
+  userId?: string;
+  roles?: string[];
+  message?: string;
 }
 
 function App() {
   const [weather, setWeather] = useState<WeatherForecast[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [loadingUser, setLoadingUser] = useState(false);
 
   const apiUrl = runtimeConfig.apiUrl || import.meta.env.VITE_API_URL || '';
+
+  // Fetch user info from backend
+  const fetchUserInfo = async () => {
+    if (!apiUrl) return;
+    
+    setLoadingUser(true);
+    try {
+      const response = await fetch(`${apiUrl.replace(/\/$/, '')}/userinfo`, {
+        credentials: 'include' // Important for Easy Auth cookies
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUserInfo(data);
+        appInsights.trackEvent({ 
+          name: 'UserInfoFetched',
+          properties: { isAuthenticated: data.isAuthenticated }
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching user info:', err);
+      setUserInfo({
+        isAuthenticated: false,
+        message: 'Error al obtener información del usuario'
+      });
+    } finally {
+      setLoadingUser(false);
+    }
+  };
 
   const fetchWeather = async () => {
     setLoading(true);
@@ -30,7 +71,9 @@ function App() {
 
     try {
       const startTime = Date.now();
-      const response = await fetch(`${apiUrl.replace(/\/$/, '')}/weatherforecast`);
+      const response = await fetch(`${apiUrl.replace(/\/$/, '')}/weatherforecast`, {
+        credentials: 'include' // Important for Easy Auth cookies
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -50,22 +93,22 @@ function App() {
         properties: { recordCount: data.length },
       });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(`Error al obtener el clima: ${errorMessage}`);
+      
       appInsights.trackException({
         exception: err instanceof Error ? err : new Error(errorMessage),
         severityLevel: 3,
-      });
-
-      appInsights.trackEvent({
-        name: 'WeatherFetchFailed',
-        properties: { error: errorMessage },
       });
     } finally {
       setLoading(false);
     }
   };
+
+  // Fetch user info on component mount
+  useEffect(() => {
+    fetchUserInfo();
+  }, [apiUrl]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -81,9 +124,36 @@ function App() {
               </div>
               <h1 className="text-xl font-semibold text-slate-900">Camuzzi Weather</h1>
             </div>
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span>App Insights Connected</span>
+            
+            {/* User Info Display */}
+            <div className="flex items-center gap-4">
+              {loadingUser ? (
+                <div className="text-sm text-slate-500">Cargando usuario...</div>
+              ) : userInfo?.isAuthenticated ? (
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-slate-900">
+                      {userInfo.name || 'Usuario'}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      {userInfo.email || 'Email no disponible'}
+                    </div>
+                    {userInfo.roles && userInfo.roles.length > 0 && (
+                      <div className="text-xs text-blue-600 font-semibold">
+                        Rol: {userInfo.roles.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-amber-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>No autenticado</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -173,9 +243,20 @@ function App() {
                     <p className="text-sm text-slate-500 mb-3">
                       {forecast.temperatureF}°F
                     </p>
-                    <p className="text-sm font-medium text-slate-700 bg-slate-100 rounded-lg py-2 px-3">
+                    <p className="text-sm font-medium text-slate-700 bg-slate-100 rounded-lg py-2 px-3 mb-2">
                       {forecast.summary}
                     </p>
+                    {/* User Role Badge */}
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <p className="text-xs text-slate-500 mb-1">Consultado por:</p>
+                      <p className={`text-xs font-semibold px-2 py-1 rounded-md inline-block ${
+                        forecast.userRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                        forecast.userRole === 'User' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {forecast.userRole}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}

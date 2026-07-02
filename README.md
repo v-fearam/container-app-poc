@@ -66,6 +66,8 @@ container-app-poc/
 ```bash
 export AZURE_RESOURCE_GROUP="rg-far-container-app-easyauth"
 export AZURE_LOCATION="eastus2"
+export CORS_ALLOWED_ORIGINS="http://localhost:5173,http://localhost:3000"
+export CORS_ALLOWED_ORIGIN_SUFFIXES=".azurecontainerapps.io"
 ```
 
 ### Paso 2: Login a Azure
@@ -88,7 +90,11 @@ az group create \
 az deployment group create \
   --resource-group $AZURE_RESOURCE_GROUP \
   --template-file biceps/main.bicep \
-  --parameters location=$AZURE_LOCATION deployContainerApps=false
+  --parameters \
+    location=$AZURE_LOCATION \
+    corsAllowedOrigins="$CORS_ALLOWED_ORIGINS" \
+    corsAllowedOriginSuffixes="$CORS_ALLOWED_ORIGIN_SUFFIXES" \
+    deployContainerApps=false
 ```
 
 Esto crea:
@@ -128,7 +134,11 @@ az acr build \
 az deployment group create \
   --resource-group $AZURE_RESOURCE_GROUP \
   --template-file biceps/main.bicep \
-  --parameters location=$AZURE_LOCATION deployContainerApps=true
+  --parameters \
+    location=$AZURE_LOCATION \
+    corsAllowedOrigins="$CORS_ALLOWED_ORIGINS" \
+    corsAllowedOriginSuffixes="$CORS_ALLOWED_ORIGIN_SUFFIXES" \
+    deployContainerApps=true
 ```
 
 Esto crea:
@@ -136,6 +146,7 @@ Esto crea:
 - ✅ **Frontend Container App** (puerto 80, React + Nginx)
 - ✅ App Insights configurado en ambas apps
 - ✅ Managed Identity con permisos AcrPull
+- ✅ CORS habilitado para localhost y dominios `*.azurecontainerapps.io`
 
 ### Paso 7: Obtener URLs
 

@@ -19,6 +19,12 @@ param acrName string
 @secure()
 param appInsightsConnectionString string
 
+@description('Comma-separated explicit CORS origins allowed by backend API')
+param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
+
+@description('Comma-separated host suffixes allowed for CORS origins')
+param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
+
 @description('Target port for the container')
 param targetPort int = 8080
 
@@ -104,6 +110,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ASPNETCORE_ENVIRONMENT'
               value: 'Production'
+            }
+            {
+              name: 'CORS_ALLOWED_ORIGINS'
+              value: corsAllowedOrigins
+            }
+            {
+              name: 'CORS_ALLOWED_ORIGIN_SUFFIXES'
+              value: corsAllowedOriginSuffixes
             }
           ]
         }
