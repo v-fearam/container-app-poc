@@ -1,0 +1,20 @@
+{
+  "name": "container-app-poc",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "src/frontend",
+    "src/backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd src/frontend && npm run dev",
+    "dev:backend": "cd src/backend && dotnet watch run",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd src/frontend && npm run build",
+    "build:backend": "cd src/backend && dotnet publish -c Release -o ./publish"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
