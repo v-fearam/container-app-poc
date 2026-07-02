@@ -4,7 +4,7 @@ param location string
 @description('The name of the Log Analytics workspace')
 param workspaceName string
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2025-07-01' = {
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: workspaceName
   location: location
   properties: {
@@ -12,6 +12,11 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2025-07-01' = {
       name: 'PerGB2018'
     }
     retentionInDays: 30
+    features: {
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
   }
 }
 

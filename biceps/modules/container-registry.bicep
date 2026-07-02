@@ -12,14 +12,16 @@ param acrName string
 ])
 param acrSku string = 'Basic'
 
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
   location: location
   sku: {
     name: acrSku
   }
   properties: {
-    adminUserEnabled: true
+    adminUserEnabled: false
+    publicNetworkAccess: 'Enabled'
+    networkRuleBypassOptions: 'AzureServices'
   }
 }
 
