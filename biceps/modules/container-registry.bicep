@@ -12,7 +12,7 @@ param acrName string
 ])
 param acrSku string = 'Basic'
 
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' = {
   name: acrName
   location: location
   sku: {

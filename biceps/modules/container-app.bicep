@@ -16,11 +16,14 @@ param acrName string
 @description('Use ACR image instead of public image')
 param useAcrImage bool = false
 
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = if (useAcrImage) {
+@description('Application Insights connection string')
+param appInsightsConnectionString string = ''
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = if (useAcrImage) {
   name: acrName
 }
 
-resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
+resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
   name: containerAppName
   location: location
   identity: {
@@ -37,8 +40,14 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       }
       registries: useAcrImage ? [
         {
-          server: containerRegistry.properties.loginServer
+          server: containerRegistry!.properties.loginServer
           identity: 'system'
+        }
+      ] : []
+      secrets: !empty(appInsightsConnectionString) ? [
+        {
+          name: 'appinsights-connection-string'
+          value: appInsightsConnectionString
         }
       ] : []
     }
@@ -51,6 +60,12 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             cpu: json('0.25')
             memory: '0.5Gi'
           }
+          env: !empty(appInsightsConnectionString) ? [
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              secretRef: 'appinsights-connection-string'
+            }
+          ] : []
         }
       ]
       scale: {

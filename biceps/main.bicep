@@ -12,8 +12,11 @@ param containerAppName string = 'ca-easyauth-demo'
 @description('The name of the Container Registry')
 param containerRegistryName string = 'acr${uniqueString(resourceGroup().id)}'
 
-@description('The container image to deploy')
-param containerImage string = 'mcr.microsoft.com/dotnet/samples:aspnetapp'
+@description('The name of the image in ACR (without registry prefix)')
+param acrImageName string = 'aspnetapp'
+
+@description('The tag for the container image')
+param acrImageTag string = 'latest'
 
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
@@ -21,6 +24,16 @@ module logAnalytics 'modules/log-analytics.bicep' = {
   params: {
     location: location
     workspaceName: 'log-${environmentName}'
+  }
+}
+
+// Application Insights
+module appInsights 'modules/application-insights.bicep' = {
+  name: 'appinsights-deployment'
+  params: {
+    location: location
+    appInsightsName: 'appi-${containerAppName}'
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
   }
 }
 
@@ -50,9 +63,10 @@ module containerApp 'modules/container-app.bicep' = {
     location: location
     containerAppName: containerAppName
     environmentId: environment.outputs.environmentId
-    containerImage: containerImage
+    containerImage: '${containerRegistry.outputs.acrLoginServer}/${acrImageName}:${acrImageTag}'
     acrName: containerRegistryName
-    useAcrImage: false // Set to true when using ACR instead of public image
+    useAcrImage: true
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 
@@ -61,3 +75,5 @@ output containerAppUrl string = containerApp.outputs.containerAppUrl
 output containerAppFqdn string = containerApp.outputs.containerAppFqdn
 output acrLoginServer string = containerRegistry.outputs.acrLoginServer
 output acrName string = containerRegistry.outputs.acrName
+output appInsightsConnectionString string = appInsights.outputs.connectionString
+output appInsightsName string = appInsights.outputs.appInsightsName
