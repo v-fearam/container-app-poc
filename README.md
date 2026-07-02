@@ -146,6 +146,23 @@ requests
 
 ## Siguiente paso: Easy Auth con Entra ID
 
+📚 **Tutorial completo**: [Configurar Easy Auth paso a paso](docs/EASY-AUTH-TUTORIAL.md)
+
+El tutorial incluye:
+- ✅ Dos métodos de configuración (automático y manual)
+- ✅ Screenshots y comandos paso a paso
+- ✅ Configuración de roles y permisos
+- ✅ Integración con aplicación .NET
+- ✅ Troubleshooting de problemas comunes
+- ✅ Consultas KQL para monitorear autenticación
+
+**Resumen rápido del Método Automático**:
+1. Container App → Security → Authentication → Add identity provider
+2. Seleccionar "Microsoft" y dejar "Create new app registration"
+3. Configurar "Require authentication"
+4. Click en "Add"
+5. ✅ ¡Listo! Tu app ahora requiere autenticación con Microsoft/Azure AD
+
 Documentación de referencia: [Authentication with Microsoft Entra ID](https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra)
 
 ## Instrumentación de Aplicación .NET para Application Insights
