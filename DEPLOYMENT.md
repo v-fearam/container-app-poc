@@ -1,36 +1,313 @@
 # Guía de Despliegue - Container App POC
 
-Esta guía detalla cómo desplegar la aplicación completa (Frontend + Backend) a Azure Container Apps.
+Esta guía detalla **paso a paso** cómo desplegar la aplicación completa (Frontend + Backend) a Azure Container Apps usando WSL y Azure CLI.
 
 ## 📋 Pre-requisitos
 
+- ✅ WSL (Windows Subsystem for Linux) o Linux
 - ✅ Docker Desktop corriendo
-- ✅ Azure CLI instalado y autenticado (`az login`)
+- ✅ Azure CLI instalado y autenticado
 - ✅ Subscription de Azure activa
 
-## ⚙️ Configuración Inicial
+## 🚀 Despliegue Paso a Paso
 
-Configura las variables de ambiente para tu deployment:
+### Paso 1: Configurar Variables de Ambiente
 
-```powershell
-# Copiar archivo de ejemplo
-copy .env.example .env
+Abre tu terminal WSL y configura las variables:
 
-# Configurar variables (o usar los valores por defecto)
-$env:AZURE_RESOURCE_GROUP = "rg-far-container-app-easyauth"
-$env:AZURE_LOCATION = "eastus2"
+```bash
+export AZURE_RESOURCE_GROUP="rg-far-container-app-easyauth"
+export AZURE_LOCATION="eastus2"
 ```
 
-## 🚀 Despliegue Completo (Opción 1: Script Automatizado)
+**Nota**: Puedes cambiar estos valores según tus necesidades.
 
-El método más rápido es usar el script de despliegue automatizado:
+### Paso 2: Login a Azure
 
-```powershell
-# 1. Asegúrate de estar logueado en Azure
+```bash
+# Login a Azure CLI
 az login
 
-# 2. Ejecuta el script de despliegue con las variables configuradas
-.\scripts\deploy-to-azure.ps1 -ResourceGroup $env:AZURE_RESOURCE_GROUP -Location $env:AZURE_LOCATION
+# Verificar tu subscription actual
+az account show --output table
+
+# (Opcional) Si tienes múltiples subscriptions, selecciona una
+az account list --output table
+az account set --subscription "TU_SUBSCRIPTION_ID"
+```
+
+### Paso 3: Crear Resource Group
+
+```bash
+az group create \
+  --name $AZURE_RESOURCE_GROUP \
+  --location $AZURE_LOCATION
+```
+
+✅ Esto crea el contenedor lógico para todos tus recursos.
+
+### Paso 4: Desplegar Infraestructura Base
+
+```bash
+az deployment group create \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --template-file biceps/main.bicep \
+  --parameters location=$AZURE_LOCATION deployContainerApps=false
+```
+
+**¿Qué despliega este comando?**
+- ✅ Azure Container Registry (ACR) - para almacenar tus imágenes Docker
+- ✅ Log Analytics Workspace - para logs centralizados
+- ✅ Application Insights - para telemetría y monitoreo
+- ✅ Container App Environment - el ambiente donde correrán tus apps
+
+⏱️ **Tiempo estimado**: 3-5 minutos
+
+### Paso 5: Obtener el Nombre del ACR
+
+```bash
+ACR_NAME=$(az deployment group show \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
+  --query 'properties.outputs.acrName.value' \
+  --output tsv)
+
+echo "📦 ACR Name: $ACR_NAME"
+```
+
+### Paso 6: Construir las Imágenes Docker
+
+```bash
+# Construir imagen del backend (.NET 10 Minimal API)
+docker build \
+  -t camuzzi-weather-backend:latest \
+  -f src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+# Construir imagen del frontend (React + Nginx)
+docker build \
+  -t camuzzi-weather-frontend:latest \
+  -f src/frontend/Dockerfile \
+  src/frontend
+```
+
+**¿Qué hace cada build?**
+- **Backend**: Compila .NET 10 → runtime optimizado (multi-stage)
+- **Frontend**: Build de Vite → servidor Nginx Alpine (multi-stage)
+
+⏱️ **Tiempo estimado**: 2-4 minutos por imagen
+
+### Paso 7: Login al ACR
+
+```bash
+az acr login --name $ACR_NAME
+```
+
+✅ Esto autentica tu Docker local con tu Azure Container Registry.
+
+### Paso 8: Tagear las Imágenes
+
+```bash
+# Tagear backend
+docker tag camuzzi-weather-backend:latest \
+  $ACR_NAME.azurecr.io/camuzzi-weather-backend:latest
+
+# Tagear frontend
+docker tag camuzzi-weather-frontend:latest \
+  $ACR_NAME.azurecr.io/camuzzi-weather-frontend:latest
+```
+
+### Paso 9: Push de las Imágenes al ACR
+
+```bash
+# Push backend
+docker push $ACR_NAME.azurecr.io/camuzzi-weather-backend:latest
+
+# Push frontend
+docker push $ACR_NAME.azurecr.io/camuzzi-weather-frontend:latest
+```
+
+⏱️ **Tiempo estimado**: 2-3 minutos (depende de tu conexión)
+
+### Paso 10: Desplegar las Container Apps
+
+```bash
+az deployment group create \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --template-file biceps/main.bicep \
+  --parameters location=$AZURE_LOCATION deployContainerApps=true
+```
+
+**¿Qué despliega este comando?**
+- ✅ **Backend Container App** (`ca-backend-weather`)
+  - Puerto: 8080
+  - CPU: 0.5 cores, RAM: 1 GB
+  - Auto-scaling: 1-3 replicas
+  - App Insights configurado
+  
+- ✅ **Frontend Container App** (`ca-frontend-weather`)
+  - Puerto: 80
+  - CPU: 0.25 cores, RAM: 0.5 GB
+  - Auto-scaling: 1-5 replicas
+  - Variable `VITE_API_URL` apuntando al backend
+  - App Insights configurado
+
+- ✅ **Managed Identity** con permisos de `AcrPull` para ambas apps
+
+⏱️ **Tiempo estimado**: 2-3 minutos
+
+### Paso 11: Obtener las URLs de tu Aplicación
+
+```bash
+# URL del Frontend
+FRONTEND_URL=$(az deployment group show \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
+  --query 'properties.outputs.frontendAppUrl.value' \
+  --output tsv)
+
+# URL del Backend
+BACKEND_URL=$(az deployment group show \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
+  --query 'properties.outputs.backendAppUrl.value' \
+  --output tsv)
+
+echo ""
+echo "🎉 Deployment Complete!"
+echo ""
+echo "🌐 Frontend: $FRONTEND_URL"
+echo "🌐 Backend:  $BACKEND_URL"
+```
+
+### Paso 12: Verificar que Todo Funciona
+
+```bash
+# Probar el backend
+curl $BACKEND_URL/weatherforecast
+
+# Abrir el frontend en tu browser
+echo "Abre en tu navegador: $FRONTEND_URL"
+```
+
+---
+
+## 🔄 Actualizar una Aplicación Existente
+
+Si ya desplegaste y solo quieres actualizar el código:
+
+### Actualizar Backend
+
+```bash
+# 1. Hacer tus cambios en src/backend/WeatherApi/
+
+# 2. Reconstruir la imagen
+docker build -t camuzzi-weather-backend:latest \
+  -f src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+# 3. Tagear y subir
+docker tag camuzzi-weather-backend:latest \
+  $ACR_NAME.azurecr.io/camuzzi-weather-backend:latest
+docker push $ACR_NAME.azurecr.io/camuzzi-weather-backend:latest
+
+# 4. Obtener el nombre del Container App
+BACKEND_APP=$(az containerapp list \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --query "[?contains(name, 'backend')].name" \
+  --output tsv)
+
+# 5. Crear nueva revisión (restart para que tome la nueva imagen)
+az containerapp revision restart \
+  --name $BACKEND_APP \
+  --resource-group $AZURE_RESOURCE_GROUP
+```
+
+### Actualizar Frontend
+
+```bash
+# 1. Hacer tus cambios en src/frontend/
+
+# 2. Reconstruir la imagen
+docker build -t camuzzi-weather-frontend:latest \
+  -f src/frontend/Dockerfile \
+  src/frontend
+
+# 3. Tagear y subir
+docker tag camuzzi-weather-frontend:latest \
+  $ACR_NAME.azurecr.io/camuzzi-weather-frontend:latest
+docker push $ACR_NAME.azurecr.io/camuzzi-weather-frontend:latest
+
+# 4. Obtener el nombre del Container App
+FRONTEND_APP=$(az containerapp list \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --query "[?contains(name, 'frontend')].name" \
+  --output tsv)
+
+# 5. Crear nueva revisión
+az containerapp revision restart \
+  --name $FRONTEND_APP \
+  --resource-group $AZURE_RESOURCE_GROUP
+```
+
+---
+
+## 📊 Monitoreo y Troubleshooting
+
+### Ver Logs en Tiempo Real
+
+```bash
+# Logs del backend
+az containerapp logs show \
+  --name ca-backend-weather \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --follow
+
+# Logs del frontend
+az containerapp logs show \
+  --name ca-frontend-weather \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --follow
+```
+
+### Ver Métricas en Application Insights
+
+```bash
+# Queries de ejemplo en Log Analytics
+az monitor log-analytics query \
+  --workspace $(az deployment group show \
+    --resource-group $AZURE_RESOURCE_GROUP \
+    --name main \
+    --query 'properties.outputs.logAnalyticsWorkspaceId.value' -o tsv) \
+  --analytics-query "requests | where timestamp > ago(1h) | summarize count() by resultCode"
+```
+
+### Verificar Estado de las Apps
+
+```bash
+# Ver todas las container apps
+az containerapp list \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --output table
+
+# Detalles de una app específica
+az containerapp show \
+  --name ca-backend-weather \
+  --resource-group $AZURE_RESOURCE_GROUP
+```
+
+---
+
+## 🗑️ Limpiar Recursos
+
+Cuando termines de probar, puedes eliminar todo:
+
+```bash
+# ⚠️ CUIDADO: Esto elimina TODOS los recursos del resource group
+az group delete \
+  --name $AZURE_RESOURCE_GROUP \
+  --yes \
+  --no-wait
 ```
 
 Este script hace TODO automáticamente:
