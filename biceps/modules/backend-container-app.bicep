@@ -16,6 +16,7 @@ param containerImage string
 param acrName string
 
 @description('Application Insights Connection String')
+@secure()
 param appInsightsConnectionString string
 
 @description('Target port for the container')
@@ -33,12 +34,37 @@ param cpu string = '0.5'
 @description('Memory size')
 param memory string = '1.0Gi'
 
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = {
+  name: acrName
+}
+
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'uami-${containerAppName}'
+  location: location
+}
+
+resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(userAssignedIdentity.id, containerRegistry.id, 'AcrPull')
+  scope: containerRegistry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentity.id}': {}
+    }
   }
+  dependsOn: [
+    acrPullRole
+  ]
   properties: {
     environmentId: environmentId
     configuration: {
@@ -51,7 +77,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [
         {
           server: '${acrName}.azurecr.io'
-          identity: 'system'
+          identity: userAssignedIdentity.id
         }
       ]
       secrets: [
@@ -97,17 +123,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         ]
       }
     }
-  }
-}
-
-// Assign AcrPull role to Container App's managed identity
-resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerApp.id, 'acrPull')
-  scope: resourceGroup()
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 

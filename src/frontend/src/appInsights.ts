@@ -1,8 +1,9 @@
 import { ApplicationInsights } from '@microsoft/applicationinsights-web';
 import { ReactPlugin } from '@microsoft/applicationinsights-react-js';
+import { runtimeConfig } from './runtimeConfig';
 
 const reactPlugin = new ReactPlugin();
-const connectionString = import.meta.env.VITE_APPINSIGHTS_CONNECTION_STRING || '';
+const connectionString = runtimeConfig.appInsightsConnectionString || import.meta.env.VITE_APPINSIGHTS_CONNECTION_STRING || '';
 
 let appInsights: ApplicationInsights;
 

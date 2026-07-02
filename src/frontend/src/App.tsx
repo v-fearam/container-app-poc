@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { appInsights } from './appInsights';
+import { runtimeConfig } from './runtimeConfig';
 
 interface WeatherForecast {
   date: string;
@@ -13,17 +14,23 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const apiUrl = runtimeConfig.apiUrl || import.meta.env.VITE_API_URL || '';
 
   const fetchWeather = async () => {
     setLoading(true);
     setError(null);
+
+    if (!apiUrl) {
+      setError('API URL no configurada. Define API_URL (runtime) o VITE_API_URL (build).');
+      setLoading(false);
+      return;
+    }
     
     appInsights.trackEvent({ name: 'FetchWeatherButtonClicked' });
 
     try {
       const startTime = Date.now();
-      const response = await fetch(`${apiUrl}/weatherforecast`);
+      const response = await fetch(`${apiUrl.replace(/\/$/, '')}/weatherforecast`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

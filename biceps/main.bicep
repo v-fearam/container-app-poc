@@ -3,17 +3,23 @@ targetScope = 'resourceGroup'
 @description('The location for all resources')
 param location string = resourceGroup().location
 
+@description('Workload short name used in resource names')
+param workloadName string = 'weather'
+
+@description('Environment short name used in resource names')
+param environmentShortName string = 'dev'
+
 @description('The name of the Container App Environment')
-param environmentName string = 'cae-easyauth-${uniqueString(resourceGroup().id)}'
+param environmentName string = 'cae-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
 
 @description('The name of the Backend Container App')
-param backendAppName string = 'ca-backend-weather'
+param backendAppName string = 'ca-${workloadName}-be-${environmentShortName}'
 
 @description('The name of the Frontend Container App')
-param frontendAppName string = 'ca-frontend-weather'
+param frontendAppName string = 'ca-${workloadName}-fe-${environmentShortName}'
 
 @description('The name of the Container Registry')
-param containerRegistryName string = 'acr${uniqueString(resourceGroup().id)}'
+param containerRegistryName string = 'acr${take(replace(toLower(workloadName), '-', ''), 12)}${take(uniqueString(resourceGroup().id), 8)}'
 
 @description('The backend image name in ACR')
 param backendImageName string = 'camuzzi-weather-backend'
@@ -32,7 +38,7 @@ module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
   params: {
     location: location
-    workspaceName: 'log-${environmentName}'
+    workspaceName: 'law-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
   }
 }
 
@@ -41,7 +47,7 @@ module appInsights 'modules/application-insights.bicep' = {
   name: 'appinsights-deployment'
   params: {
     location: location
-    appInsightsName: 'appi-camuzzi-weather'
+    appInsightsName: 'appi-${workloadName}-${environmentShortName}'
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
   }
 }
@@ -93,7 +99,7 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
     containerImage: '${containerRegistry.outputs.acrLoginServer}/${frontendImageName}:${imageTag}'
     acrName: containerRegistryName
     appInsightsConnectionString: appInsights.outputs.connectionString
-    backendApiUrl: deployContainerApps ? backendApp.outputs.containerAppUrl : ''
+    backendApiUrl: deployContainerApps ? backendApp!.outputs.containerAppUrl : ''
     targetPort: 80
     minReplicas: 1
     maxReplicas: 5
@@ -103,8 +109,8 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
 }
 
 // Outputs
-output backendAppUrl string = deployContainerApps ? backendApp.outputs.containerAppUrl : ''
-output frontendAppUrl string = deployContainerApps ? frontendApp.outputs.containerAppUrl : ''
+output backendAppUrl string = deployContainerApps ? backendApp!.outputs.containerAppUrl : ''
+output frontendAppUrl string = deployContainerApps ? frontendApp!.outputs.containerAppUrl : ''
 output acrLoginServer string = containerRegistry.outputs.acrLoginServer
 output acrName string = containerRegistry.outputs.acrName
 output appInsightsConnectionString string = appInsights.outputs.connectionString
