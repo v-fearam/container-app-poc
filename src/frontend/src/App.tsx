@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { appInsights } from './appInsights';
-import './App.css';
 
 interface WeatherForecast {
   date: string;
@@ -20,7 +19,6 @@ function App() {
     setLoading(true);
     setError(null);
     
-    // Track custom event
     appInsights.trackEvent({ name: 'FetchWeatherButtonClicked' });
 
     try {
@@ -34,7 +32,6 @@ function App() {
       const data = await response.json();
       setWeather(data);
 
-      // Track successful API call duration
       const duration = Date.now() - startTime;
       appInsights.trackMetric({
         name: 'WeatherAPICallDuration',
@@ -49,10 +46,9 @@ function App() {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
 
-      // Track exception
       appInsights.trackException({
         exception: err instanceof Error ? err : new Error(errorMessage),
-        severityLevel: 3, // Error
+        severityLevel: 3,
       });
 
       appInsights.trackEvent({
@@ -65,52 +61,191 @@ function App() {
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>🌤️ Skill Camuzzi - Weather App</h1>
-        <p>Bienvenido a la aplicación de clima con telemetría end-to-end</p>
-        
-        <button 
-          onClick={fetchWeather}
-          disabled={loading}
-          className="weather-button"
-        >
-          {loading ? 'Cargando...' : 'Obtener Clima'}
-        </button>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Header/Navbar */}
+      <nav className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+              </div>
+              <h1 className="text-xl font-semibold text-slate-900">Camuzzi Weather</h1>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span>App Insights Connected</span>
+            </div>
+          </div>
+        </div>
+      </nav>
 
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Hero Section */}
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-bold text-slate-900 mb-4">
+            Pronóstico del Tiempo
+          </h2>
+          <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+            Consulta el clima en tiempo real con telemetría distribuida end-to-end
+          </p>
+        </div>
+
+        {/* Action Button */}
+        <div className="flex justify-center mb-12">
+          <button
+            onClick={fetchWeather}
+            disabled={loading}
+            className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Cargando...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+                Obtener Clima
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Error State */}
         {error && (
-          <div className="error">
-            <h3>❌ Error</h3>
-            <p>{error}</p>
+          <div className="max-w-2xl mx-auto mb-8 bg-red-50 border border-red-200 rounded-xl p-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 className="font-semibold text-red-900 mb-1">Error al obtener datos</h3>
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
           </div>
         )}
 
+        {/* Weather Cards */}
         {weather && (
-          <div className="weather-container">
-            <h2>📊 Pronóstico del Tiempo</h2>
-            <div className="weather-grid">
+          <div className="space-y-6">
+            <h3 className="text-2xl font-bold text-slate-900 text-center">
+              Próximos 5 Días
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               {weather.map((forecast, index) => (
-                <div key={index} className="weather-card">
-                  <h3>{new Date(forecast.date).toLocaleDateString('es-AR')}</h3>
-                  <p className="temperature">{forecast.temperatureC}°C</p>
-                  <p className="temperature-f">({forecast.temperatureF}°F)</p>
-                  <p className="summary">{forecast.summary}</p>
+                <div
+                  key={index}
+                  className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6 hover:shadow-xl hover:scale-105 transition-all duration-200 cursor-pointer"
+                >
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-slate-600 mb-2">
+                      {new Date(forecast.date).toLocaleDateString('es-AR', { 
+                        weekday: 'short', 
+                        day: 'numeric', 
+                        month: 'short' 
+                      })}
+                    </p>
+                    <div className="my-4">
+                      <svg className="w-16 h-16 mx-auto text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                      </svg>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-900 mb-1">
+                      {forecast.temperatureC}°
+                    </p>
+                    <p className="text-sm text-slate-500 mb-3">
+                      {forecast.temperatureF}°F
+                    </p>
+                    <p className="text-sm font-medium text-slate-700 bg-slate-100 rounded-lg py-2 px-3">
+                      {forecast.summary}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        <div className="info-section">
-          <h3>📡 Telemetría Configurada</h3>
-          <ul>
-            <li>✅ Application Insights habilitado</li>
-            <li>✅ Correlación CORS activada</li>
-            <li>✅ Tracking de requests y responses</li>
-            <li>✅ Distributed tracing end-to-end</li>
-          </ul>
+        {/* Info Cards */}
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900">Telemetría Activa</h3>
+            </div>
+            <ul className="space-y-2">
+              <li className="flex items-center gap-2 text-slate-700">
+                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>Application Insights habilitado</span>
+              </li>
+              <li className="flex items-center gap-2 text-slate-700">
+                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>Correlación CORS activada</span>
+              </li>
+              <li className="flex items-center gap-2 text-slate-700">
+                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>Distributed tracing end-to-end</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900">Tech Stack</h3>
+            </div>
+            <ul className="space-y-2">
+              <li className="flex items-center gap-2 text-slate-700">
+                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                <span>Frontend: React 18 + TypeScript + Vite</span>
+              </li>
+              <li className="flex items-center gap-2 text-slate-700">
+                <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                <span>Backend: .NET 10 Minimal API</span>
+              </li>
+              <li className="flex items-center gap-2 text-slate-700">
+                <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
+                <span>Monitoring: Azure Application Insights</span>
+              </li>
+            </ul>
+          </div>
         </div>
-      </header>
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-20 border-t border-gray-200 bg-white/50 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center text-slate-600">
+            <p className="text-sm">
+              © 2026 Camuzzi - Aplicación de demostración con Azure Container Apps
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

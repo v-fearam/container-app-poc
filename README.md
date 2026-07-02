@@ -1,32 +1,98 @@
-# Container App POC - Easy Auth
+# Container App POC - Easy Auth + Full-Stack Monorepo
 
-Proyecto de prueba de concepto para implementar y probar Easy Authentication en Azure Container Apps.
+Proyecto de prueba de concepto para implementar y probar Easy Authentication en Azure Container Apps con una aplicación full-stack moderna.
 
-## Objetivo
+## 🎯 Objetivo
 
-Explorar y validar la configuración de Easy Auth (Azure App Service Authentication/Authorization) en Azure Container Apps para proteger aplicaciones mediante autenticación integrada.
+Explorar y validar la configuración de Easy Auth (Azure App Service Authentication/Authorization) en Azure Container Apps con una aplicación React + .NET 10 y telemetría completa.
 
-## Estado
+## 📦 Estado Actual
 
-🚧 En desarrollo inicial
+✅ **Aplicación Full-Stack Completa**
+- Frontend: React 18 + TypeScript + Vite + Tailwind CSS
+- Backend: .NET 10 Minimal API con WeatherForecast
+- Application Insights configurado con correlación end-to-end
+- Dockerfiles multi-stage optimizados para producción
 
-📊 **Application Insights configurado** - Ver [guía de monitoreo](docs/APPLICATION-INSIGHTS.md)
+## 🏗️ Estructura del Proyecto
 
-## Tecnologías
+```
+container-app-poc/
+├── src/
+│   ├── frontend/              # React + TypeScript + Vite
+│   │   ├── src/
+│   │   │   ├── App.tsx       # UI moderna con Tailwind
+│   │   │   ├── appInsights.ts # Configuración de telemetría
+│   │   │   └── main.tsx
+│   │   ├── Dockerfile        # Multi-stage con Nginx
+│   │   └── nginx.conf        # Config optimizada para SPA
+│   └── backend/WeatherApi/   # .NET 10 Minimal API
+│       ├── Program.cs        # API con App Insights
+│       └── Dockerfile        # Multi-stage optimizado
+├── biceps/                   # Infraestructura Azure
+├── docs/                     # Documentación
+├── scripts/                  # Scripts de automatización
+├── docker-compose.yml        # Desarrollo local
+└── DOCKER.md                 # Guía completa de Docker
+```
 
-- Azure Container Apps
-- Azure Container Registry (ACR)
-- Easy Auth (Azure App Service Authentication)
-- .NET Sample App
+## 🚀 Quick Start
 
-## Arquitectura
+### Desarrollo Local (sin Docker)
 
-La infraestructura incluye:
-- **Container App Environment**: Entorno administrado para Container Apps
-- **Container App**: Aplicación de ejemplo .NET (ASP.NET Core)
-- **Azure Container Registry**: Registro privado para imágenes de contenedor
-- **Log Analytics Workspace**: Para logging y monitoreo del sistema
-- **Application Insights**: Para telemetría de aplicación, trazas distribuidas y análisis de rendimiento
+```powershell
+# Backend (.NET 10)
+cd src/backend/WeatherApi
+dotnet run
+
+# Frontend (React + Vite)
+cd src/frontend
+npm install
+npm run dev
+```
+
+Accede a:
+- Frontend: http://localhost:5173
+- Backend: http://localhost:5000
+
+### Desarrollo con Docker
+
+```powershell
+# Construir imágenes
+.\scripts\build-images.ps1
+
+# Ejecutar localmente
+.\scripts\run-local.ps1
+
+# O con docker-compose
+docker-compose up --build
+```
+
+Accede a:
+- Frontend: http://localhost:3000
+- Backend: http://localhost:5000
+
+Ver [DOCKER.md](DOCKER.md) para guía completa de Docker.
+
+## 🎨 Stack Tecnológico
+
+### Frontend
+- **Framework**: React 18 + TypeScript
+- **Build**: Vite 8
+- **Styling**: Tailwind CSS 3
+- **Telemetría**: @microsoft/applicationinsights-web
+- **Servidor**: Nginx (Alpine)
+
+### Backend
+- **Framework**: .NET 10 Minimal API
+- **Telemetría**: Azure.Monitor.OpenTelemetry.AspNetCore
+- **Runtime**: ASP.NET Core 10
+
+### Infraestructura
+- **Compute**: Azure Container Apps
+- **Registry**: Azure Container Registry (ACR)
+- **Monitoring**: Application Insights + Log Analytics
+- **Auth**: Easy Auth (Entra ID)
 
 ## Despliegue
 

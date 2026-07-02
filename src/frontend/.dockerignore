@@ -1,0 +1,6 @@
+# Ignore node_modules in Docker build
+node_modules
+npm-debug.log
+dist
+.env.local
+.env.*.local

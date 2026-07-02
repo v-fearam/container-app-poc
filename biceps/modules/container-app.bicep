@@ -24,12 +24,34 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-pr
   name: acrName
 }
 
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (useAcrImage) {
+  name: 'uami-${containerAppName}'
+  location: location
+}
+
+// Assign AcrPull role to the user-assigned identity before creating the Container App.
+resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (useAcrImage) {
+  name: guid(userAssignedIdentity.id, containerRegistry.id, 'AcrPull')
+  scope: containerRegistry
+  properties: {
+    principalId: userAssignedIdentity!.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull role
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
   name: containerAppName
   location: location
   identity: {
-    type: 'SystemAssigned'
+    type: useAcrImage ? 'UserAssigned' : 'SystemAssigned'
+    userAssignedIdentities: useAcrImage ? {
+      '${userAssignedIdentity.id}': {}
+    } : null
   }
+  dependsOn: useAcrImage ? [
+    acrPullRole
+  ] : []
   properties: {
     managedEnvironmentId: environmentId
     configuration: {
@@ -42,7 +64,7 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
       registries: useAcrImage ? [
         {
           server: containerRegistry!.properties.loginServer
-          identity: 'system'
+          identity: userAssignedIdentity!.id
         }
       ] : []
       secrets: !empty(appInsightsConnectionString) ? [
@@ -77,18 +99,7 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
   }
 }
 
-// Assign AcrPull role to the Container App's managed identity if using ACR
-resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (useAcrImage) {
-  name: guid(containerApp.id, containerRegistry.id, 'AcrPull')
-  scope: containerRegistry
-  properties: {
-    principalId: containerApp.identity.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull role
-    principalType: 'ServicePrincipal'
-  }
-}
-
 output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output containerAppFqdn string = containerApp.properties.configuration.ingress.fqdn
 output containerAppId string = containerApp.id
-output containerAppPrincipalId string = containerApp.identity.principalId
+output containerAppPrincipalId string = useAcrImage ? userAssignedIdentity!.properties.principalId : containerApp.identity.principalId
