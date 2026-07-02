@@ -1,4 +1,4 @@
-# Guía de Despliegue - Camuzzi Weather App
+# Guía de Despliegue - Container App POC
 
 Esta guía detalla cómo desplegar la aplicación completa (Frontend + Backend) a Azure Container Apps.
 
@@ -8,6 +8,19 @@ Esta guía detalla cómo desplegar la aplicación completa (Frontend + Backend) 
 - ✅ Azure CLI instalado y autenticado (`az login`)
 - ✅ Subscription de Azure activa
 
+## ⚙️ Configuración Inicial
+
+Configura las variables de ambiente para tu deployment:
+
+```powershell
+# Copiar archivo de ejemplo
+copy .env.example .env
+
+# Configurar variables (o usar los valores por defecto)
+$env:AZURE_RESOURCE_GROUP = "rg-far-container-app-easyauth"
+$env:AZURE_LOCATION = "eastus2"
+```
+
 ## 🚀 Despliegue Completo (Opción 1: Script Automatizado)
 
 El método más rápido es usar el script de despliegue automatizado:
@@ -16,8 +29,8 @@ El método más rápido es usar el script de despliegue automatizado:
 # 1. Asegúrate de estar logueado en Azure
 az login
 
-# 2. Ejecuta el script de despliegue
-.\scripts\deploy-to-azure.ps1 -ResourceGroup "rg-camuzzi-weather" -Location "eastus2"
+# 2. Ejecuta el script de despliegue con las variables configuradas
+.\scripts\deploy-to-azure.ps1 -ResourceGroup $env:AZURE_RESOURCE_GROUP -Location $env:AZURE_LOCATION
 ```
 
 Este script hace TODO automáticamente:
@@ -50,17 +63,17 @@ az login
 # Configurar subscription (si tienes múltiples)
 az account set --subscription "TU_SUBSCRIPTION_ID"
 
-# Variables
-$RESOURCE_GROUP = "rg-camuzzi-weather"
-$LOCATION = "eastus2"
+# Variables de ambiente
+$env:AZURE_RESOURCE_GROUP = "rg-far-container-app-easyauth"
+$env:AZURE_LOCATION = "eastus2"
 ```
 
 ### Paso 2: Crear Resource Group
 
 ```powershell
 az group create `
-  --name $RESOURCE_GROUP `
-  --location $LOCATION
+  --name $env:AZURE_RESOURCE_GROUP `
+  --location $env:AZURE_LOCATION
 ```
 
 ### Paso 3: Desplegar Infraestructura Base
@@ -68,9 +81,9 @@ az group create `
 ```powershell
 # Desplegar sin Container Apps primero
 az deployment group create `
-  --resource-group $RESOURCE_GROUP `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
   --template-file biceps/main.bicep `
-  --parameters location=$LOCATION deployContainerApps=false
+  --parameters location=$env:AZURE_LOCATION deployContainerApps=false
 ```
 
 Esto crea:
@@ -83,7 +96,7 @@ Esto crea:
 
 ```powershell
 $ACR_NAME = az deployment group show `
-  --resource-group $RESOURCE_GROUP `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
   --name main `
   --query 'properties.outputs.acrName.value' `
   --output tsv
@@ -114,9 +127,9 @@ Esto construye:
 ```powershell
 # Ahora sí, desplegar los Container Apps
 az deployment group create `
-  --resource-group $RESOURCE_GROUP `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
   --template-file biceps/main.bicep `
-  --parameters location=$LOCATION deployContainerApps=true
+  --parameters location=$env:AZURE_LOCATION deployContainerApps=true
 ```
 
 Esto crea:
@@ -138,14 +151,14 @@ Esto crea:
 ```powershell
 # URL del Frontend
 $FRONTEND_URL = az deployment group show `
-  --resource-group $RESOURCE_GROUP `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
   --name main `
   --query 'properties.outputs.frontendAppUrl.value' `
   --output tsv
 
 # URL del Backend
 $BACKEND_URL = az deployment group show `
-  --resource-group $RESOURCE_GROUP `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
   --name main `
   --query 'properties.outputs.backendAppUrl.value' `
   --output tsv

@@ -134,14 +134,29 @@ Ver [DOCKER.md](DOCKER.md) para guía completa de Docker.
 
 ## ☁️ Despliegue a Azure Container Apps
 
+### Configuración Inicial
+
+1. **Configurar variables de ambiente**:
+   ```powershell
+   # Copiar el archivo de ejemplo
+   copy .env.example .env
+   
+   # Editar .env con tus valores (o usar los valores por defecto):
+   # AZURE_RESOURCE_GROUP=rg-far-container-app-easyauth
+   # AZURE_LOCATION=eastus2
+   ```
+
 ### Opción 1: Script Automatizado (Recomendado)
 
 ```powershell
 # Login a Azure
 az login
 
-# Desplegar todo en un comando
-.\scripts\deploy-to-azure.ps1 -ResourceGroup "rg-camuzzi-weather" -Location "eastus2"
+# Cargar variables de ambiente y desplegar
+$env:AZURE_RESOURCE_GROUP = "rg-far-container-app-easyauth"
+$env:AZURE_LOCATION = "eastus2"
+
+.\scripts\deploy-to-azure.ps1 -ResourceGroup $env:AZURE_RESOURCE_GROUP -Location $env:AZURE_LOCATION
 ```
 
 Este script despliega:
@@ -156,25 +171,31 @@ Ver **[DEPLOYMENT.md](DEPLOYMENT.md)** para guía detallada paso a paso.
 
 **Resumen rápido:**
 
-1. **Desplegar infraestructura**:
+1. **Configurar variables**:
    ```powershell
-   az deployment group create \
-     --resource-group rg-camuzzi-weather \
-     --template-file biceps/main.bicep \
+   $env:AZURE_RESOURCE_GROUP = "rg-far-container-app-easyauth"
+   $env:AZURE_LOCATION = "eastus2"
+   ```
+
+2. **Desplegar infraestructura**:
+   ```powershell
+   az deployment group create `
+     --resource-group $env:AZURE_RESOURCE_GROUP `
+     --template-file biceps/main.bicep `
      --parameters deployContainerApps=false
    ```
 
-2. **Construir y subir imágenes**:
+3. **Construir y subir imágenes**:
    ```powershell
    .\scripts\build-images.ps1
    .\scripts\push-to-acr.ps1 -AcrName <nombre-del-acr>
    ```
 
-3. **Desplegar Container Apps**:
+4. **Desplegar Container Apps**:
    ```powershell
-   az deployment group create \
-     --resource-group rg-camuzzi-weather \
-     --template-file biceps/main.bicep \
+   az deployment group create `
+     --resource-group $env:AZURE_RESOURCE_GROUP `
+     --template-file biceps/main.bicep `
      --parameters deployContainerApps=true
    ```
 
