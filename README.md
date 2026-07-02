@@ -58,12 +58,12 @@ La infraestructura incluye:
      --location $LOCATION
    ```
 
-4. **Desplegar la infraestructura con Bicep** *(crea el ACR, entre otros recursos)*
+4. **Desplegar infraestructura base (sin Container App)**
    ```bash
    az deployment group create \
      --resource-group $RESOURCE_GROUP \
      --template-file biceps/main.bicep \
-     --parameters location=$LOCATION
+       --parameters location=$LOCATION deployContainerApp=false
    ```
 
 5. **Importar la imagen al ACR privado** *(sin necesidad de Docker instalado localmente)*
@@ -80,12 +80,12 @@ La infraestructura incluye:
      --image aspnetapp:latest
    ```
 
-6. **Redesplegar para que Container App use la imagen del ACR**
+6. **Desplegar Container App (ya con imagen en ACR)**
    ```bash
    az deployment group create \
      --resource-group $RESOURCE_GROUP \
      --template-file biceps/main.bicep \
-     --parameters location=$LOCATION
+       --parameters location=$LOCATION deployContainerApp=true
    ```
 
 7. **Obtener la URL de la aplicación**

@@ -17,6 +17,7 @@ param acrName string
 param useAcrImage bool = false
 
 @description('Application Insights connection string')
+@secure()
 param appInsightsConnectionString string = ''
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = if (useAcrImage) {

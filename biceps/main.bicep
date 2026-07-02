@@ -18,6 +18,9 @@ param acrImageName string = 'aspnetapp'
 @description('The tag for the container image')
 param acrImageTag string = 'latest'
 
+@description('Deploy Container App in this run')
+param deployContainerApp bool = true
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -57,7 +60,7 @@ module environment 'modules/container-app-environment.bicep' = {
 }
 
 // Container App
-module containerApp 'modules/container-app.bicep' = {
+module containerApp 'modules/container-app.bicep' = if (deployContainerApp) {
   name: 'container-app-deployment'
   params: {
     location: location
@@ -71,8 +74,8 @@ module containerApp 'modules/container-app.bicep' = {
 }
 
 // Outputs
-output containerAppUrl string = containerApp.outputs.containerAppUrl
-output containerAppFqdn string = containerApp.outputs.containerAppFqdn
+output containerAppUrl string = deployContainerApp ? containerApp!.outputs.containerAppUrl : ''
+output containerAppFqdn string = deployContainerApp ? containerApp!.outputs.containerAppFqdn : ''
 output acrLoginServer string = containerRegistry.outputs.acrLoginServer
 output acrName string = containerRegistry.outputs.acrName
 output appInsightsConnectionString string = appInsights.outputs.connectionString
