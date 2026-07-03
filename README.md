@@ -205,12 +205,13 @@ az acr build \
   --file src/frontend/Dockerfile \
   src/frontend
 
-# Reiniciar ambas container apps
-az containerapp revision restart \
+# Forzar nueva revisión en backend (pull de imagen actualizada)
+az containerapp update \
   --name ca-weather-be-dev \
   --resource-group $AZURE_RESOURCE_GROUP
 
-az containerapp revision restart \
+# Forzar nueva revisión en frontend (pull de imagen actualizada)
+az containerapp update \
   --name ca-weather-fe-dev \
   --resource-group $AZURE_RESOURCE_GROUP
 ```
