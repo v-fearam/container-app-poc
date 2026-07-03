@@ -23,7 +23,10 @@ function App() {
   const [weather, setWeather] = useState<WeatherForecast[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo>({
+    isAuthenticated: false,
+    message: 'No autenticado'
+  });
   const [loadingUser, setLoadingUser] = useState(false);
 
   const apiUrl = runtimeConfig.apiUrl || import.meta.env.VITE_API_URL || '';
@@ -185,6 +188,22 @@ function App() {
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
             Consulta el clima en tiempo real con telemetría distribuida end-to-end
           </p>
+        </div>
+
+        <div className="max-w-2xl mx-auto mb-8">
+          <div className={`rounded-xl border p-4 ${loadingUser
+            ? 'bg-slate-50 border-slate-200 text-slate-700'
+            : userInfo.isAuthenticated
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-amber-50 border-amber-200 text-amber-800'
+            }`}>
+            <p className="font-semibold">
+              Estado de autenticacion: {loadingUser ? 'Verificando...' : userInfo.isAuthenticated ? 'Autenticado' : 'No autenticado'}
+            </p>
+            {!loadingUser && userInfo.message && (
+              <p className="text-sm mt-1">{userInfo.message}</p>
+            )}
+          </div>
         </div>
 
         {/* Action Button */}

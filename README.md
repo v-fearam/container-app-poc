@@ -89,6 +89,7 @@ az group create \
 ```bash
 az deployment group create \
   --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
   --template-file biceps/main.bicep \
   --parameters \
     location=$AZURE_LOCATION \
@@ -133,6 +134,7 @@ az acr build \
 ```bash
 az deployment group create \
   --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
   --template-file biceps/main.bicep \
   --parameters \
     location=$AZURE_LOCATION \
@@ -169,20 +171,72 @@ echo "🌐 Frontend: $FRONTEND_URL"
 echo "🌐 Backend:  $BACKEND_URL"
 ```
 
-### 🔄 Actualizar una Aplicación
+### 🔄 Actualizar Aplicación (Backend y Frontend)
+
+Después de hacer cambios en el código, sigue estos pasos para reconstruir y redeplegar:
+
+#### Paso 1: Obtener Variables Necesarias
 
 ```bash
-# Reconstruir imagen
+# Si no las tienes guardadas, obtén el nombre del ACR
+ACR_NAME=$(az deployment group show \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
+  --query 'properties.outputs.acrName.value' \
+  --output tsv)
+
+echo "ACR Name: $ACR_NAME"
+```
+
+#### Actualizar Ambos (Backend y Frontend)
+
+```bash
+# Reconstruir backend
 az acr build \
   --registry $ACR_NAME \
   --image camuzzi-weather-backend:latest \
   --file src/backend/WeatherApi/Dockerfile \
   src/backend/WeatherApi
 
-# Reiniciar container app
+# Reconstruir frontend
+az acr build \
+  --registry $ACR_NAME \
+  --image camuzzi-weather-frontend:latest \
+  --file src/frontend/Dockerfile \
+  src/frontend
+
+# Reiniciar ambas container apps
 az containerapp revision restart \
-  --name ca-backend-weather \
+  --name ca-weather-be-dev \
   --resource-group $AZURE_RESOURCE_GROUP
+
+az containerapp revision restart \
+  --name ca-weather-fe-dev \
+  --resource-group $AZURE_RESOURCE_GROUP
+```
+
+#### Verificar el Deployment
+
+```bash
+# Ver URL del frontend
+FRONTEND_URL=$(az deployment group show \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
+  --query 'properties.outputs.frontendAppUrl.value' \
+  --output tsv)
+
+# Ver URL del backend
+BACKEND_URL=$(az deployment group show \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --name main \
+  --query 'properties.outputs.backendAppUrl.value' \
+  --output tsv)
+
+echo "✅ Frontend: $FRONTEND_URL"
+echo "✅ Backend:  $BACKEND_URL"
+
+# Verificar que el backend responda
+curl $BACKEND_URL/weatherforecast
 ```
 
 ## 📚 Documentación

@@ -68,7 +68,8 @@ Access the app:
 ### Frontend (React + Vite)
 
 - **Base Image**: `nginx:alpine`
-- **Build Image**: `node:20-alpine`
+- **Build Image**: `node:22-alpine`
+- **npm in build stage**: `11.18.0`
 - **Port**: 80
 - **Features**:
   - Multi-stage build with Node.js and Nginx
