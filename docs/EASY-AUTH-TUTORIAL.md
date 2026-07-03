@@ -29,12 +29,12 @@ Al finalizar este tutorial:
 export RESOURCE_GROUP="rg-far-container-app-easyauth"
 
 FRONTEND_URL=$(az containerapp show \
-  --name ca-frontend-weather \
+  --name ca-weather-fe-dev \
   --resource-group $RESOURCE_GROUP \
   --query 'properties.configuration.ingress.fqdn' -o tsv)
 
 BACKEND_URL=$(az containerapp show \
-  --name ca-backend-weather \
+  --name ca-weather-be-dev \
   --resource-group $RESOURCE_GROUP \
   --query 'properties.configuration.ingress.fqdn' -o tsv)
 
@@ -57,7 +57,7 @@ echo "Backend:  https://$BACKEND_URL"
 
 Ejemplo:
 ```
-https://ca-frontend-weather.xxx.eastus2.azurecontainerapps.io/.auth/login/aad/callback
+https://ca-weather-fe-dev.delightfulbush-6f1a4d43.eastus2.azurecontainerapps.io/.auth/login/aad/callback
 ```
 
 3. Click **Register**
@@ -184,8 +184,8 @@ az ad sp show --id <APPLICATION_ID> --query appRoles
 ### Via Azure Portal
 
 1. Azure Portal → **Container Apps**
-2. Selecciona **ca-frontend-weather**
-3. **Settings** → **Authentication**
+2. Selecciona **ca-weather-fe-dev**
+3. En el menú izquierdo, bajo **Security** → **Authentication**
 4. Click **Add identity provider**
 5. **Identity provider**: **Microsoft**
 
@@ -266,8 +266,8 @@ api://<CLIENT_ID>
 
 ### Paso 5: Configurar Easy Auth en Backend
 
-1. Azure Portal → Container Apps → **ca-backend-weather**
-2. **Settings** → **Authentication**
+1. Azure Portal → Container Apps → **ca-weather-be-dev**
+2. En el menú izquierdo, bajo **Security** → **Authentication**
 3. **Add identity provider** → **Microsoft**
 4. **App registration type**: **Provide the details of an existing app registration**
 5. **Application (client) ID**: Backend Client ID
