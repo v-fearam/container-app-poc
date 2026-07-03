@@ -1,49 +1,58 @@
-# Tutorial: Easy Auth con Roles en Azure Container Apps
+# Guía Completa: Easy Auth para SPA con Tenant Externo
 
-Este tutorial te guía paso a paso para configurar **Easy Auth** con **Microsoft Entra ID** usando el **approach recomendado por Microsoft** para aplicaciones Frontend + Backend.
+## 🎯 Tu Escenario Específico
 
-## 🎯 Arquitectura Recomendada
-
-**Easy Auth SOLO en el Frontend** (approach simple y seguro):
-
-```mermaid
-graph LR
-    User[Usuario] -->|1. Login| FE[Frontend<br/>Easy Auth ON]
-    FE -->|2. Fetch API<br/>+ X-MS-CLIENT-PRINCIPAL| BE[Backend<br/>Sin Easy Auth]
-    BE -->|3. Parse Header<br/>Extract Roles| BE
-    BE -->|4. Response + Role| FE
+### Arquitectura
+```
+Browser (Usuario) 
+  ↓
+  → Frontend Container App (Easy Auth ON) → Login en Tenant Externo
+  ↓
+  → Backend Container App (Easy Auth ON, público) → Valida tokens del Tenant Externo
 ```
 
-**Por qué este approach:**
-- ✅ Usuario se autentica **una sola vez** en el Frontend
-- ✅ Backend recibe **automáticamente** headers de autenticación
-- ✅ **No requiere OAuth scopes** entre apps (mucho más simple)
-- ✅ Recomendado por Microsoft para este patrón arquitectural
+### Tenants Involucrados
 
-## 🎯 Objetivo
+1. **Tenant de Azure Resources** (donde están los Container Apps):
+   - Tenant ID: `b9ccb062-1a4e-421f-a3da-0a738577137d`
+   - Uso: Solo para deployar infraestructura
+   - **NO usás este tenant para autenticación**
 
-Al finalizar este tutorial:
-- ✅ Frontend protegido con Easy Auth
-- ✅ Roles personalizados configurados en Entra ID
-- ✅ Roles incluidos en el access token
-- ✅ Frontend muestra usuario logueado + email
-- ✅ Backend lee roles del header `X-MS-CLIENT-PRINCIPAL`
-- ✅ Frontend muestra el rol en los datos
+2. **Tenant Externo "Cognito Migration"** (para usuarios y apps):
+   - Tenant ID: `0a3af0e3-416b-4a6b-97e9-cb3a9a094449`
+   - Uso: App Registrations, Roles, Usuarios
+   - **SÍ usás este tenant para autenticación**
 
-## 📋 Requisitos Previos
+### ⚠️ Aclaración Importante: Por Qué Backend Necesita Easy Auth
 
-- ✅ Frontend y Backend desplegados en Azure Container Apps
-- ✅ Permisos de **Application Administrator** en Microsoft Entra ID
-- ✅ Permisos de **Contributor** en los Container Apps
+**Pregunta**: ¿Por qué el Backend necesita Easy Auth si el Frontend ya autenticó?
+
+**Respuesta**: Porque tu Frontend es una **SPA (Single Page Application)**:
+1. El **JavaScript corre en el browser del usuario** (no en Azure)
+2. El **browser está en internet público**
+3. El browser hace `fetch()` **directamente** al Backend desde internet
+4. El header `X-MS-CLIENT-PRINCIPAL` solo lo inyecta **Easy Auth del mismo Container App**
+5. Si el Backend NO tiene Easy Auth, **NO recibe el header** porque el request viene del browser, no del Frontend Container App
+
+**Flujo Real**:
+```
+Browser → fetch(backend-url) → Backend Container App
+          ↑ Este request viene de internet público, NO del Frontend Container App
+```
+
+**Por lo tanto**: Backend DEBE tener Easy Auth para:
+- Validar el access token que el browser envía
+- Inyectar el header `X-MS-CLIENT-PRINCIPAL` con la info del usuario
+- Tu código parsea ese header y extrae roles
 
 ---
 
-## Parte 1: Configurar App Registration con Roles
+## 📋 Preparación (Antes de Empezar)
 
-### Paso 1: Crear App Registration
+### Información que Necesitás
 
 ```bash
-# Obtener las URLs de tus apps
+# 1. URLs de tus Container Apps
 export RESOURCE_GROUP="rg-far-container-app-easyauth"
 
 FRONTEND_URL=$(az containerapp show \
@@ -60,325 +69,497 @@ echo "Frontend: https://$FRONTEND_URL"
 echo "Backend:  https://$BACKEND_URL"
 ```
 
-### Paso 2: Registrar Frontend App en Entra ID
+**Resultado esperado**:
+```
+Frontend: https://ca-weather-fe-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io
+Backend:  https://ca-weather-be-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io
+```
+
+### 2. Tenant Externo
+
+- **Tenant ID**: `0a3af0e3-416b-4a6b-97e9-cb3a9a094449` (Cognito Migration)
+- **Permisos**: Application Administrator (para crear App Registrations)
+
+---
+
+## Parte 1: Crear App Registration para Frontend
+
+### Paso 1.1: Asegurarte de Estar en el Tenant Correcto
+
+1. Azure Portal → Click en tu perfil (arriba derecha)
+2. **Switch directory**
+3. Seleccionar: **Cognito Migration** (tenant `0a3af0e3-416b-4a6b-97e9-cb3a9a094449`)
+
+### Paso 1.2: Crear App Registration
 
 1. Azure Portal → **Microsoft Entra ID**
 2. **App registrations** → **+ New registration**
 
-**Name**: `ContainerApp-Weather-Frontend`
-
-**Supported account types**: `Accounts in this organizational directory only (Single tenant)`
-
-**Redirect URI**:
-- Platform: **Web**
-- URI: `https://<FRONTEND_URL>/.auth/login/aad/callback`
-
-Ejemplo:
+**Configuración**:
 ```
-https://ca-weather-fe-dev.delightfulbush-6f1a4d43.eastus2.azurecontainerapps.io/.auth/login/aad/callback
+Name: ContainerApp-Weather-Frontend
+Supported account types: Accounts in this organizational directory only (Single tenant)
+Redirect URI:
+  - Platform: Web
+  - URI: https://ca-weather-fe-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io/.auth/login/aad/callback
 ```
 
 3. Click **Register**
 
-**Anotar**:
-- **Application (client) ID**: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
-- **Directory (tenant) ID**: `yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy`
+### Paso 1.3: Anotar IDs
 
-### Paso 3: Configurar Roles en el App Registration
+En la página **Overview** del App Registration:
 
-1. En tu App Registration, ve a **App roles**
-2. Click **+ Create app role**
+```
+Application (client) ID: ______________________________________
+Directory (tenant) ID:   0a3af0e3-416b-4a6b-97e9-cb3a9a094449 (verificar)
+```
 
-**Rol Admin**:
-- **Display name**: `Admin`
-- **Allowed member types**: `Users/Groups`
-- **Value**: `Admin`
-- **Description**: `Administrator role with full access`
-- **Enable this app role**: ☑️
-- Click **Apply**
+### Paso 1.4: Habilitar ID Tokens
 
-**Rol User**:
-- **Display name**: `User`
-- **Allowed member types**: `Users/Groups`
-- **Value**: `User`
-- **Description**: `Standard user role`
-- **Enable this app role**: ☑️
-- Click **Apply**
+1. En el App Registration, ve a **Authentication** (menú izquierdo)
+2. En **Implicit grant and hybrid flows**:
+   - ☑️ **ID tokens (used for implicit and hybrid flows)**
+3. Click **Save**
 
-### Paso 4: Configurar Token Configuration
+⚠️ **CRÍTICO**: Sin esto, Easy Auth da error 401.
 
-1. En el App Registration, ve a **Token configuration**
-2. Click **+ Add optional claim**
-3. **Token type**: `Access`
-4. Selecciona los claims:
-   - ☑️ **email**
-   - ☑️ **family_name**
-   - ☑️ **given_name**
-   - ☑️ **upn**
-5. Click **Add**
-
-6. Click **+ Add groups claim**
-7. Selecciona **Security groups**
-8. **Customize token properties by type**:
-   - ID: ☑️ **Group ID**
-   - Access: ☑️ **Group ID**
-9. Click **Add**
-
-### Paso 5: Configurar API Permissions
-
-1. Ve a **API permissions**
-2. Click **+ Add a permission**
-3. **Microsoft Graph** → **Delegated permissions**
-4. Busca y selecciona:
-   - ☑️ **User.Read** (para leer perfil del usuario)
-   - ☑️ **email**
-   - ☑️ **profile**
-   - ☑️ **openid**
-5. Click **Add permissions**
-6. Click **Grant admin consent for [Your Organization]**
-7. Confirma **Yes**
-
-### Paso 6: Crear Client Secret
+### Paso 1.5: Crear Client Secret
 
 1. Ve a **Certificates & secrets**
 2. **Client secrets** → **+ New client secret**
 3. **Description**: `Frontend-Secret-2026`
 4. **Expires**: `12 months`
 5. Click **Add**
-6. **⚠️ COPIA EL VALUE AHORA** (solo se muestra una vez)
+6. **⚠️ COPIA EL VALUE AHORA**:
 
-### Paso 7: Habilitar ID Tokens
+```
+Client Secret Value: _______________________________________________
+```
 
-1. Ve a **Authentication**
-2. En **Implicit grant and hybrid flows**:
-   - ☑️ **ID tokens**
-3. Click **Save**
+### Paso 1.6: Configurar App Roles
+
+1. Ve a **App roles**
+2. Click **+ Create app role**
+
+**Rol Admin**:
+```
+Display name: Admin
+Allowed member types: Users/Groups
+Value: Admin
+Description: Administrator role with full access
+Enable this app role: ☑️
+```
+Click **Apply**
+
+**Rol User**:
+```
+Display name: User
+Allowed member types: Users/Groups
+Value: User
+Description: Standard user role
+Enable this app role: ☑️
+```
+Click **Apply**
+
+### Paso 1.7: Configurar Token Configuration (Roles en Token)
+
+1. Ve a **Token configuration**
+2. Click **+ Add optional claim**
+3. **Token type**: `Access`
+4. Selecciona:
+   - ☑️ **email**
+   - ☑️ **family_name**
+   - ☑️ **given_name**
+   - ☑️ **upn**
+5. Click **Add**
 
 ---
 
-## Parte 2: Asignar Roles a Usuarios
+## Parte 2: Crear App Registration para Backend (API)
 
-### Paso 1: Ir a Enterprise Applications
+### Paso 2.1: Crear App Registration
+
+1. Azure Portal → **Microsoft Entra ID** → **App registrations**
+2. **+ New registration**
+
+**Configuración**:
+```
+Name: ContainerApp-Weather-Backend-API
+Supported account types: Accounts in this organizational directory only (Single tenant)
+Redirect URI:
+  - Platform: Web
+  - URI: https://ca-weather-be-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io/.auth/login/aad/callback
+```
+
+3. Click **Register**
+
+### Paso 2.2: Anotar IDs
+
+```
+Application (client) ID (Backend): ______________________________________
+Directory (tenant) ID:             0a3af0e3-416b-4a6b-97e9-cb3a9a094449 (verificar)
+```
+
+### Paso 2.3: Habilitar ID Tokens
+
+1. **Authentication** → **Implicit grant and hybrid flows**
+2. ☑️ **ID tokens**
+3. Click **Save**
+
+### Paso 2.4: Exponer API
+
+1. Ve a **Expose an API**
+2. **Application ID URI** → Click **Add**
+3. **Acepta el default**: `api://<BACKEND_CLIENT_ID>`
+   - Ejemplo: `api://e36880cc-f3s5-4e33-ae82-a88f6cdb632f`
+4. Click **Save**
+
+⚠️ **IMPORTANTE**: Usá el formato `api://<CLIENT_ID>`, NO custom como `api://weather-backend`.
+
+### Paso 2.5: Agregar Scope
+
+1. Click **+ Add a scope**
+
+**Configuración**:
+```
+Scope name: Weather.Read
+Who can consent: Admins and users
+Admin consent display name: Read weather data
+Admin consent description: Allows the app to read weather forecast data
+User consent display name: Read weather data
+User consent description: Allows the app to read weather forecast on your behalf
+State: Enabled
+```
+
+2. Click **Add scope**
+
+3. **Verificá que aparezca**:
+   - Scope: `api://<BACKEND_CLIENT_ID>/Weather.Read`
+
+### Paso 2.6: Autorizar al Frontend (Pre-authorize)
+
+1. En **Expose an API**, baja a **Authorized client applications**
+2. Click **+ Add a client application**
+
+**Configuración**:
+```
+Client ID: <FRONTEND_CLIENT_ID>
+Authorized scopes: ☑️ api://<BACKEND_CLIENT_ID>/Weather.Read
+```
+
+3. Click **Add application**
+
+⚠️ **CRÍTICO**: Este paso hace que el Frontend pueda llamar al Backend sin prompt de consentimiento.
+
+### Paso 2.7: Crear Client Secret para Backend
+
+1. **Certificates & secrets** → **+ New client secret**
+2. **Description**: `Backend-Secret-2026`
+3. **Expires**: `12 months`
+4. Click **Add**
+5. **⚠️ COPIA EL VALUE**:
+
+```
+Backend Client Secret: _______________________________________________
+```
+
+---
+
+## Parte 3: Agregar Permisos al Frontend para Llamar al Backend
+
+### Paso 3.1: Configurar API Permissions
+
+1. Ve al **Frontend App Registration** (`ContainerApp-Weather-Frontend`)
+2. **API permissions** → **+ Add a permission**
+3. **My APIs** → Selecciona **ContainerApp-Weather-Backend-API**
+   
+   ⚠️ Si NO aparece: Esperá 2-3 minutos y refrescá la página (propagación de Azure AD)
+
+4. **Delegated permissions** → ☑️ **Weather.Read**
+5. Click **Add permissions**
+
+### Paso 3.2: Grant Admin Consent
+
+1. En **API permissions**, click **Grant admin consent for [Cognito Migration]**
+2. Confirma **Yes**
+
+**Verificá que diga**:
+```
+Status: ✅ Granted for Cognito Migration
+```
+
+---
+
+## Parte 4: Asignar Roles a Usuarios
+
+### Paso 4.1: Ir a Enterprise Applications
 
 1. Azure Portal → **Microsoft Entra ID**
 2. **Enterprise applications**
-3. Busca `ContainerApp-Weather-Frontend`
+3. **All applications** → Busca `ContainerApp-Weather-Frontend`
 4. Click en la aplicación
 
-### Paso 2: Requerir Asignación de Usuarios
+### Paso 4.2: Requerir Asignación
 
 1. Ve a **Properties**
 2. **Assignment required?** → **Yes**
 3. Click **Save**
 
-Ahora solo usuarios asignados podrán acceder.
-
-### Paso 3: Asignar tu Usuario con Rol
+### Paso 4.3: Asignar tu Usuario con Rol
 
 1. Ve a **Users and groups**
 2. Click **+ Add user/group**
 3. **Users**: Click **None Selected**
-   - Busca tu usuario (tu email)
+   - Busca tu usuario (email)
    - Selecciónalo
    - Click **Select**
 4. **Select a role**: Click **None Selected**
-   - Selecciona **Admin** (o **User**)
+   - Selecciona **Admin**
    - Click **Select**
 5. Click **Assign**
 
-✅ Ahora tu usuario tiene el rol **Admin** asignado.
+---
 
-### Paso 4: Verificar el Rol Asignado
+## Parte 5: Configurar Easy Auth en el Frontend Container App
+
+### Paso 5.1: Remover Configuración Anterior (si existe)
 
 ```bash
-# Via Azure CLI (opcional)
-az ad sp show --id <APPLICATION_ID> --query appRoles
+# Limpiar configuración anterior
+az containerapp auth microsoft remove \
+  --name ca-weather-fe-dev \
+  --resource-group rg-far-container-app-easyauth
 ```
+
+### Paso 5.2: Configurar Easy Auth (via Portal)
+
+1. Azure Portal → **Container Apps** → **ca-weather-fe-dev**
+2. **Security** → **Authentication**
+3. Click **Add identity provider**
+4. **Identity provider**: **Microsoft**
+
+**Configuración**:
+```
+App registration type: Provide the details of an existing app registration
+
+Application (client) ID: <FRONTEND_CLIENT_ID>
+
+Client secret: <FRONTEND_CLIENT_SECRET>
+
+Issuer URL: https://login.microsoftonline.com/0a3af0e3-416b-4a6b-97e9-cb3a9a094449/v2.0
+
+Allowed token audiences:
+  <FRONTEND_CLIENT_ID>
+  api://<FRONTEND_CLIENT_ID>
+```
+
+⚠️ **CRÍTICO**: 
+- Usá `login.microsoftonline.com`, NO `sts.windows.net`
+- Usá el tenant ID correcto: `0a3af0e3-416b-4a6b-97e9-cb3a9a094449`
+
+**Authentication settings**:
+```
+Restrict access: Require authentication
+Unauthenticated requests: HTTP 302 Found redirect: recommended for websites
+Token store: Enabled
+```
+
+5. Click **Add**
 
 ---
 
-## Parte 3: Configurar Easy Auth en el Frontend
+## Parte 6: Configurar Easy Auth en el Backend Container App
 
-### Via Azure Portal
+### Paso 6.1: Remover Configuración Anterior (si existe)
 
-1. Azure Portal → **Container Apps**
-2. Selecciona **ca-weather-fe-dev**
-3. En el menú izquierdo, bajo **Security** → **Authentication**
-4. Click **Add identity provider**
-5. **Identity provider**: **Microsoft**
-
-**App registration type**:
-- **Provide the details of an existing app registration**
-
-**Application (client) ID**:
-- Pega el Client ID del Paso 1.2
-
-**Client secret**:
-- Pega el secret del Paso 1.6
-
-**Issuer URL**:
-```
-https://login.microsoftonline.com/<TENANT_ID>/v2.0
+```bash
+# Limpiar configuración anterior
+az containerapp auth microsoft remove \
+  --name ca-weather-be-dev \
+  --resource-group rg-far-container-app-easyauth
 ```
 
-**Allowed token audiences** (importante para roles):
+### Paso 6.2: Configurar Easy Auth (via Portal)
+
+1. Azure Portal → **Container Apps** → **ca-weather-be-dev**
+2. **Security** → **Authentication**
+3. Click **Add identity provider**
+4. **Identity provider**: **Microsoft**
+
+**Configuración**:
 ```
-api://<CLIENT_ID>
-<CLIENT_ID>
+App registration type: Provide the details of an existing app registration
+
+Application (client) ID: <BACKEND_CLIENT_ID>
+
+Client secret: <BACKEND_CLIENT_SECRET>
+
+Issuer URL: https://login.microsoftonline.com/0a3af0e3-416b-4a6b-97e9-cb3a9a094449/v2.0
+
+Allowed token audiences:
+  <BACKEND_CLIENT_ID>
+  api://<BACKEND_CLIENT_ID>
 ```
 
-**Restrict access**: **Require authentication**
+⚠️ **CRÍTICO**: Mismo tenant ID que el Frontend.
 
-**Unauthenticated requests**: **HTTP 302 Found redirect**
+**Authentication settings**:
+```
+Restrict access: Require authentication
+Unauthenticated requests: HTTP 401 Unauthorized: recommended for APIs
+Token store: Enabled
+```
 
-**Token store**: ☑️ **Enabled**
-
-6. Click **Add**
+5. Click **Add**
 
 ---
 
-## Parte 4: Verificar que los Roles Aparecen en el Token
+## Parte 7: Actualizar el Frontend para Enviar Access Token
 
-### Opción 1: Via Portal (/.auth/me)
+### Paso 7.1: Modificar App.tsx
 
-1. Abre el frontend en el navegador (serás redirigido a login)
-2. Inicia sesión con tu usuario
-3. Una vez autenticado, navega a:
-```
-https://<FRONTEND_URL>/.auth/me
-```
+El Frontend necesita obtener el **access token** y enviarlo al Backend.
 
-4. Busca en el JSON la sección `roles`:
-```json
-{
-  "claims": [
-    ...
-    {
-      "typ": "roles",
-      "val": "Admin"
+**Actualizar `src/frontend/src/App.tsx`**:
+
+```typescript
+// Al inicio del archivo
+const [accessToken, setAccessToken] = useState<string | null>(null);
+
+// Nueva función para obtener access token
+const getAccessToken = async (): Promise<string | null> => {
+  try {
+    const response = await fetch('/.auth/me', {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get auth info');
     }
-  ]
-}
-```
-
-### Opción 2: Decodificar el Token
-
-1. En el navegador (con sesión iniciada), abre DevTools → Application → Cookies
-2. Busca la cookie `AppServiceAuthSession`
-3. Cópiala
-4. Usa `curl` para obtener el token:
-
-```bash
-curl -H "Cookie: AppServiceAuthSession=<cookie-value>" \
-  https://<FRONTEND_URL>/.auth/me
-```
-
-5. Busca el claim `roles` en la respuesta
-
----
-
-## Parte 5: Cómo Funciona el Backend (Sin Easy Auth)
-
-### Backend: Leer Roles del Header `X-MS-CLIENT-PRINCIPAL`
-
-**⚠️ Importante**: El Backend **NO tiene Easy Auth configurado**, pero recibe automáticamente el header `X-MS-CLIENT-PRINCIPAL` cuando el Frontend (con Easy Auth) le envía requests.
-
-**Cómo funciona:**
-1. Usuario se autentica en el Frontend (Easy Auth)
-2. Frontend hace `fetch()` al Backend con `credentials: 'include'`
-3. Easy Auth del Frontend inyecta el header `X-MS-CLIENT-PRINCIPAL` en el request
-4. Backend parsea el header y extrae roles
-
-**Formato del header** (Base64 encoded JSON):
-```json
-{
-  "auth_typ": "aad",
-  "claims": [
-    {"typ": "roles", "val": "Admin"},
-    {"typ": "name", "val": "John Doe"},
-    {"typ": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress", "val": "john@contoso.com"}
-  ],
-  "name_typ": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
-  "role_typ": "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-}
-```
-
-**Código del Backend** (ya implementado en `src/backend/WeatherApi/Program.cs`):
-```csharp
-string GetClientPrincipal(HttpRequest request)
-{
-    var header = request.Headers["X-MS-CLIENT-PRINCIPAL"].ToString();
-    if (string.IsNullOrEmpty(header)) return "Anonymous";
     
-    var decoded = Convert.FromBase64String(header);
-    var json = Encoding.UTF8.GetString(decoded);
-    var principal = JsonSerializer.Deserialize<ClientPrincipal>(json);
+    const authInfo = await response.json();
+    if (authInfo && authInfo.length > 0) {
+      return authInfo[0].access_token;
+    }
     
-    var roleClaim = principal?.Claims?.FirstOrDefault(c => c.Typ == "roles");
-    return roleClaim?.Val ?? "User";
-}
+    return null;
+  } catch (error) {
+    console.error('Error getting access token:', error);
+    return null;
+  }
+};
+
+// Modificar fetchWeather para enviar access token
+const fetchWeather = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) {
+      setError("API URL not configured");
+      return;
+    }
+
+    // Obtener access token
+    const token = await getAccessToken();
+    
+    if (!token) {
+      setError("No access token available");
+      return;
+    }
+
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+    };
+    
+    // Enviar token en Authorization header
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${apiUrl}/weatherforecast`, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    setForecasts(data);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Failed to fetch weather data");
+    console.error("Error fetching weather:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Similar para fetchUserInfo
+const fetchUserInfo = async () => {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) {
+      setUserInfo({
+        name: "API URL not configured",
+        email: "",
+        roles: []
+      });
+      return;
+    }
+
+    // Obtener access token
+    const token = await getAccessToken();
+    
+    if (!token) {
+      setUserInfo({
+        name: "No access token",
+        email: "",
+        roles: []
+      });
+      return;
+    }
+
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${apiUrl}/userinfo`, {
+      method: 'GET',
+      headers: headers,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: UserInfo = await response.json();
+    setUserInfo(data);
+  } catch (err) {
+    setUserInfo({
+      name: "Error loading user info",
+      email: err instanceof Error ? err.message : "Unknown error",
+      roles: []
+    });
+    console.error("Error fetching user info:", err);
+  }
+};
 ```
-
-### Frontend: Obtener Info del Usuario
-
-El frontend puede llamar a `/.auth/me` (devuelve info del token) o al endpoint `/userinfo` del Backend (parsea el header).
 
 ---
 
-## 🧪 Testing
+## Parte 8: Rebuild y Deploy
 
-### Test 1: Verificar Autenticación
-
-```bash
-# Sin autenticación (debe redirigir)
-curl -I https://<FRONTEND_URL>
-
-# Debe devolver HTTP 302 con Location: login.microsoftonline.com
-```
-
-### Test 2: Verificar Roles
-
-1. Login en el navegador
-2. Abre DevTools → Console
-3. Ejecuta:
-```javascript
-fetch('/.auth/me')
-  .then(r => r.json())
-  .then(d => console.log(d[0].user_claims.find(c => c.typ === 'roles')))
-```
-
-Deberías ver: `{typ: "roles", val: "Admin"}`
-
----
-
-## 🔧 Troubleshooting
-
-### Problema: Roles no aparecen en el token
-
-**Solución**:
-1. Verifica que asignaste el rol al usuario en **Enterprise Applications** → **Users and groups**
-2. Verifica **Token configuration** → **Optional claims** → Access token tiene los claims necesarios
-3. Cierra sesión y vuelve a iniciar (/.auth/logout)
-
-### Problema: "AADSTS50105: The signed in user is not assigned to a role"
-
-**Solución**:
-1. Ve a **Enterprise applications** → Tu app
-2. **Users and groups** → Verifica que tu usuario está asignado
-3. Verifica que tiene un **rol** asignado (no solo acceso)
-
-### Problema: Frontend no puede llamar al Backend
-
-**Solución**:
-1. Verifica que el Frontend tiene permiso en **API permissions** para llamar al Backend
-2. Verifica que el Backend tiene el `Issuer URL` y `Allowed token audiences` correctos
-3. Verifica CORS en el backend
-
----
-
-## Parte 6: Rebuild y Deploy
-
-Una vez configurado Easy Auth en el Frontend, necesitás reconstruir las imágenes con el código actualizado:
+### Paso 8.1: Rebuild Frontend con Cambios
 
 ```bash
 export AZURE_RESOURCE_GROUP="rg-far-container-app-easyauth"
@@ -387,153 +568,170 @@ ACR_NAME=$(az deployment group show \
   --name main \
   --query 'properties.outputs.acrName.value' -o tsv)
 
-# Rebuild backend con CORS fix
-az acr build --registry $ACR_NAME \
-  --image camuzzi-weather-backend:latest \
-  --file src/backend/WeatherApi/Dockerfile \
-  src/backend/WeatherApi
-
 # Rebuild frontend
 az acr build --registry $ACR_NAME \
   --image camuzzi-weather-frontend:latest \
   --file src/frontend/Dockerfile \
   src/frontend
 
-# Restart apps para que tomen las nuevas imágenes
+# Rebuild backend (CORS ya está OK)
+az acr build --registry $ACR_NAME \
+  --image camuzzi-weather-backend:latest \
+  --file src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+# Restart apps
 az containerapp revision restart \
-  --name ca-weather-be-dev \
+  --name ca-weather-fe-dev \
   --resource-group $AZURE_RESOURCE_GROUP
 
 az containerapp revision restart \
-  --name ca-weather-fe-dev \
+  --name ca-weather-be-dev \
   --resource-group $AZURE_RESOURCE_GROUP
 ```
 
 ---
 
+## Parte 9: Testing
+
+### Test 1: Frontend Login
+
+1. Abre: `https://ca-weather-fe-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io`
+2. Deberías ser redirigido a: `login.microsoftonline.com`
+3. Login con tu usuario del tenant externo
+4. Deberías volver al frontend **sin error 401**
+
+### Test 2: Verificar Access Token
+
+En el frontend logueado, abre DevTools → Console:
+
+```javascript
+fetch('/.auth/me', { credentials: 'include' })
+  .then(r => r.json())
+  .then(d => console.log(d[0].access_token))
+```
+
+Deberías ver un **JWT token** largo.
+
+### Test 3: Verificar Roles en Token
+
+```javascript
+fetch('/.auth/me', { credentials: 'include' })
+  .then(r => r.json())
+  .then(d => {
+    const roles = d[0].user_claims.filter(c => c.typ === 'roles');
+    console.log('Roles:', roles);
+  })
+```
+
+Deberías ver: `[{typ: "roles", val: "Admin"}]`
+
+### Test 4: Backend Recibe Token
+
+El Backend debería:
+- Recibir el `Authorization: Bearer <token>` header del browser
+- Easy Auth valida el token
+- Easy Auth inyecta `X-MS-CLIENT-PRINCIPAL`
+- Tu código parsea el header y extrae roles
+
+---
+
+## 🐛 Troubleshooting
+
+### Error 401 en Callback
+
+**Síntoma**: `https://.../auth/login/aad/callback` → HTTP ERROR 401
+
+**Causas**:
+1. ❌ **ID tokens no habilitados**
+   - Solución: App Registration → Authentication → ☑️ ID tokens → Save
+
+2. ❌ **Tenant ID incorrecto en Issuer URL**
+   - Solución: Verificar que sea `0a3af0e3-416b-4a6b-97e9-cb3a9a094449`
+
+3. ❌ **Redirect URI no coincide**
+   - Solución: Debe ser exactamente igual (con/sin trailing slash importa)
+
+4. ❌ **Client secret expirado o incorrecto**
+   - Solución: Crear nuevo secret y actualizar Container App
+
+### Backend No Aparece en "My APIs"
+
+**Síntoma**: Al agregar permisos en Frontend, el Backend no aparece en "My APIs"
+
+**Causas**:
+1. ❌ **No exponiste el API** (Expose an API → Application ID URI)
+2. ❌ **No agregaste un scope** (Weather.Read)
+3. ❌ **Propagación** - Esperá 2-3 minutos y refrescá
+
+### Error CORS
+
+**Síntoma**: `Access-Control-Allow-Credentials must be 'true'`
+
+**Solución**: El código ya tiene `AllowCredentials()` en CORS. Solo asegurate de rebuild.
+
+### Backend No Recibe `X-MS-CLIENT-PRINCIPAL`
+
+**Síntoma**: Header vacío, rol = "Anonymous"
+
+**Causas**:
+1. ❌ **Backend NO tiene Easy Auth** - Debe tenerlo para SPAs
+2. ❌ **Frontend no envía Authorization header** - Verificá código de App.tsx
+3. ❌ **Token inválido** - Verificá que Frontend y Backend usen mismo tenant
+
+---
+
+## ✅ Checklist Final
+
+**App Registrations**:
+- [ ] Frontend App creado en tenant externo
+- [ ] Backend App creado en tenant externo
+- [ ] Ambos tienen ID tokens habilitados
+- [ ] Ambos tienen client secrets creados y copiados
+- [ ] Backend tiene API expuesta (Application ID URI)
+- [ ] Backend tiene scope Weather.Read
+- [ ] Backend tiene Frontend pre-autorizado (Authorized client applications)
+- [ ] Frontend tiene permiso Weather.Read (API permissions)
+- [ ] Admin consent granted
+
+**Roles y Usuarios**:
+- [ ] Roles Admin y User creados en Frontend App
+- [ ] Token configuration tiene optional claims
+- [ ] Usuario asignado con rol Admin en Enterprise Application
+
+**Container Apps**:
+- [ ] Frontend Easy Auth configurado con tenant externo
+- [ ] Backend Easy Auth configurado con tenant externo
+- [ ] Ambos usan Issuer URL con tenant externo
+- [ ] Ambos tienen Allowed token audiences correctos
+
+**Código**:
+- [ ] Frontend modificado para obtener y enviar access token
+- [ ] Backend tiene CORS con AllowCredentials
+- [ ] Backend parsea X-MS-CLIENT-PRINCIPAL
+
+**Deploy**:
+- [ ] Frontend rebuild y restart
+- [ ] Backend rebuild y restart
+
+**Testing**:
+- [ ] Login funciona sin error 401
+- [ ] `/.auth/me` devuelve access token
+- [ ] Roles aparecen en user_claims
+- [ ] Frontend muestra usuario + email + roles
+- [ ] Weather forecast devuelve datos con roles
+
+---
+
 ## 📚 Referencias Oficiales
 
-### Documentación que Soporta este Approach
-
-**1. Authentication and Authorization in Azure Container Apps** (actualizado abril 2026)
-- URL: https://learn.microsoft.com/en-us/azure/container-apps/authentication
-- **Cita clave** (sección "Feature architecture"):
-  > "The authentication and authorization middleware component runs as a **sidecar container** on each replica. When enabled, **every incoming HTTP request passes through the security layer** before being handled by your application."
-  
-  > "**Relevant information your app needs is provided in request headers**"
-
-**2. Enable Authentication with Microsoft Entra ID** (actualizado febrero 2026)
-- URL: https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra
-- **Cita clave** (sección "Working with authenticated users"):
-  > "See [Access user claims in application code](authentication#access-user-claims-in-application-code) for details on working with authenticated users."
-  
-  > El header **X-MS-CLIENT-PRINCIPAL** contiene toda la información del usuario autenticado
-
-**3. Configure Authentication User Identities**
-- URL: https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-user-identities
-- **Cita clave**:
-  > "For all language frameworks, App Service makes the claims in the incoming token (whether from an authenticated end user or a client application) available to your code by **injecting them into the request headers**."
-
-### Cuándo SÍ Usar OAuth Scopes (Daemon Client Application)
-
-**Solo cuando necesitas service-to-service sin usuario**:
-- URL: https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra#daemon-client-application-service-to-service-calls
-- **Caso de uso**: Backend llama a OTROS servicios protegidos (no tu propio backend)
-- Ejemplo: Backend → Azure Storage, Cosmos DB, otra API externa
-
-**Para Frontend → Backend propio**: **NO** usar OAuth scopes (approach recomendado de este tutorial)
+- [Container Apps Authentication](https://learn.microsoft.com/en-us/azure/container-apps/authentication) - Arquitectura y flujos
+- [Enable Authentication with Entra ID](https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra) - Configuración de Entra ID
+- [Daemon Client Applications](https://learn.microsoft.com/en-us/azure/container-apps/authentication-entra#daemon-client-application-service-to-service-calls) - Service-to-service auth
+- [Access User Claims](https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-user-identities) - Headers y claims
 
 ---
 
-## 🎯 Por Qué NO Usar Easy Auth en el Backend
-
-### Según la Documentación Oficial:
-
-1. **Authentication Flow** (Container Apps docs):
-   > "The security container doesn't run in-process. **Relevant information is provided in request headers**."
-   
-   ✅ El header `X-MS-CLIENT-PRINCIPAL` **ya contiene** toda la información de autenticación
-
-2. **Simplicity** (Architecture best practices):
-   > "You're not required to use this feature for authentication. You can use the bundled security features in your web framework."
-   
-   ✅ El Backend puede parsear headers directamente (más simple que doble autenticación)
-
-3. **Service-to-Service** (When to use OAuth):
-   > "Your application can acquire a token to call a Web API **on behalf of itself** (not on behalf of a user)."
-   
-   ❌ Nuestro caso: Frontend → Backend **on behalf of a user** (no daemon)
-
-### Ventajas del Approach Recomendado:
-
-| Aspecto | Easy Auth Solo Frontend | Easy Auth en Ambos (OAuth) |
-|---------|------------------------|----------------------------|
-| **Complejidad** | ⭐ Baja | ⭐⭐⭐ Alta |
-| **Autenticaciones** | 1 (solo Frontend) | 2 (Frontend + Backend) |
-| **App Registrations** | 1 | 2 |
-| **OAuth Scopes** | No necesarios | Sí, con permisos delegados |
-| **Latencia** | ⚡ Baja | 🐌 Media (validación extra) |
-| **Mantenimiento** | ✅ Simple | ⚠️ Complejo |
-| **Recomendado por MS** | ✅ Sí (para este patrón) | ❌ No (solo para daemon apps) |
-
-## ✅ Checklist
-
-- [ ] App Registration creado para Frontend
-- [ ] Roles (Admin, User) creados en App roles
-- [ ] Token configuration con optional claims configurado
-- [ ] Client secret creado
-- [ ] Usuario asignado con rol Admin
-- [ ] Easy Auth habilitado en Frontend
-- [ ] ❌ **Backend SIN Easy Auth** (usa header X-MS-CLIENT-PRINCIPAL)
-- [ ] Roles aparecen en `/.auth/me`
-- [ ] Rebuild backend con código actualizado
-- [ ] Rebuild frontend con código actualizado
-- [ ] Frontend muestra usuario logueado
-- [ ] Backend lee roles del header X-MS-CLIENT-PRINCIPAL
-- [ ] Frontend muestra rol que viene del backend
-
----
-
-## 🔄 Apéndice: OAuth Scopes (Approach Avanzado)
-
-<details>
-<summary>Click para expandir: Configuración de OAuth Scopes entre Frontend y Backend (solo si lo necesitas)</summary>
-
-### ⚠️ Solo usar si:
-- Tienes **múltiples backends** que necesitan autenticación independiente
-- Necesitas **service-to-service** sin usuario (daemon apps)
-- Tu arquitectura requiere **permisos delegados granulares**
-
-### Pasos Adicionales:
-
-1. **Registrar Backend App**:
-   - Azure Portal → Microsoft Entra ID → App registrations → New
-   - Name: `ContainerApp-Weather-Backend-API`
-   - Redirect URI: `https://<BACKEND_URL>/.auth/login/aad/callback`
-
-2. **Exponer API**:
-   - Expose an API → Application ID URI: `api://weather-backend`
-   - Add a scope: `Weather.Read`
-
-3. **Autorizar Frontend**:
-   - Frontend App → API permissions → Add permission → My APIs
-   - Seleccionar Backend API → Weather.Read
-   - Grant admin consent
-
-4. **Configurar Easy Auth en Backend**:
-   - Backend Container App → Security → Authentication
-   - Add identity provider → Microsoft
-   - Usar Backend Client ID y Secret
-   - Allowed token audiences: `api://weather-backend`
-
-**Desventajas de este approach**:
-- ❌ Mucho más complejo
-- ❌ Doble autenticación (overhead)
-- ❌ Problemas de propagación (Backend no aparece en My APIs)
-- ❌ No recomendado por Microsoft para Frontend → Backend propio
-
-</details>
-
----
-
-🎉 ¡Listo! Ahora tu aplicación usa Easy Auth con roles siguiendo el **approach recomendado por Microsoft**.
+**Última actualización**: 2026-07-03 16:52
+**Escenario**: SPA + Backend público + Tenant externo para autenticación
+**Approach**: Easy Auth en Frontend + Backend con OAuth scopes
