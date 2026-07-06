@@ -1,290 +1,187 @@
-# Container App POC - Easy Auth + Full-Stack Monorepo
+# Container App POC — Easy Auth + Full-Stack
 
-Proyecto de prueba de concepto para implementar y probar Easy Authentication en Azure Container Apps con una aplicación full-stack moderna.
+POC de Azure Container Apps con Easy Auth (Entra ID), React + .NET 10, telemetría con Application Insights.
 
-## 🎯 Objetivo
+## Stack
 
-Explorar y validar la configuración de Easy Auth (Azure App Service Authentication/Authorization) en Azure Container Apps con una aplicación React + .NET 10 y telemetría completa.
+| Capa | Tecnología |
+|------|-----------|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS + Nginx |
+| Backend | .NET 10 API (Controllers + Easy Auth service) |
+| Auth | Easy Auth (Custom OIDC) + App Roles (User/Admin) |
+| Infra | Azure Container Apps + ACR + App Insights + Log Analytics |
+| IaC | Bicep (main.bicep + easyauth.bicep separados) |
 
-## 📦 Estado Actual
-
-✅ **Aplicación Full-Stack Completa**
-- Frontend: React 18 + TypeScript + Vite + Tailwind CSS
-- Backend: .NET 10 Minimal API con WeatherForecast
-- Application Insights configurado con correlación end-to-end
-- Dockerfiles multi-stage optimizados para producción
-- Infraestructura Bicep lista para deployment
-
-## 🏗️ Estructura del Proyecto
+## Estructura
 
 ```
 container-app-poc/
 ├── src/
-│   ├── frontend/              # React + TypeScript + Vite
-│   │   ├── Dockerfile        # Multi-stage con Nginx
-│   │   └── nginx.conf        # Config optimizada para SPA
-│   └── backend/WeatherApi/   # .NET 10 Minimal API
-│       ├── Program.cs        # API con App Insights
-│       └── Dockerfile        # Multi-stage optimizado
-├── biceps/                   # Infraestructura Azure
-│   ├── main.bicep           # Orquestador principal
-│   └── modules/             # Módulos reutilizables
-├── docs/                     # Documentación
-├── DEPLOYMENT.md            # Guía detallada de deployment
-└── DEVELOPMENT.md           # Guía de desarrollo local
+│   ├── frontend/               # React SPA + nginx
+│   │   ├── src/context/        # AuthContext (Easy Auth)
+│   │   ├── src/hooks/          # useApi (Bearer interceptor)
+│   │   ├── src/pages/          # HomePage, AdminPage
+│   │   ├── nginx.conf          # /_authinfo endpoint
+│   │   └── Dockerfile
+│   └── backend/WeatherApi/     # .NET 10 API
+│       ├── Controllers/        # Weather, Auth controllers
+│       ├── Attributes/         # RequireAuth, RequireRole
+│       ├── Services/           # EasyAuthService
+│       └── Dockerfile
+├── biceps/
+│   ├── main.bicep              # Infra base (sin auth)
+│   ├── easyauth.bicep          # Easy Auth (separado)
+│   └── modules/                # Módulos reutilizables
+└── docs/
+    └── EASY-AUTH-TUTORIAL.md   # Guía completa de Easy Auth
 ```
 
-## 🎨 Stack Tecnológico
+---
 
-### Frontend
-- **Framework**: React 18 + TypeScript
-- **Build**: Vite 8
-- **Styling**: Tailwind CSS 3
-- **Telemetría**: @microsoft/applicationinsights-web
-- **Servidor**: Nginx (Alpine)
+## 🚀 Despliegue Completo (desde cero)
 
-### Backend
-- **Framework**: .NET 10 Minimal API
-- **Telemetría**: Azure.Monitor.OpenTelemetry.AspNetCore
-- **Runtime**: ASP.NET Core 10
-
-### Infraestructura
-- **Compute**: Azure Container Apps
-- **Registry**: Azure Container Registry (ACR)
-- **Monitoring**: Application Insights + Log Analytics
-- **Auth**: Easy Auth (Entra ID)
-
-## ☁️ Despliegue a Azure Container Apps
-
-### Pre-requisitos
-- WSL (Windows Subsystem for Linux) o Linux
-- Docker Desktop corriendo
-- Azure CLI instalado (`az --version`)
-
-### Paso 1: Configurar Variables
+### Variables de entorno
 
 ```bash
-export AZURE_RESOURCE_GROUP="rg-far-container-app-easyauth"
-export AZURE_LOCATION="eastus2"
-export CORS_ALLOWED_ORIGINS="http://localhost:5173,http://localhost:3000"
-export CORS_ALLOWED_ORIGIN_SUFFIXES=".azurecontainerapps.io"
+export RG="rg-far-container-app-easyauth"
+export LOCATION="eastus2"
 ```
 
-### Paso 2: Login a Azure
+### Paso 1: Resource Group
 
 ```bash
-az login
+az group create --name $RG --location $LOCATION
 ```
 
-### Paso 3: Crear Resource Group
-
-```bash
-az group create \
-  --name $AZURE_RESOURCE_GROUP \
-  --location $AZURE_LOCATION
-```
-
-### Paso 4: Desplegar Infraestructura Base
+### Paso 2: Infraestructura base (sin Container Apps)
 
 ```bash
 az deployment group create \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
+  --resource-group $RG \
   --template-file biceps/main.bicep \
-  --parameters \
-    location=$AZURE_LOCATION \
-    corsAllowedOrigins="$CORS_ALLOWED_ORIGINS" \
-    corsAllowedOriginSuffixes="$CORS_ALLOWED_ORIGIN_SUFFIXES" \
-    deployContainerApps=false
+  --parameters deployContainerApps=false
 ```
 
-Esto crea:
-- ✅ Azure Container Registry (ACR)
-- ✅ Log Analytics Workspace
-- ✅ Application Insights
-- ✅ Container App Environment
+Crea: ACR, Log Analytics, Application Insights, Container App Environment.
 
-### Paso 5: Construir y Publicar Imágenes
+### Paso 3: Build de imágenes en ACR
 
 ```bash
-# Obtener nombre del ACR
-ACR_NAME=$(az deployment group show \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
-  --query 'properties.outputs.acrName.value' \
-  --output tsv)
+ACR_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.acrName.value' -o tsv)
 
-# Construir backend en ACR
-az acr build \
-  --registry $ACR_NAME \
-  --image camuzzi-weather-backend:latest \
+# Backend
+az acr build --registry $ACR_NAME \
+  --image weather-api:latest \
   --file src/backend/WeatherApi/Dockerfile \
   src/backend/WeatherApi
 
-# Construir frontend en ACR
-az acr build \
-  --registry $ACR_NAME \
-  --image camuzzi-weather-frontend:latest \
+# Frontend
+az acr build --registry $ACR_NAME \
+  --image weather-frontend:latest \
   --file src/frontend/Dockerfile \
   src/frontend
 ```
 
-### Paso 6: Desplegar Container Apps
+### Paso 4: Deploy Container Apps
 
 ```bash
 az deployment group create \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
+  --resource-group $RG \
   --template-file biceps/main.bicep \
+  --parameters deployContainerApps=true
+```
+
+### Paso 5: Obtener URLs
+
+```bash
+FRONTEND_URL=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.frontendAppUrl.value' -o tsv)
+BACKEND_URL=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.backendAppUrl.value' -o tsv)
+
+echo "Frontend: $FRONTEND_URL"
+echo "Backend:  $BACKEND_URL"
+```
+
+### Paso 6 (Opcional): Configurar Easy Auth
+
+Ver [docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md) para la guía completa.
+
+Resumen rápido:
+
+```bash
+# 1. Crear App Registrations en Entra ID (ver tutorial)
+# 2. Setear secrets en los Container Apps
+az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
+  microsoft-provider-authentication-secret="<FE_CLIENT_SECRET>" \
+  token-store-sas="<SAS_URL_FROM_DEPLOYMENT>"
+
+az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
+  microsoft-provider-authentication-secret="<BE_CLIENT_SECRET>"
+
+# 3. Deploy auth config
+az deployment group create -g $RG \
+  --template-file biceps/easyauth.bicep \
   --parameters \
-    location=$AZURE_LOCATION \
-    corsAllowedOrigins="$CORS_ALLOWED_ORIGINS" \
-    corsAllowedOriginSuffixes="$CORS_ALLOWED_ORIGIN_SUFFIXES" \
-    deployContainerApps=true
+    frontendClientId="<FE_CLIENT_ID>" \
+    backendClientId="<BE_CLIENT_ID>" \
+    oidcWellKnownUrl="<OIDC_DISCOVERY_URL>"
 ```
 
-Esto crea:
-- ✅ **Backend Container App** (puerto 8080, .NET 10 API)
-- ✅ **Frontend Container App** (puerto 80, React + Nginx)
-- ✅ App Insights configurado en ambas apps
-- ✅ Managed Identity con permisos AcrPull
-- ✅ CORS habilitado para localhost y dominios `*.azurecontainerapps.io`
+---
 
-### Paso 7: Obtener URLs
+## 🔄 Actualizar código (rebuild + redeploy)
 
 ```bash
-# Frontend URL
-FRONTEND_URL=$(az deployment group show \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
-  --query 'properties.outputs.frontendAppUrl.value' \
-  --output tsv)
+ACR_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.acrName.value' -o tsv)
 
-# Backend URL
-BACKEND_URL=$(az deployment group show \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
-  --query 'properties.outputs.backendAppUrl.value' \
-  --output tsv)
+# Rebuild
+az acr build --registry $ACR_NAME --image weather-api:latest \
+  --file src/backend/WeatherApi/Dockerfile src/backend/WeatherApi
 
-echo "🌐 Frontend: $FRONTEND_URL"
-echo "🌐 Backend:  $BACKEND_URL"
+az acr build --registry $ACR_NAME --image weather-frontend:latest \
+  --file src/frontend/Dockerfile src/frontend
+
+# Redeploy (force new revision)
+az containerapp update -n ca-weather-be-dev -g $RG
+az containerapp update -n ca-weather-fe-dev -g $RG
 ```
 
-### 🔄 Actualizar Aplicación (Backend y Frontend)
+---
 
-Después de hacer cambios en el código, sigue estos pasos para reconstruir y redeplegar:
-
-#### Paso 1: Obtener Variables Necesarias
+## 🧹 Limpiar recursos
 
 ```bash
-# Si no las tienes guardadas, obtén el nombre del ACR
-ACR_NAME=$(az deployment group show \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
-  --query 'properties.outputs.acrName.value' \
-  --output tsv)
-
-echo "ACR Name: $ACR_NAME"
+az group delete --name $RG --yes --no-wait
 ```
 
-#### Actualizar Ambos (Backend y Frontend)
+---
 
-```bash
-# Reconstruir backend
-az acr build \
-  --registry $ACR_NAME \
-  --image camuzzi-weather-backend:latest \
-  --file src/backend/WeatherApi/Dockerfile \
-  src/backend/WeatherApi
+## 📊 Monitoreo
 
-# Reconstruir frontend
-az acr build \
-  --registry $ACR_NAME \
-  --image camuzzi-weather-frontend:latest \
-  --file src/frontend/Dockerfile \
-  src/frontend
+Telemetría end-to-end incluida:
+- Frontend: Page views, custom events, route tracking
+- Backend: HTTP requests, traces (ILogger), dependencies
+- Correlación distribuida con W3C Trace Context
 
-# Forzar nueva revisión en backend (pull de imagen actualizada)
-az containerapp update \
-  --name ca-weather-be-dev \
-  --resource-group $AZURE_RESOURCE_GROUP
+```kql
+// Requests últimas 24h
+requests | where timestamp > ago(24h)
+| summarize count(), avg(duration) by name, resultCode
 
-# Forzar nueva revisión en frontend (pull de imagen actualizada)
-az containerapp update \
-  --name ca-weather-fe-dev \
-  --resource-group $AZURE_RESOURCE_GROUP
+// Traces de auth
+traces | where timestamp > ago(24h) and message contains "role"
 ```
 
-#### Verificar el Deployment
-
-```bash
-# Ver URL del frontend
-FRONTEND_URL=$(az deployment group show \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
-  --query 'properties.outputs.frontendAppUrl.value' \
-  --output tsv)
-
-# Ver URL del backend
-BACKEND_URL=$(az deployment group show \
-  --resource-group $AZURE_RESOURCE_GROUP \
-  --name main \
-  --query 'properties.outputs.backendAppUrl.value' \
-  --output tsv)
-
-echo "✅ Frontend: $FRONTEND_URL"
-echo "✅ Backend:  $BACKEND_URL"
-
-# Verificar que el backend responda
-curl $BACKEND_URL/weatherforecast
-```
+---
 
 ## 📚 Documentación
 
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Guía completa de despliegue con explicaciones detalladas
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Desarrollo local sin Docker o con Docker Compose
-- **[DOCKER.md](DOCKER.md)** - Detalles de Dockerfiles y troubleshooting
-- **[docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md)** - Configuración de Easy Auth con Entra ID
-
-## 🔐 Configurar Easy Auth
-
-Para proteger la aplicación con Microsoft Entra ID:
-
-1. Portal Azure → Container App → Settings → Authentication
-2. Add identity provider → Microsoft
-3. Create new app registration
-4. Require authentication → Save
-
-📚 **Tutorial completo**: [docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md)
-
-## 📊 Monitoreo con Application Insights
-
-Telemetría end-to-end incluida:
-- ✅ Page views y user actions (Frontend)
-- ✅ HTTP requests y dependencies (Backend)
-- ✅ Distributed tracing con W3C Trace Context
-- ✅ Application Map para visualizar flujos
-
-### Query KQL de Ejemplo
-
-```kql
-// Ver requests de las últimas 24 horas
-requests
-| where timestamp > ago(24h)
-| summarize count(), avg(duration) by cloud_RoleName
-| render barchart
-```
-
-Ver más queries en [DEPLOYMENT.md](DEPLOYMENT.md).
-
-## 🧹 Limpiar Recursos
-
-```bash
-az group delete --name $AZURE_RESOURCE_GROUP --yes --no-wait
-```
-
-## 📄 Licencia
-
-Este proyecto es un POC (Proof of Concept) para fines educativos y de demostración.
+| Doc | Contenido |
+|-----|-----------|
+| [docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md) | Guía completa Easy Auth: App Registrations, Token Store, Custom OIDC, roles, troubleshooting |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Desarrollo local |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Detalles de deployment |
 

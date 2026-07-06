@@ -37,29 +37,6 @@ param cpu string = '0.25'
 @description('Memory size')
 param memory string = '0.5Gi'
 
-@description('Easy Auth frontend client ID (App Registration)')
-param easyAuthClientId string = ''
-
-@description('Easy Auth client secret')
-@secure()
-param easyAuthClientSecret string = ''
-
-@description('OIDC Well-Known Configuration URL')
-param oidcWellKnownUrl string = ''
-
-@description('Easy Auth provider name')
-param easyAuthProviderName string = 'entraid'
-
-@description('Token Store SAS URL for Blob Storage')
-@secure()
-param tokenStoreSasUrl string = ''
-
-@description('Backend API scope for access token')
-param backendApiScope string = ''
-
-@description('Enable Easy Auth')
-param enableEasyAuth bool = false
-
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = {
   name: acrName
 }
@@ -106,24 +83,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           identity: userAssignedIdentity.id
         }
       ]
-      secrets: union(
-        [
-          {
-            name: 'appinsights-connection-string'
-            value: appInsightsConnectionString
-          }
-        ],
-        enableEasyAuth ? [
-          {
-            name: 'microsoft-provider-authentication-secret'
-            value: easyAuthClientSecret
-          }
-          {
-            name: 'token-store-sas'
-            value: tokenStoreSasUrl
-          }
-        ] : []
-      )
+      secrets: [
+        {
+          name: 'appinsights-connection-string'
+          value: appInsightsConnectionString
+        }
+      ]
     }
     template: {
       containers: [
@@ -159,47 +124,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
           }
         ]
-      }
-    }
-  }
-}
-
-resource authConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = if (enableEasyAuth) {
-  parent: containerApp
-  name: 'current'
-  properties: {
-    platform: {
-      enabled: true
-    }
-    globalValidation: {
-      unauthenticatedClientAction: 'RedirectToLoginPage'
-      redirectToProvider: easyAuthProviderName
-    }
-    identityProviders: {
-      customOpenIdConnectProviders: {
-        '${easyAuthProviderName}': {
-          registration: {
-            clientId: easyAuthClientId
-            clientCredential: {
-              clientSecretSettingName: 'microsoft-provider-authentication-secret'
-            }
-            openIdConnectConfiguration: {
-              wellKnownOpenIdConfiguration: oidcWellKnownUrl
-            }
-          }
-          login: {
-            scopes: union(['openid', 'profile', 'email'], empty(backendApiScope) ? [] : [backendApiScope])
-          }
-        }
-      }
-    }
-    login: {
-      preserveUrlFragmentsForLogins: false
-      tokenStore: {
-        enabled: true
-        azureBlobStorage: {
-          sasUrlSettingName: 'token-store-sas'
-        }
       }
     }
   }

@@ -70,58 +70,82 @@ Este documento cubre la configuración de Easy Auth (Authentication) en Azure Co
 
 ## Despliegue con Bicep (Método Recomendado)
 
-El directorio `biceps/` contiene templates que despliegan la infraestructura completa incluyendo Easy Auth, Token Store, y toda la configuración.
+Easy Auth se configura con un Bicep **separado** (`biceps/easyauth.bicep`), que se ejecuta DESPUÉS de tener las Container Apps desplegadas con `main.bicep`.
 
-### Despliegue con parámetros inline
+### Pre-requisitos
+
+1. Container Apps ya desplegadas (ver README.md pasos 1-5)
+2. App Registrations creadas (ver sección "Pre-requisitos: App Registrations" abajo)
+3. Client secrets generados
+
+### Paso 1: Setear secrets en Container Apps
 
 ```bash
-az deployment group create \
-  --resource-group rg-far-container-app-easyauth \
-  --template-file biceps/main.bicep \
+RG="rg-far-container-app-easyauth"
+
+# Frontend: client secret + token store SAS (se genera en paso 2)
+az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
+  microsoft-provider-authentication-secret="<FRONTEND_CLIENT_SECRET>"
+
+# Backend: client secret
+az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
+  microsoft-provider-authentication-secret="<BACKEND_CLIENT_SECRET>"
+```
+
+### Paso 2: Deploy Easy Auth + Token Store
+
+```bash
+# POC-Fred (CIAM)
+az deployment group create -g $RG \
+  --template-file biceps/easyauth.bicep \
   --parameters \
-    enableEasyAuth=true \
-    easyAuthFrontendClientId="e9e60b6c-3b17-40f9-8722-0e2387fb232d" \
-    easyAuthFrontendClientSecret="<TU-CLIENT-SECRET-FRONTEND>" \
-    easyAuthBackendClientId="9cbeba2f-de5d-42c5-b886-1f1395e59e3e" \
-    easyAuthBackendClientSecret="<TU-CLIENT-SECRET-BACKEND>" \
-    oidcWellKnownUrl="https://cognitomigration.ciamlogin.com/0a3af0e3-416b-4a6b-97e9-cb3a9a094449/v2.0/.well-known/openid-configuration" \
-    easyAuthProviderName="entraid"
+    frontendClientId="e9e60b6c-3b17-40f9-8722-0e2387fb232d" \
+    backendClientId="9cbeba2f-de5d-42c5-b886-1f1395e59e3e" \
+    oidcWellKnownUrl="https://cognitomigration.ciamlogin.com/0a3af0e3-416b-4a6b-97e9-cb3a9a094449/v2.0/.well-known/openid-configuration"
 ```
 
-### Despliegue con archivo de parámetros
-
-Crear un archivo `parameters.json`:
-
-```json
-{
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "enableEasyAuth": { "value": true },
-    "easyAuthFrontendClientId": { "value": "e9e60b6c-3b17-40f9-8722-0e2387fb232d" },
-    "easyAuthFrontendClientSecret": { "value": "<TU-CLIENT-SECRET-FRONTEND>" },
-    "easyAuthBackendClientId": { "value": "9cbeba2f-de5d-42c5-b886-1f1395e59e3e" },
-    "easyAuthBackendClientSecret": { "value": "<TU-CLIENT-SECRET-BACKEND>" },
-    "oidcWellKnownUrl": { "value": "https://cognitomigration.ciamlogin.com/0a3af0e3-416b-4a6b-97e9-cb3a9a094449/v2.0/.well-known/openid-configuration" },
-    "easyAuthProviderName": { "value": "entraid" }
-  }
-}
-```
+### Paso 3: Obtener SAS URL y setear en frontend
 
 ```bash
-az deployment group create \
-  --resource-group rg-far-container-app-easyauth \
-  --template-file biceps/main.bicep \
-  --parameters @parameters.json
+# Obtener la SAS URL generada por el deployment
+TOKEN_STORE_SAS=$(az deployment group show -g $RG \
+  --name easyauth \
+  --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
+
+# Setearla como secret en el frontend
+az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
+  token-store-sas="$TOKEN_STORE_SAS"
 ```
 
-### Qué despliega el Bicep
+### Paso 4: Obtener Callback URL para App Registration
 
-El template `main.bicep` orquesta módulos en `biceps/modules/`:
-- **token-store-storage.bicep**: Storage Account + blob container `tokenstore` + genera SAS URL (2 años)
-- **frontend-container-app.bicep**: Container App con Easy Auth (`RedirectToLoginPage`), Token Store, y scope del backend API
-- **backend-container-app.bicep**: Container App con Easy Auth (`AllowAnonymous`), sin Token Store
-- Además: Container Registry, Log Analytics, Application Insights, Container App Environment
+```bash
+CALLBACK_URL=$(az deployment group show -g $RG \
+  --name easyauth \
+  --query 'properties.outputs.frontendCallbackUrl.value' -o tsv)
+
+echo "Agregar como Redirect URI (Web) en la App Registration del frontend:"
+echo "$CALLBACK_URL"
+```
+
+### Qué despliega `easyauth.bicep`
+
+- **Token Store Storage**: Storage Account + blob container `tokenstore` + SAS URL (2 años)
+- **Frontend authConfig**: Custom OIDC (`RedirectToLoginPage`) + Token Store + scope del backend
+- **Backend authConfig**: Custom OIDC (`AllowAnonymous`) — valida tokens pero no bloquea CORS
+
+### Para CMZ (Workforce)
+
+Mismo comando, solo cambia el `oidcWellKnownUrl`:
+
+```bash
+az deployment group create -g $RG \
+  --template-file biceps/easyauth.bicep \
+  --parameters \
+    frontendClientId="<CMZ_FRONTEND_CLIENT_ID>" \
+    backendClientId="<CMZ_BACKEND_CLIENT_ID>" \
+    oidcWellKnownUrl="https://login.microsoftonline.com/<CAMUZZI_TENANT_ID>/v2.0/.well-known/openid-configuration"
+```
 
 ---
 

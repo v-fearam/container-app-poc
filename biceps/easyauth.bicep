@@ -1,0 +1,167 @@
+// ============================================================================
+// Easy Auth Configuration — Standalone Deployment
+// ============================================================================
+// Deploy AFTER main.bicep has created the Container Apps.
+// This creates the Token Store storage and configures Easy Auth (Custom OIDC)
+// on both frontend and backend Container Apps.
+//
+// IMPORTANT: Secrets must be set via CLI BEFORE deploying this file:
+//
+//   # 1. Set secrets on frontend (client secret + token store SAS)
+//   az containerapp secret set -n ca-weather-fe-dev -g <RG> --secrets \
+//     microsoft-provider-authentication-secret=<FRONTEND_SECRET> \
+//     token-store-sas=<SAS_URL>
+//
+//   # 2. Set secrets on backend (client secret)
+//   az containerapp secret set -n ca-weather-be-dev -g <RG> --secrets \
+//     microsoft-provider-authentication-secret=<BACKEND_SECRET>
+//
+//   # 3. Deploy auth config
+//   az deployment group create --resource-group <RG> \
+//     --template-file biceps/easyauth.bicep \
+//     --parameters \
+//       frontendClientId=<FRONTEND_CLIENT_ID> \
+//       backendClientId=<BACKEND_CLIENT_ID> \
+//       oidcWellKnownUrl=<OIDC_DISCOVERY_URL>
+//
+// ============================================================================
+
+targetScope = 'resourceGroup'
+
+@description('Location for resources')
+param location string = resourceGroup().location
+
+// --- Container App names (must already exist from main.bicep) ---
+@description('Frontend Container App name')
+param frontendAppName string = 'ca-weather-fe-dev'
+
+@description('Backend Container App name')
+param backendAppName string = 'ca-weather-be-dev'
+
+// --- App Registration IDs ---
+@description('Frontend App Registration Client ID')
+param frontendClientId string
+
+@description('Backend App Registration Client ID')
+param backendClientId string
+
+// --- OIDC Configuration ---
+@description('OIDC Well-Known Configuration URL (CIAM: https://{tenant}.ciamlogin.com/{tenantId}/v2.0/.well-known/openid-configuration)')
+param oidcWellKnownUrl string
+
+@description('Custom OIDC provider name (used in callback path: /.auth/login/{name}/callback)')
+param providerName string = 'entraid'
+
+// --- Token Store ---
+@description('Storage account name for Token Store')
+param tokenStoreStorageAccountName string = 'st${take(replace(toLower('weather'), '-', ''), 8)}tokens${take(uniqueString(resourceGroup().id), 4)}'
+
+// ============================================================================
+// Token Store Storage Account
+// ============================================================================
+module tokenStoreStorage 'modules/token-store-storage.bicep' = {
+  name: 'easyauth-token-store'
+  params: {
+    location: location
+    storageAccountName: tokenStoreStorageAccountName
+  }
+}
+
+// ============================================================================
+// Reference existing Container Apps
+// ============================================================================
+resource frontendApp 'Microsoft.App/containerApps@2024-03-01' existing = {
+  name: frontendAppName
+}
+
+resource backendApp 'Microsoft.App/containerApps@2024-03-01' existing = {
+  name: backendAppName
+}
+
+// ============================================================================
+// Frontend Auth Configuration
+// ============================================================================
+resource frontendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
+  parent: frontendApp
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: providerName
+    }
+    identityProviders: {
+      customOpenIdConnectProviders: {
+        '${providerName}': {
+          registration: {
+            clientId: frontendClientId
+            clientCredential: {
+              clientSecretSettingName: 'microsoft-provider-authentication-secret'
+            }
+            openIdConnectConfiguration: {
+              wellKnownOpenIdConfiguration: oidcWellKnownUrl
+            }
+          }
+          login: {
+            scopes: ['openid', 'profile', 'email', 'api://${backendClientId}/.default']
+          }
+        }
+      }
+    }
+    login: {
+      preserveUrlFragmentsForLogins: false
+      tokenStore: {
+        enabled: true
+        azureBlobStorage: {
+          sasUrlSettingName: 'token-store-sas'
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Backend Auth Configuration
+// ============================================================================
+resource backendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
+  parent: backendApp
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'AllowAnonymous'
+    }
+    identityProviders: {
+      customOpenIdConnectProviders: {
+        '${providerName}': {
+          registration: {
+            clientId: backendClientId
+            clientCredential: {
+              clientSecretSettingName: 'microsoft-provider-authentication-secret'
+            }
+            openIdConnectConfiguration: {
+              wellKnownOpenIdConfiguration: oidcWellKnownUrl
+            }
+          }
+          login: {
+            scopes: ['openid', 'profile', 'email']
+          }
+        }
+      }
+    }
+    login: {
+      preserveUrlFragmentsForLogins: false
+    }
+  }
+}
+
+// ============================================================================
+// Outputs
+// ============================================================================
+output tokenStoreStorageAccountName string = tokenStoreStorage.outputs.storageAccountName
+output tokenStoreSasUrl string = tokenStoreStorage.outputs.tokenStoreSasUrl
+output frontendCallbackUrl string = 'https://${frontendApp.properties.configuration.ingress.fqdn}/.auth/login/${providerName}/callback'

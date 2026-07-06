@@ -22,10 +22,10 @@ param frontendAppName string = 'ca-${workloadName}-fe-${environmentShortName}'
 param containerRegistryName string = 'acr${take(replace(toLower(workloadName), '-', ''), 12)}${take(uniqueString(resourceGroup().id), 8)}'
 
 @description('The backend image name in ACR')
-param backendImageName string = 'camuzzi-weather-backend'
+param backendImageName string = 'weather-api'
 
 @description('The frontend image name in ACR')
-param frontendImageName string = 'camuzzi-weather-frontend'
+param frontendImageName string = 'weather-frontend'
 
 @description('The tag for the container images')
 param imageTag string = 'latest'
@@ -38,32 +38,6 @@ param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
 
 @description('Comma-separated host suffixes allowed for CORS origins')
 param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
-
-@description('Enable Easy Auth on Container Apps')
-param enableEasyAuth bool = false
-
-@description('Easy Auth frontend client ID')
-param easyAuthFrontendClientId string = ''
-
-@description('Easy Auth frontend client secret')
-@secure()
-param easyAuthFrontendClientSecret string = ''
-
-@description('Easy Auth backend client ID')
-param easyAuthBackendClientId string = ''
-
-@description('Easy Auth backend client secret')
-@secure()
-param easyAuthBackendClientSecret string = ''
-
-@description('OIDC Well-Known URL (CIAM: https://{tenant}.ciamlogin.com/{tenantId}/v2.0/.well-known/openid-configuration, Workforce: https://login.microsoftonline.com/{tenantId}/v2.0/.well-known/openid-configuration)')
-param oidcWellKnownUrl string = ''
-
-@description('Easy Auth custom provider name')
-param easyAuthProviderName string = 'entraid'
-
-@description('Storage account name for Token Store')
-param tokenStoreStorageAccountName string = 'st${take(replace(toLower(workloadName), '-', ''), 8)}tokens${take(uniqueString(resourceGroup().id), 4)}'
 
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
@@ -103,15 +77,6 @@ module environment 'modules/container-app-environment.bicep' = {
   }
 }
 
-// Token Store Storage (for Easy Auth)
-module tokenStoreStorage 'modules/token-store-storage.bicep' = if (enableEasyAuth) {
-  name: 'token-store-deployment'
-  params: {
-    location: location
-    storageAccountName: tokenStoreStorageAccountName
-  }
-}
-
 // Backend Container App
 module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApps) {
   name: 'backend-app-deployment'
@@ -129,11 +94,6 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     maxReplicas: 3
     cpu: '0.5'
     memory: '1.0Gi'
-    enableEasyAuth: enableEasyAuth
-    easyAuthClientId: easyAuthBackendClientId
-    easyAuthClientSecret: easyAuthBackendClientSecret
-    oidcWellKnownUrl: oidcWellKnownUrl
-    easyAuthProviderName: easyAuthProviderName
   }
 }
 
@@ -153,13 +113,6 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
     maxReplicas: 5
     cpu: '0.25'
     memory: '0.5Gi'
-    enableEasyAuth: enableEasyAuth
-    easyAuthClientId: easyAuthFrontendClientId
-    easyAuthClientSecret: easyAuthFrontendClientSecret
-    oidcWellKnownUrl: oidcWellKnownUrl
-    easyAuthProviderName: easyAuthProviderName
-    tokenStoreSasUrl: enableEasyAuth ? tokenStoreStorage!.outputs.tokenStoreSasUrl : ''
-    backendApiScope: enableEasyAuth ? 'api://${easyAuthBackendClientId}/.default' : ''
   }
 }
 
