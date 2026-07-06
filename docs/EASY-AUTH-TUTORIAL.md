@@ -434,6 +434,25 @@ Usuario logueado → Easy Auth tiene tokens
 - Secret `token-store-sas` en el Container App frontend
 - `tokenStore.enabled: true` + `azureBlobStorage.sasUrlSettingName` en la auth config
 
+### Seguridad del Token Store
+
+La seguridad tiene 4 capas:
+
+1. **Blob Storage privado**: `allowBlobPublicAccess: false` — nadie accede sin credenciales
+2. **SAS URL limitada**: solo HTTPS, solo operaciones blob, con fecha de expiración (2 años), solo permisos rwdl en ese container
+3. **SAS URL como Secret**: se guarda como **secret** del Container App — solo el sidecar de Easy Auth (componente de la plataforma) la lee. No es accesible desde tu código ni containers
+4. **Tokens por sesión**: cada token se asocia al session ID del usuario. Un usuario NO puede leer tokens de otro
+
+```
+Tu código NUNCA toca el blob directamente.
+Solo recibe los tokens como HTTP headers inyectados por el sidecar de Easy Auth.
+```
+
+**Mejoras para producción:**
+- **Managed Identity** en vez de SAS → sin secretos que expiren
+- **Private Endpoint** → blob accesible solo via red privada
+- **Storage Firewall** → restringir acceso a la subnet del Container App Environment
+
 ---
 
 ### Flujo de Autenticación Paso a Paso
