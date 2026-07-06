@@ -396,6 +396,8 @@ az containerapp auth microsoft remove \
 
 **Configuración**:
 ```
+Tenant type: Workforce
+
 App registration type: Provide the details of an existing app registration
 
 Application (client) ID: <FRONTEND_CLIENT_ID>
@@ -408,6 +410,12 @@ Allowed token audiences:
   <FRONTEND_CLIENT_ID>
   api://<FRONTEND_CLIENT_ID>
 ```
+
+💡 **¿Qué es "Tenant type"?**
+- **Workforce** ← **Usá esta**: Para cuentas de trabajo/escuela (Microsoft Entra ID) o Microsoft accounts (Outlook.com, Live.com)
+  - Tu caso: Usuarios en el tenant "Cognito Migration"
+- **Customer (Preview)**: Para Azure AD B2C, identidades de consumidores, social accounts (Facebook, Google)
+  - NO uses esta opción
 
 ⚠️ **CRÍTICO**: 
 - Usá `login.microsoftonline.com`, NO `sts.windows.net`
@@ -444,6 +452,8 @@ az containerapp auth microsoft remove \
 
 **Configuración**:
 ```
+Tenant type: Workforce
+
 App registration type: Provide the details of an existing app registration
 
 Application (client) ID: <BACKEND_CLIENT_ID>
