@@ -4,12 +4,53 @@ import { useAuth } from '../context/AuthContext';
 import { useApi, ApiError } from '../hooks/useApi';
 import { WeatherCard, type WeatherForecast } from '../components/WeatherCard';
 
+interface EndpointTestResult {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  statusCode?: number;
+  message?: string;
+}
+
 export function HomePage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const { get } = useApi();
   const [weather, setWeather] = useState<WeatherForecast[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Role diagnostics
+  const [roles, setRoles] = useState<string[] | null>(null);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [userEndpoint, setUserEndpoint] = useState<EndpointTestResult>({ status: 'idle' });
+  const [adminEndpoint, setAdminEndpoint] = useState<EndpointTestResult>({ status: 'idle' });
+
+  const fetchRoles = async () => {
+    setRolesLoading(true);
+    try {
+      const data = await get<{ roles: string[] }>('/roles');
+      setRoles(data.roles);
+    } catch (err) {
+      setRoles([]);
+    } finally {
+      setRolesLoading(false);
+    }
+  };
+
+  const testEndpoint = async (
+    path: string,
+    setter: (r: EndpointTestResult) => void
+  ) => {
+    setter({ status: 'loading' });
+    try {
+      await get<WeatherForecast[]>(path);
+      setter({ status: 'success', statusCode: 200, message: 'Acceso permitido' });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setter({ status: 'error', statusCode: err.status, message: err.status === 403 ? 'Rol insuficiente' : err.status === 401 ? 'No autenticado' : err.body });
+      } else {
+        setter({ status: 'error', message: 'Error de red' });
+      }
+    }
+  };
 
   const fetchWeather = async () => {
     setLoading(true);
@@ -120,6 +161,126 @@ export function HomePage() {
             {weather.map((forecast, index) => (
               <WeatherCard key={index} forecast={forecast} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Role Diagnostics Panel */}
+      {isAuthenticated && (
+        <div className="mt-16 mb-8">
+          <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Diagnóstico de Roles y Endpoints</h3>
+                <p className="text-sm text-slate-500">Verifica qué roles tiene el usuario y qué endpoints puede acceder</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* /roles card */}
+              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <code className="text-sm font-mono text-slate-700 bg-slate-200 px-2 py-0.5 rounded">GET /roles</code>
+                  <button
+                    onClick={fetchRoles}
+                    disabled={rolesLoading}
+                    className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {rolesLoading ? '...' : 'Consultar'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-2">Roles del usuario actual</p>
+                {roles !== null && (
+                  <div className="mt-2">
+                    {roles.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {roles.map((role) => (
+                          <span key={role} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800">
+                            {role}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-amber-600 font-medium">Sin roles asignados</span>
+                    )}
+                  </div>
+                )}
+                {roles === null && !rolesLoading && (
+                  <p className="text-xs text-slate-400 italic">Click "Consultar" para ver roles</p>
+                )}
+              </div>
+
+              {/* /weatherforecast/user card */}
+              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <code className="text-sm font-mono text-slate-700 bg-slate-200 px-2 py-0.5 rounded">GET /weatherforecast/user</code>
+                  <button
+                    onClick={() => testEndpoint('/weatherforecast/user', setUserEndpoint)}
+                    disabled={userEndpoint.status === 'loading'}
+                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {userEndpoint.status === 'loading' ? '...' : 'Probar'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-2">Requiere rol: <span className="font-semibold text-slate-700">User</span></p>
+                {userEndpoint.status !== 'idle' && userEndpoint.status !== 'loading' && (
+                  <div className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                    userEndpoint.status === 'success'
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {userEndpoint.status === 'success' ? (
+                      <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    <span>{userEndpoint.statusCode} — {userEndpoint.message}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* /weatherforecast/admin card */}
+              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <code className="text-sm font-mono text-slate-700 bg-slate-200 px-2 py-0.5 rounded">GET /weatherforecast/admin</code>
+                  <button
+                    onClick={() => testEndpoint('/weatherforecast/admin', setAdminEndpoint)}
+                    disabled={adminEndpoint.status === 'loading'}
+                    className="text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {adminEndpoint.status === 'loading' ? '...' : 'Probar'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-2">Requiere rol: <span className="font-semibold text-slate-700">Admin</span></p>
+                {adminEndpoint.status !== 'idle' && adminEndpoint.status !== 'loading' && (
+                  <div className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                    adminEndpoint.status === 'success'
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    {adminEndpoint.status === 'success' ? (
+                      <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    <span>{adminEndpoint.statusCode} — {adminEndpoint.message}</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
