@@ -12,10 +12,12 @@ namespace WeatherApi.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly EasyAuthService _easyAuthService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(EasyAuthService easyAuthService)
+    public AuthController(EasyAuthService easyAuthService, ILogger<AuthController> logger)
     {
         _easyAuthService = easyAuthService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -29,6 +31,7 @@ public class AuthController : ControllerBase
 
         if (principal == null)
         {
+            _logger.LogWarning("Userinfo requested without authentication");
             return Ok(new UserInfo
             {
                 IsAuthenticated = false,
@@ -39,6 +42,8 @@ public class AuthController : ControllerBase
         var email = _easyAuthService.GetUserEmail();
         var name = _easyAuthService.GetUserName();
         var roles = _easyAuthService.GetRoles();
+
+        _logger.LogInformation("Userinfo requested by {User} with roles [{Roles}]", email ?? name, string.Join(", ", roles));
 
         return Ok(new UserInfo
         {
@@ -63,6 +68,8 @@ public class AuthController : ControllerBase
     public IActionResult GetRoles()
     {
         var roles = _easyAuthService.GetRoles();
+        var user = _easyAuthService.GetUserEmail() ?? "unknown";
+        _logger.LogInformation("Roles endpoint accessed by {User}: [{Roles}]", user, string.Join(", ", roles));
         return Ok(new { roles });
     }
 }

@@ -8,10 +8,6 @@ namespace WeatherApi.Attributes;
 /// Action filter that requires the caller to have a specific Easy Auth role.
 /// Returns 401 if not authenticated, 403 if the required role is missing.
 /// </summary>
-/// <example>
-/// [RequireRole("Admin")]
-/// public IActionResult GetAdminData() { ... }
-/// </example>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
 public class RequireRoleAttribute : TypeFilterAttribute
 {
@@ -24,11 +20,13 @@ public class RequireRoleAttribute : TypeFilterAttribute
     {
         private readonly string _role;
         private readonly EasyAuthService _easyAuthService;
+        private readonly ILogger<RequireRoleFilter> _logger;
 
-        public RequireRoleFilter(string role, EasyAuthService easyAuthService)
+        public RequireRoleFilter(string role, EasyAuthService easyAuthService, ILogger<RequireRoleFilter> logger)
         {
             _role = role;
             _easyAuthService = easyAuthService;
+            _logger = logger;
         }
 
         public void OnActionExecuting(ActionExecutingContext context)
@@ -37,6 +35,7 @@ public class RequireRoleAttribute : TypeFilterAttribute
 
             if (principal == null)
             {
+                _logger.LogWarning("Access denied to {Path}: no authentication principal", context.HttpContext.Request.Path);
                 context.Result = new JsonResult(new { error = "Unauthorized", message = "No authentication principal found." })
                 {
                     StatusCode = StatusCodes.Status401Unauthorized
@@ -46,6 +45,8 @@ public class RequireRoleAttribute : TypeFilterAttribute
 
             if (!_easyAuthService.HasRole(_role))
             {
+                var user = principal.UserDetails ?? principal.UserId ?? "unknown";
+                _logger.LogWarning("Access denied to {Path}: user {User} missing role {Role}", context.HttpContext.Request.Path, user, _role);
                 context.Result = new JsonResult(new { error = "Forbidden", message = $"Required role '{_role}' is missing." })
                 {
                     StatusCode = StatusCodes.Status403Forbidden

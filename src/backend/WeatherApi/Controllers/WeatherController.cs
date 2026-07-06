@@ -18,10 +18,12 @@ public class WeatherController : ControllerBase
     ];
 
     private readonly EasyAuthService _easyAuthService;
+    private readonly ILogger<WeatherController> _logger;
 
-    public WeatherController(EasyAuthService easyAuthService)
+    public WeatherController(EasyAuthService easyAuthService, ILogger<WeatherController> logger)
     {
         _easyAuthService = easyAuthService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -34,6 +36,7 @@ public class WeatherController : ControllerBase
     public IActionResult Get()
     {
         var principal = _easyAuthService.GetClientPrincipal()!;
+        var user = principal.UserDetails ?? principal.UserId ?? "unknown";
 
         var userRole = "User";
         var roleClaim = principal.Claims?.FirstOrDefault(c => c.Typ == "roles");
@@ -41,6 +44,8 @@ public class WeatherController : ControllerBase
         {
             userRole = roleClaim.Val ?? "User";
         }
+
+        _logger.LogInformation("Weather forecast requested by {User} with role {Role}", user, userRole);
 
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new WeatherForecast(
@@ -63,6 +68,9 @@ public class WeatherController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public IActionResult GetForUser()
     {
+        var user = _easyAuthService.GetUserEmail() ?? "unknown";
+        _logger.LogInformation("User-role endpoint accessed by {User}", user);
+
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new WeatherForecast(
                 DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
@@ -87,6 +95,8 @@ public class WeatherController : ControllerBase
         var principal = _easyAuthService.GetClientPrincipal()!;
         var requestedBy = principal.UserDetails ?? principal.UserId ?? "unknown";
         var claimsCount = principal.Claims?.Count ?? 0;
+
+        _logger.LogInformation("Admin endpoint accessed by {User} with {ClaimsCount} claims", requestedBy, claimsCount);
 
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new AdminWeatherForecast(
