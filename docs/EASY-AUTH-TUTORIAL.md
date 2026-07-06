@@ -449,7 +449,10 @@ Solo recibe los tokens como HTTP headers inyectados por el sidecar de Easy Auth.
 ```
 
 **Mejoras para producción:**
-- **Managed Identity** en vez de SAS → sin secretos que expiren
+- **Managed Identity** en vez de SAS → sin secretos que expiren.
+  > ⚠️ A julio 2026, esta funcionalidad está en preview (SDK v1.6.0-beta.1) y NO está disponible en el schema ARM/Bicep GA.
+  > Cuando esté en GA, migraremos de `sasUrlSettingName` a `managedIdentityResourceId`.
+  > Ref: https://learn.microsoft.com/en-us/dotnet/api/azure.resourcemanager.appcontainers.models.containerapptokenstore.managedidentityresourceid?view=azure-dotnet-preview
 - **Private Endpoint** → blob accesible solo via red privada
 - **Storage Firewall** → restringir acceso a la subnet del Container App Environment
 
