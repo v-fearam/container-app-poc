@@ -7,14 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Latest Azure Monitor OpenTelemetry package for App Insights -->
-    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="*" />
-    <!-- Latest OpenAPI support -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="*" />
-    <!-- Latest Swagger/OpenAPI documentation -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="*" />
-    <!-- DotNetEnv para cargar variables desde .env -->
-    <PackageReference Include="DotNetEnv" Version="*" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.5.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <PackageReference Include="DotNetEnv" Version="3.2.0" />
   </ItemGroup>
 
 </Project>

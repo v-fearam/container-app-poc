@@ -1,8 +1,8 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using WeatherApi.Extensions;
 
-// Cargar variables desde .env si existe
-DotNetEnv.Env.Load();
+// Load .env file for local development (file may not exist in production)
+if (File.Exists(".env")) DotNetEnv.Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,7 +19,9 @@ builder.Services.AddEasyAuth();
 // CORS
 builder.Services.AddWeatherCors(builder.Configuration);
 
-// Configure OpenTelemetry with Azure Monitor (opcional en desarrollo)
+// OpenTelemetry + Azure Monitor (App Insights)
+// UseAzureMonitor() auto-collects: HTTP requests, dependencies, ILogger logs, exceptions, metrics
+// Ref: https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-enable
 var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
     ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
 
@@ -29,14 +31,12 @@ if (!string.IsNullOrEmpty(appInsightsConnectionString))
     {
         options.ConnectionString = appInsightsConnectionString;
     });
-    Console.WriteLine("✅ Application Insights habilitado");
-}
-else
-{
-    Console.WriteLine("⚠️  Application Insights no configurado (opcional para desarrollo local)");
 }
 
 var app = builder.Build();
+
+// Health endpoint (no auth, useful for probes and smoke tests)
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

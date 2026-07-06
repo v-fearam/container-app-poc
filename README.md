@@ -161,18 +161,30 @@ az group delete --name $RG --yes --no-wait
 
 ## 📊 Monitoreo
 
-Telemetría end-to-end incluida:
-- Frontend: Page views, custom events, route tracking
-- Backend: HTTP requests, traces (ILogger), dependencies
-- Correlación distribuida con W3C Trace Context
+Telemetría end-to-end con **OpenTelemetry + Azure Monitor**:
+
+**Backend (.NET 10)**:
+- Paquete: `Azure.Monitor.OpenTelemetry.AspNetCore` → `UseAzureMonitor()`
+- Auto-recolecta: HTTP requests, dependencies, ILogger logs, exceptions, metrics
+- [Docs: Enable OpenTelemetry](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-enable)
+
+**Frontend (React SPA)**:
+- Page views, custom events, route tracking via Application Insights JS SDK
+
+**Managed OTel Agent (platform level)**:
+- Configurado en el Container App Environment vía Bicep
+- Reenvía traces y logs a App Insights sin cambios en la app
+- [Docs: OTel agents in Container Apps](https://learn.microsoft.com/azure/container-apps/opentelemetry-agents)
+
+**Arquitectura dual**: la app envía directo a App Insights (via SDK) + el managed agent captura logs/traces adicionales a nivel plataforma. Esto garantiza visibilidad completa.
 
 ```kql
 // Requests últimas 24h
 requests | where timestamp > ago(24h)
 | summarize count(), avg(duration) by name, resultCode
 
-// Traces de auth
-traces | where timestamp > ago(24h) and message contains "role"
+// ILogger traces
+traces | where timestamp > ago(24h) and customDimensions.CategoryName startswith "WeatherApi"
 ```
 
 ---

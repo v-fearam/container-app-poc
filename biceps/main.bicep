@@ -74,6 +74,7 @@ module environment 'modules/container-app-environment.bicep' = {
     location: location
     environmentName: environmentName
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 
