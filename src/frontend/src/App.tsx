@@ -8,14 +8,7 @@ function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route
-          index
-          element={
-            <ProtectedRoute>
-              <HomePage />
-            </ProtectedRoute>
-          }
-        />
+        <Route index element={<HomePage />} />
         <Route
           path="admin"
           element={

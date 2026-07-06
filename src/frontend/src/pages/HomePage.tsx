@@ -166,8 +166,7 @@ export function HomePage() {
       )}
 
       {/* Role Diagnostics Panel */}
-      {isAuthenticated && (
-        <div className="mt-16 mb-8">
+      <div className="mt-16 mb-8">
           <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -283,7 +282,6 @@ export function HomePage() {
             </div>
           </div>
         </div>
-      )}
 
       {/* Info Cards */}
       <div className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-6">
