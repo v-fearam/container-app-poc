@@ -421,6 +421,22 @@ Allowed token audiences:
 - Usá `login.microsoftonline.com`, NO `sts.windows.net`
 - Usá el tenant ID correcto: `0a3af0e3-416b-4a6b-97e9-cb3a9a094449`
 
+**Additional checks**:
+```
+Client application requirement: Allow requests only from this application itself
+Identity requirement: Allow requests from any identity
+```
+
+💡 **¿Qué significan estos checks?**
+- **Client application requirement**:
+  - ✅ "Allow requests only from this application itself" ← Recomendado para single app
+  - ❌ "Allow requests from specific client applications" - Solo si tenés múltiples apps
+  - ❌ "Allow requests from any application" - NUNCA, inseguro
+  
+- **Identity requirement**:
+  - ✅ "Allow requests from any identity" ← Recomendado (manejás usuarios en Enterprise Apps)
+  - ❌ "Allow requests from specific identities" - Solo si querés hardcodear usuarios
+
 **Authentication settings**:
 ```
 Restrict access: Require authentication
@@ -468,6 +484,12 @@ Allowed token audiences:
 ```
 
 ⚠️ **CRÍTICO**: Mismo tenant ID que el Frontend.
+
+**Additional checks**:
+```
+Client application requirement: Allow requests only from this application itself
+Identity requirement: Allow requests from any identity
+```
 
 **Authentication settings**:
 ```
