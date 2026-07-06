@@ -33,38 +33,61 @@ function App() {
 
   // Fetch user info from backend
   const fetchUserInfo = async () => {
-    if (!apiUrl) {
-      setUserInfo({
-        isAuthenticated: false,
-        message: 'API URL no configurada'
-      });
-      return;
-    }
-    
     setLoadingUser(true);
     try {
-      const response = await fetch(`${apiUrl.replace(/\/$/, '')}/userinfo`, {
-        credentials: 'include' // Important for Easy Auth cookies
-      });
+      // Call our nginx endpoint that exposes Easy Auth headers
+      const response = await fetch('/_authinfo');
       
       if (response.ok) {
         const data = await response.json();
-        setUserInfo(data);
-        appInsights.trackEvent({ 
-          name: 'UserInfoFetched',
-          properties: { isAuthenticated: data.isAuthenticated }
-        });
+        
+        if (data.authenticated && data.clientPrincipal) {
+          // Decode the base64-encoded X-MS-CLIENT-PRINCIPAL header
+          try {
+            const decoded = JSON.parse(atob(data.clientPrincipal));
+            const claims = decoded.claims || [];
+            const getClaim = (type: string) => 
+              claims.find((c: { typ: string; val: string }) => c.typ === type)?.val;
+            
+            setUserInfo({
+              isAuthenticated: true,
+              name: getClaim('name') || getClaim('preferred_username') || data.userName || decoded.userDetails,
+              email: getClaim('email') || getClaim('preferred_username') || data.userName,
+              userId: data.userId || decoded.userId,
+              roles: claims
+                .filter((c: { typ: string; val: string }) => c.typ === 'roles' || c.typ === 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role')
+                .map((c: { typ: string; val: string }) => c.val)
+            });
+          } catch {
+            // If decoding fails, use basic info from headers
+            setUserInfo({
+              isAuthenticated: true,
+              name: data.userName || 'Usuario autenticado',
+              email: data.userName,
+              userId: data.userId
+            });
+          }
+          appInsights.trackEvent({ 
+            name: 'UserInfoFetched',
+            properties: { isAuthenticated: true, provider: data.identityProvider }
+          });
+        } else {
+          setUserInfo({
+            isAuthenticated: false,
+            message: 'Usuario no autenticado (Easy Auth no configurado o en desarrollo local)'
+          });
+        }
       } else {
         setUserInfo({
           isAuthenticated: false,
-          message: `Error HTTP ${response.status}: No se pudo obtener información del usuario`
+          message: `Error HTTP ${response.status}`
         });
       }
     } catch (err) {
       console.error('Error fetching user info:', err);
       setUserInfo({
         isAuthenticated: false,
-        message: 'Error al conectar con el servidor'
+        message: 'Usuario no autenticado (Easy Auth no configurado o en desarrollo local)'
       });
     } finally {
       setLoadingUser(false);
@@ -122,7 +145,7 @@ function App() {
   // Fetch user info on component mount
   useEffect(() => {
     fetchUserInfo();
-  }, [apiUrl]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
