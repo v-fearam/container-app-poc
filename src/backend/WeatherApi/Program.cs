@@ -145,31 +145,30 @@ app.MapGet("/weatherforecast", (HttpContext context) =>
 {
     var principal = GetClientPrincipal(context);
     
-    // Obtener el primer rol del usuario (o "Anonymous" si no está autenticado)
-    var userRole = "Anonymous";
-    if (principal != null)
+    // Require authentication - return 401 if no valid token
+    if (principal == null)
     {
-        var roleClaim = principal.Claims?.FirstOrDefault(c => c.Typ == "roles");
-        if (roleClaim != null)
-        {
-            userRole = roleClaim.Val ?? "User";
-        }
-        else
-        {
-            userRole = "User"; // Usuario autenticado pero sin rol específico
-        }
+        return Results.Unauthorized();
+    }
+    
+    // Obtener el primer rol del usuario
+    var userRole = "User";
+    var roleClaim = principal.Claims?.FirstOrDefault(c => c.Typ == "roles");
+    if (roleClaim != null)
+    {
+        userRole = roleClaim.Val ?? "User";
     }
 
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
+    var forecast = Enumerable.Range(1, 5).Select(index =>
         new WeatherForecast
         (
             DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
             Random.Shared.Next(-20, 55),
             summaries[Random.Shared.Next(summaries.Length)],
-            userRole // Incluir el rol del usuario en cada pronóstico
+            userRole
         ))
         .ToArray();
-    return forecast;
+    return Results.Ok(forecast);
 })
 .WithName("GetWeatherForecast")
 .WithOpenApi();

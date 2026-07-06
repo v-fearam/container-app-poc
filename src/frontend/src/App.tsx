@@ -28,6 +28,7 @@ function App() {
     message: 'No autenticado'
   });
   const [loadingUser, setLoadingUser] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   const apiUrl = runtimeConfig.apiUrl || import.meta.env.VITE_API_URL || '';
 
@@ -71,6 +72,10 @@ function App() {
             name: 'UserInfoFetched',
             properties: { isAuthenticated: true, provider: data.identityProvider }
           });
+          // Store the access token for API calls (from Token Store)
+          if (data.accessToken) {
+            setAccessToken(data.accessToken);
+          }
         } else {
           setUserInfo({
             isAuthenticated: false,
@@ -108,8 +113,13 @@ function App() {
 
     try {
       const startTime = Date.now();
+      const headers: Record<string, string> = {};
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
       const response = await fetch(`${apiUrl.replace(/\/$/, '')}/weatherforecast`, {
-        credentials: 'include' // Important for Easy Auth cookies
+        credentials: 'include',
+        headers
       });
       
       if (!response.ok) {
