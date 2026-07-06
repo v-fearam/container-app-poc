@@ -389,6 +389,53 @@ az rest --method PUT \
 
 ## Cómo Funciona (Detalles Técnicos)
 
+### Token Store — Qué es y por qué existe
+
+El **Token Store** es un componente que permite a Easy Auth **persistir los tokens OAuth** (id_token, access_token, refresh_token) en Azure Blob Storage.
+
+**¿Por qué es necesario?**
+
+| | Sin Token Store | Con Token Store |
+|---|---|---|
+| `X-MS-CLIENT-PRINCIPAL` | ✅ Disponible | ✅ Disponible |
+| `X-MS-TOKEN-ENTRAID-ACCESS-TOKEN` | ❌ No disponible | ✅ Disponible |
+| `X-MS-TOKEN-ENTRAID-ID-TOKEN` | ❌ No disponible | ✅ Disponible |
+| `/.auth/me` | ❌ Devuelve HTML | ✅ Devuelve JSON con tokens |
+| La SPA puede enviar Bearer al backend | ❌ No (no tiene el token) | ✅ Sí |
+
+**¿Quién lo necesita?** Solo el **frontend** Container App. El backend no necesita Token Store porque no almacena tokens — solo los valida cuando llegan como Bearer header.
+
+**¿Por qué Blob Storage?** En App Service, el Token Store usa el filesystem local del servidor. Pero Container Apps **no tienen filesystem persistente** (los containers son efímeros), así que Azure requiere un almacenamiento externo: un Blob Storage con acceso via SAS URL.
+
+**¿Qué se guarda en el blob?** Un archivo JSON por sesión de usuario con:
+- `id_token` — identidad del usuario (claims, nombre, email, roles)
+- `access_token` — token para llamar al backend API (tiene el scope `api://{backend-client-id}/.default`)
+- `refresh_token` — para renovar tokens sin que el usuario vuelva a loguearse
+- Metadatos de expiración
+
+**Diagrama:**
+```
+Usuario logueado → Easy Auth tiene tokens
+                        │
+                        ├── Guarda en Blob Storage (tokenstore container)
+                        │     archivo: /tokenstore/{session-id}.json
+                        │
+                        └── En cada request del usuario:
+                              1. Lee cookie AppServiceAuthSession
+                              2. Busca tokens en blob
+                              3. Inyecta como headers HTTP al container
+                              4. nginx los expone en /_authinfo
+                              5. SPA lee accessToken → envía como Bearer
+```
+
+**Configuración requerida:**
+- Storage Account con container `tokenstore`
+- SAS URL con permisos `rwdl` (read, write, delete, list)
+- Secret `token-store-sas` en el Container App frontend
+- `tokenStore.enabled: true` + `azureBlobStorage.sasUrlSettingName` en la auth config
+
+---
+
 ### Flujo de Autenticación Paso a Paso
 
 1. **Usuario visita el frontend** → Easy Auth intercepta el request (no hay cookie de sesión)
