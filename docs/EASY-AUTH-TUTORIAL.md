@@ -49,36 +49,53 @@ Browser → fetch(backend-url) → Backend Container App
 
 ## 📋 Preparación (Antes de Empezar)
 
-### Información que Necesitás
+### Paso 0: Obtener URLs y Variables
+
+⚠️ **IMPORTANTE**: Ejecutá estos comandos primero y guardá los valores. Los usarás en TODOS los pasos siguientes.
 
 ```bash
-# 1. URLs de tus Container Apps
+# 1. Configurar Resource Group
 export RESOURCE_GROUP="rg-far-container-app-easyauth"
 
-FRONTEND_URL=$(az containerapp show \
+# 2. Obtener URLs de los Container Apps
+export FRONTEND_URL=$(az containerapp show \
   --name ca-weather-fe-dev \
   --resource-group $RESOURCE_GROUP \
   --query 'properties.configuration.ingress.fqdn' -o tsv)
 
-BACKEND_URL=$(az containerapp show \
+export BACKEND_URL=$(az containerapp show \
   --name ca-weather-be-dev \
   --resource-group $RESOURCE_GROUP \
   --query 'properties.configuration.ingress.fqdn' -o tsv)
 
-echo "Frontend: https://$FRONTEND_URL"
-echo "Backend:  https://$BACKEND_URL"
+# 3. Tenant Externo (para autenticación)
+export AUTH_TENANT_ID="0a3af0e3-416b-4a6b-97e9-cb3a9a094449"  # Cognito Migration
+
+# 4. Mostrar valores
+echo "=== VARIABLES PARA EASY AUTH ==="
+echo "Frontend URL: https://$FRONTEND_URL"
+echo "Backend URL:  https://$BACKEND_URL"
+echo "Auth Tenant:  $AUTH_TENANT_ID"
+echo "================================"
 ```
 
-**Resultado esperado**:
+**Ejemplo de resultado** (tus URLs serán diferentes en cada deployment):
 ```
-Frontend: https://ca-weather-fe-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io
-Backend:  https://ca-weather-be-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io
+=== VARIABLES PARA EASY AUTH ===
+Frontend URL: https://ca-weather-fe-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io
+Backend URL:  https://ca-weather-be-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io
+Auth Tenant:  0a3af0e3-416b-4a6b-97e9-cb3a9a094449
+================================
 ```
 
-### 2. Tenant Externo
+📝 **Copiá estos valores** - los necesitarás para los Redirect URIs en los próximos pasos.
 
-- **Tenant ID**: `0a3af0e3-416b-4a6b-97e9-cb3a9a094449` (Cognito Migration)
-- **Permisos**: Application Administrator (para crear App Registrations)
+### Información del Tenant Externo
+
+- **Tenant Name**: Cognito Migration
+- **Tenant ID**: `0a3af0e3-416b-4a6b-97e9-cb3a9a094449`
+- **Uso**: App Registrations, Roles, Usuarios
+- **Permisos necesarios**: Application Administrator (para crear App Registrations)
 
 ---
 
@@ -98,11 +115,22 @@ Backend:  https://ca-weather-be-dev.yellowpond-6073fa22.eastus2.azurecontainerap
 **Configuración**:
 ```
 Name: ContainerApp-Weather-Frontend
-Supported account types: Accounts in this organizational directory only (Single tenant)
+Supported account types: Single tenant only - Cognito Migration
 Redirect URI:
   - Platform: Web
-  - URI: https://ca-weather-fe-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io/.auth/login/aad/callback
+  - URI: https://<FRONTEND_URL>/.auth/login/aad/callback
 ```
+
+**Usá tu FRONTEND_URL** del Paso 0. Ejemplo:
+```
+https://ca-weather-fe-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io/.auth/login/aad/callback
+```
+
+⚠️ **Importante**: 
+- Copiá la URL exacta de tu variable `$FRONTEND_URL`
+- Agregá `https://` al inicio
+- Agregá `/.auth/login/aad/callback` al final
+- Sin barra final después de "callback"
 
 3. Click **Register**
 
@@ -186,10 +214,15 @@ Click **Apply**
 **Configuración**:
 ```
 Name: ContainerApp-Weather-Backend-API
-Supported account types: Accounts in this organizational directory only (Single tenant)
+Supported account types: Single tenant only - Cognito Migration
 Redirect URI:
   - Platform: Web
-  - URI: https://ca-weather-be-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io/.auth/login/aad/callback
+  - URI: https://<BACKEND_URL>/.auth/login/aad/callback
+```
+
+**Usá tu BACKEND_URL** del Paso 0. Ejemplo:
+```
+https://ca-weather-be-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io/.auth/login/aad/callback
 ```
 
 3. Click **Register**
@@ -596,7 +629,13 @@ az containerapp revision restart \
 
 ### Test 1: Frontend Login
 
-1. Abre: `https://ca-weather-fe-dev.yellowpond-6073fa22.eastus2.azurecontainerapps.io`
+1. Abre tu Frontend URL (la que copiaste en el Paso 0):
+   ```bash
+   echo "https://$FRONTEND_URL"
+   ```
+   
+   Ejemplo: `https://ca-weather-fe-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io`
+
 2. Deberías ser redirigido a: `login.microsoftonline.com`
 3. Login con tu usuario del tenant externo
 4. Deberías volver al frontend **sin error 401**
