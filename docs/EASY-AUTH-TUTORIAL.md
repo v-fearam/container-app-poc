@@ -80,12 +80,16 @@ Easy Auth se configura con un Bicep **separado** (`biceps/easyauth.bicep`), que 
 
 ### Paso 1: Setear secrets en Container Apps
 
+> ⚠️ El secret `token-store-sas` se setea con un placeholder porque el valor real
+> lo genera el deployment de easyauth.bicep. Se actualiza en el Paso 3.
+
 ```bash
 RG="rg-far-container-app-easyauth"
 
-# Frontend: client secret + token store SAS (se genera en paso 2)
+# Frontend: client secret + placeholder para token store SAS
 az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<FRONTEND_CLIENT_SECRET>"
+  microsoft-provider-authentication-secret="<FRONTEND_CLIENT_SECRET>" \
+  token-store-sas="placeholder"
 
 # Backend: client secret
 az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
@@ -104,7 +108,7 @@ az deployment group create -g $RG \
     oidcWellKnownUrl="https://cognitomigration.ciamlogin.com/0a3af0e3-416b-4a6b-97e9-cb3a9a094449/v2.0/.well-known/openid-configuration"
 ```
 
-### Paso 3: Obtener SAS URL y setear en frontend
+### Paso 3: Actualizar token-store-sas con el valor real
 
 ```bash
 # Obtener la SAS URL generada por el deployment
@@ -112,7 +116,7 @@ TOKEN_STORE_SAS=$(az deployment group show -g $RG \
   --name easyauth \
   --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
 
-# Setearla como secret en el frontend
+# Actualizar el secret del frontend con el valor real
 az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
   token-store-sas="$TOKEN_STORE_SAS"
 ```
