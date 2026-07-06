@@ -132,6 +132,26 @@ https://ca-weather-fe-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io
 - Agregá `/.auth/login/aad/callback` al final
 - Sin barra final después de "callback"
 
+💡 **¿Por qué "Web" y no "Single-page application (SPA)"?**
+
+Aunque tu frontend es una **SPA React**, usá **Platform Type: Web** porque:
+- Easy Auth maneja el OAuth flow **server-side** (sidecar en Container Apps)
+- El callback `/.auth/login/aad/callback` lo procesa **Easy Auth** (servidor), NO tu JavaScript
+- Easy Auth usa **authorization code flow** (server-side), no PKCE
+- "Single-page application (SPA)" solo se usa cuando hacés auth directamente desde el browser con MSAL.js (sin Easy Auth)
+
+**Flujo con Easy Auth**:
+```
+Browser → Easy Auth (servidor) → Entra ID → Easy Auth (servidor) → Browser
+          ↑ OAuth flow manejado server-side por Easy Auth
+```
+
+**Flujo SIN Easy Auth** (no es tu caso):
+```
+Browser (MSAL.js) → Entra ID → Browser (MSAL.js)
+↑ OAuth flow manejado en el browser con PKCE
+```
+
 3. Click **Register**
 
 ### Paso 1.3: Anotar IDs
@@ -224,6 +244,8 @@ Redirect URI:
 ```
 https://ca-weather-be-dev.delightfulcliff-4c3aef98.eastus2.azurecontainerapps.io/.auth/login/aad/callback
 ```
+
+💡 **Nota**: También usá **Platform Type: Web** (igual que el Frontend) porque Easy Auth es server-side.
 
 3. Click **Register**
 
