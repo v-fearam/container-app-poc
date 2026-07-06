@@ -138,11 +138,9 @@ ACR_NAME=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.acrName.value' -o tsv)
 
 # Rebuild
-az acr build --registry $ACR_NAME --image weather-api:latest \
-  --file src/backend/WeatherApi/Dockerfile src/backend/WeatherApi
+az acr build --registry $ACR_NAME --image weather-api:latest --file src/backend/WeatherApi/Dockerfile src/backend/WeatherApi
 
-az acr build --registry $ACR_NAME --image weather-frontend:latest \
-  --file src/frontend/Dockerfile src/frontend
+az acr build --registry $ACR_NAME --image weather-frontend:latest --file src/frontend/Dockerfile src/frontend
 
 # Redeploy (force new revision)
 az containerapp update -n ca-weather-be-dev -g $RG

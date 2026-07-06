@@ -27,25 +27,26 @@ public class WeatherController : ControllerBase
     }
 
     /// <summary>
-    /// Returns a 5-day weather forecast for any authenticated user.
+    /// Returns a 5-day weather forecast. Works without auth; includes role info if logged in.
     /// </summary>
     [HttpGet]
-    [RequireAuth]
     [ProducesResponseType(typeof(WeatherForecast[]), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public IActionResult Get()
     {
-        var principal = _easyAuthService.GetClientPrincipal()!;
-        var user = principal.UserDetails ?? principal.UserId ?? "unknown";
+        var principal = _easyAuthService.GetClientPrincipal();
+        var userRole = "";
 
-        var userRole = "User";
-        var roleClaim = principal.Claims?.FirstOrDefault(c => c.Typ == "roles");
-        if (roleClaim != null)
+        if (principal != null)
         {
-            userRole = roleClaim.Val ?? "User";
+            var user = principal.UserDetails ?? principal.UserId ?? "anonymous";
+            var roleClaim = principal.Claims?.FirstOrDefault(c => c.Typ == "roles");
+            userRole = roleClaim?.Val ?? "";
+            _logger.LogInformation("Weather forecast requested by {User} with role {Role}", user, userRole);
         }
-
-        _logger.LogInformation("Weather forecast requested by {User} with role {Role}", user, userRole);
+        else
+        {
+            _logger.LogInformation("Weather forecast requested without authentication");
+        }
 
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new WeatherForecast(
