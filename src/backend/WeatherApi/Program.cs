@@ -102,6 +102,28 @@ ClientPrincipal? GetClientPrincipal(HttpContext context)
     return null;
 }
 
+// Helper method to require a specific role — returns null if authorized, or an IResult with the error
+IResult? RequireRole(HttpContext context, string requiredRole)
+{
+    var principal = GetClientPrincipal(context);
+    if (principal == null)
+    {
+        return Results.Json(new { error = "Unauthorized", message = "No authentication principal found." }, statusCode: 401);
+    }
+
+    var roles = principal.Claims?
+        .Where(c => c.Typ == "roles")
+        .Select(c => c.Val)
+        .ToList() ?? new List<string>();
+
+    if (!roles.Contains(requiredRole, StringComparer.OrdinalIgnoreCase))
+    {
+        return Results.Json(new { error = "Forbidden", message = $"Required role '{requiredRole}' is missing." }, statusCode: 403);
+    }
+
+    return null;
+}
+
 // New endpoint: Get user info
 app.MapGet("/userinfo", (HttpContext context) =>
 {
@@ -173,6 +195,68 @@ app.MapGet("/weatherforecast", (HttpContext context) =>
 .WithName("GetWeatherForecast")
 .WithOpenApi();
 
+app.MapGet("/weatherforecast/user", (HttpContext context) =>
+{
+    var authError = RequireRole(context, "Weather.Read");
+    if (authError != null) return authError;
+
+    var forecast = Enumerable.Range(1, 5).Select(index =>
+        new WeatherForecast
+        (
+            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+            Random.Shared.Next(-20, 55),
+            summaries[Random.Shared.Next(summaries.Length)],
+            "User"
+        ))
+        .ToArray();
+    return Results.Ok(forecast);
+})
+.WithName("GetWeatherForecastUser")
+.WithOpenApi();
+
+app.MapGet("/weatherforecast/admin", (HttpContext context) =>
+{
+    var authError = RequireRole(context, "Weather.Admin");
+    if (authError != null) return authError;
+
+    var principal = GetClientPrincipal(context)!;
+    var requestedBy = principal.UserDetails ?? principal.UserId ?? "unknown";
+    var claimsCount = principal.Claims?.Count ?? 0;
+
+    var forecast = Enumerable.Range(1, 5).Select(index =>
+        new AdminWeatherForecast
+        (
+            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+            Random.Shared.Next(-20, 55),
+            summaries[Random.Shared.Next(summaries.Length)],
+            "Admin",
+            requestedBy,
+            claimsCount
+        ))
+        .ToArray();
+    return Results.Ok(forecast);
+})
+.WithName("GetWeatherForecastAdmin")
+.WithOpenApi();
+
+app.MapGet("/roles", (HttpContext context) =>
+{
+    var principal = GetClientPrincipal(context);
+    if (principal == null)
+    {
+        return Results.Json(new { error = "Unauthorized", message = "No authentication principal found." }, statusCode: 401);
+    }
+
+    var roles = principal.Claims?
+        .Where(c => c.Typ == "roles")
+        .Select(c => c.Val)
+        .ToList() ?? new List<string>();
+
+    return Results.Ok(new { roles });
+})
+.WithName("GetRoles")
+.WithOpenApi();
+
 app.Run();
 
 // Models para Easy Auth
@@ -203,6 +287,12 @@ record UserInfo
 
 // Updated WeatherForecast to include user role
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary, string UserRole)
+{
+    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+}
+
+// Extended forecast for admin endpoint
+record AdminWeatherForecast(DateOnly Date, int TemperatureC, string? Summary, string UserRole, string RequestedBy, int ClaimsCount)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
