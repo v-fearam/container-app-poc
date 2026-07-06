@@ -24,7 +24,7 @@ export function Navbar() {
                 <Link to="/" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
                   Inicio
                 </Link>
-                {user?.roles.includes('Weather.Admin') && (
+                {user?.roles.includes('Admin') && (
                   <Link to="/admin" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
                     Admin
                   </Link>

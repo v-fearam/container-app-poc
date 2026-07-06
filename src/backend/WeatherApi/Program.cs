@@ -197,7 +197,7 @@ app.MapGet("/weatherforecast", (HttpContext context) =>
 
 app.MapGet("/weatherforecast/user", (HttpContext context) =>
 {
-    var authError = RequireRole(context, "Weather.Read");
+    var authError = RequireRole(context, "User");
     if (authError != null) return authError;
 
     var forecast = Enumerable.Range(1, 5).Select(index =>
@@ -216,7 +216,7 @@ app.MapGet("/weatherforecast/user", (HttpContext context) =>
 
 app.MapGet("/weatherforecast/admin", (HttpContext context) =>
 {
-    var authError = RequireRole(context, "Weather.Admin");
+    var authError = RequireRole(context, "Admin");
     if (authError != null) return authError;
 
     var principal = GetClientPrincipal(context)!;

@@ -19,7 +19,7 @@ function App() {
         <Route
           path="admin"
           element={
-            <ProtectedRoute requiredRole="Weather.Admin">
+            <ProtectedRoute requiredRole="Admin">
               <AdminPage />
             </ProtectedRoute>
           }
