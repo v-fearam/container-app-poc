@@ -25,8 +25,10 @@ var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CON
 
 if (!string.IsNullOrEmpty(appInsightsConnectionString))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor();
-    builder.Logging.AddConsole();
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+    {
+        options.ConnectionString = appInsightsConnectionString;
+    });
     Console.WriteLine("✅ Application Insights habilitado");
 }
 else
