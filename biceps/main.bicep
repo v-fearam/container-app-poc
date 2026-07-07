@@ -42,6 +42,9 @@ param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 @description('Deploy the worker and Service Bus infrastructure')
 param deployWorker bool = true
 
+@description('Deploy the worker Container App (requires worker image in ACR)')
+param deployWorkerApp bool = false
+
 @description('The worker image name in ACR')
 param workerImageName string = 'weather-worker'
 
@@ -145,18 +148,19 @@ module serviceBus 'modules/service-bus.bicep' = if (deployWorker) {
   }
 }
 
-// Managed Identity for Worker (Service Bus Data Receiver + Sender)
+// Managed Identity for Worker (Service Bus Data Receiver + Sender + AcrPull)
 module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker) {
   name: 'worker-identity-deployment'
   params: {
     location: location
     identityName: workerIdentityName
     serviceBusNamespaceId: deployWorker ? serviceBus!.outputs.namespaceId : ''
+    acrName: containerRegistryName
   }
 }
 
 // Worker Container App (scale-to-zero with KEDA)
-module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && deployContainerApps) {
+module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && deployWorkerApp && deployContainerApps) {
   name: 'worker-app-deployment'
   params: {
     location: location

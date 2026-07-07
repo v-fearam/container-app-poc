@@ -136,20 +136,16 @@ az deployment group create -g $RG \
 
 Si ya tenés la infra base deployada, corré estos pasos para agregar el worker:
 
-### Paso 1: Extender infraestructura (agrega Service Bus + MI + Worker App)
+### Paso 1: Deploy infra del Worker (Service Bus + MI + roles)
 
 ```bash
-# Re-correr main.bicep es idempotente — solo crea lo nuevo
+# Crea Service Bus, Managed Identity con roles (SB Receiver/Sender + AcrPull)
+# NO crea el Container App aún (la imagen no existe todavía)
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/main.bicep \
-  --parameters deployWorker=true
+  --parameters deployWorker=true deployWorkerApp=false
 ```
-
-Esto crea:
-- **Service Bus Namespace** (Standard) + Queue `weather-jobs` (DLQ, maxDeliveryCount:3, lock:5min)
-- **User Managed Identity** con roles `Service Bus Data Receiver` + `Sender`
-- **Worker Container App** con KEDA scaler (1 replica por cada 5 msgs, min:0, max:10)
 
 ### Paso 2: Build y push imagen del worker
 
@@ -163,12 +159,20 @@ az acr build --registry $ACR_NAME \
   src/worker/WeatherWorker
 ```
 
-### Paso 3: Update Worker Container App con la imagen
+### Paso 3: Deploy Worker Container App
 
 ```bash
-az containerapp update -n ca-weather-worker-dev -g $RG \
-  --image ${ACR_NAME}.azurecr.io/weather-worker:latest
+# Ahora que la imagen existe, creamos el Container App con KEDA
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters deployWorker=true deployWorkerApp=true
 ```
+
+Esto crea:
+- **Service Bus Namespace** (Standard) + Queue `weather-jobs` (DLQ, maxDeliveryCount:3, lock:5min)
+- **User Managed Identity** con roles `Service Bus Data Receiver` + `Sender` + `AcrPull`
+- **Worker Container App** con KEDA scaler (1 replica por cada 5 msgs, min:0, max:10)
 
 ### Paso 4: Test — Encolar mensajes (local)
 
