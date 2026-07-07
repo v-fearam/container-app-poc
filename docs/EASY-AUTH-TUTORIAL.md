@@ -206,6 +206,64 @@ az deployment group create -g $RG \
 
 ---
 
+## Configuración de Roles (App Roles + Grupos)
+
+Los roles permiten que la API distinga entre usuarios normales y administradores. Se configuran en **ambas** App Registrations y se asignan mediante grupos de seguridad.
+
+### Paso 1: Crear App Roles en ambas App Registrations
+
+Repetir en **Frontend** y **Backend** App Registration:
+
+1. Ir a **App roles** → **Create app role**
+2. Crear rol **Admin**:
+   - Display name: `Admin`
+   - Allowed member types: **Users/Groups**
+   - Value: `Admin`
+   - Description: `Administrador con acceso completo`
+   - ✅ Enable this app role
+3. Crear rol **User**:
+   - Display name: `User`
+   - Allowed member types: **Users/Groups**
+   - Value: `User`
+   - Description: `Usuario estándar con acceso de lectura`
+   - ✅ Enable this app role
+
+> ⚠️ Los roles deben existir en **ambas** App Registrations. El frontend los necesita para mostrar/ocultar UI, y el backend los necesita para autorizar endpoints.
+
+### Paso 2: Crear Grupos de Seguridad en Entra ID
+
+1. Ir a **Microsoft Entra admin center** → **Groups** → **All groups** → **New group**
+2. Crear grupo **Admin**:
+   - Group type: **Security**
+   - Group name: `App-Weather-Admin`
+   - Membership type: **Assigned**
+   - Agregar los usuarios administradores como miembros
+3. Crear grupo **User**:
+   - Group type: **Security**
+   - Group name: `App-Weather-User`
+   - Membership type: **Assigned**
+   - Agregar los usuarios estándar como miembros
+
+### Paso 3: Asignar Roles a Grupos en Enterprise Applications
+
+Para **cada** Enterprise App (Frontend y Backend):
+
+1. Ir a **Enterprise applications** → buscar la app (por nombre de la App Registration)
+2. **Users and groups** → **Add user/group**
+3. Asignar grupo `App-Weather-Admin` → Rol: **Admin**
+4. Asignar grupo `App-Weather-User` → Rol: **User**
+
+> 💡 Al usar grupos en lugar de asignaciones directas a usuarios, agregar/quitar acceso es simplemente gestionar membresía del grupo.
+
+### Verificación
+
+Después de configurar Easy Auth (sección anterior), los roles aparecen en el claim `roles` del token:
+- El header `X-MS-CLIENT-PRINCIPAL` contiene los claims del usuario
+- La API lee `claims.Where(c => c.Typ == "roles")` para extraer los roles
+- Endpoints protegidos: `/weatherforecast/user` requiere `User`, `/weatherforecast/admin` requiere `Admin`
+
+---
+
 ## Configuración Manual (si no usás Bicep)
 
 ### Paso 1: Storage Account para Token Store
