@@ -39,6 +39,21 @@ param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
 @description('Comma-separated host suffixes allowed for CORS origins')
 param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 
+@description('Deploy the worker and Service Bus infrastructure')
+param deployWorker bool = true
+
+@description('The worker image name in ACR')
+param workerImageName string = 'weather-worker'
+
+@description('The name of the Worker Container App')
+param workerAppName string = 'ca-${workloadName}-worker-${environmentShortName}'
+
+@description('Service Bus namespace name')
+param serviceBusNamespaceName string = 'sb-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
+
+@description('Managed identity name for worker')
+param workerIdentityName string = 'id-${workloadName}-worker-${environmentShortName}'
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -117,6 +132,50 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
   }
 }
 
+// =============================================================================
+// Worker Infrastructure (Service Bus + Managed Identity + Worker Container App)
+// =============================================================================
+
+// Service Bus Namespace + Queue
+module serviceBus 'modules/service-bus.bicep' = if (deployWorker) {
+  name: 'service-bus-deployment'
+  params: {
+    location: location
+    namespaceName: serviceBusNamespaceName
+  }
+}
+
+// Managed Identity for Worker (Service Bus Data Receiver + Sender)
+module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker) {
+  name: 'worker-identity-deployment'
+  params: {
+    location: location
+    identityName: workerIdentityName
+    serviceBusNamespaceId: deployWorker ? serviceBus!.outputs.namespaceId : ''
+  }
+}
+
+// Worker Container App (scale-to-zero with KEDA)
+module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && deployContainerApps) {
+  name: 'worker-app-deployment'
+  params: {
+    location: location
+    containerAppName: workerAppName
+    environmentId: environment.outputs.environmentId
+    containerImage: '${containerRegistry.outputs.acrLoginServer}/${workerImageName}:${imageTag}'
+    acrName: containerRegistryName
+    managedIdentityId: deployWorker ? workerIdentity!.outputs.identityId : ''
+    managedIdentityClientId: deployWorker ? workerIdentity!.outputs.identityClientId : ''
+    serviceBusNamespaceFqdn: deployWorker ? serviceBus!.outputs.namespaceFqdn : ''
+    serviceBusQueueName: 'weather-jobs'
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    minReplicas: 0
+    maxReplicas: 10
+    cpu: '0.5'
+    memory: '1.0Gi'
+  }
+}
+
 // Outputs
 output backendAppUrl string = deployContainerApps ? backendApp!.outputs.containerAppUrl : ''
 output frontendAppUrl string = deployContainerApps ? frontendApp!.outputs.containerAppUrl : ''
@@ -125,4 +184,6 @@ output acrName string = containerRegistry.outputs.acrName
 output appInsightsConnectionString string = appInsights.outputs.connectionString
 output appInsightsName string = appInsights.outputs.appInsightsName
 output containerAppEnvironmentName string = environment.outputs.environmentName
+output serviceBusNamespaceFqdn string = deployWorker ? serviceBus!.outputs.namespaceFqdn : ''
+output workerIdentityClientId string = deployWorker ? workerIdentity!.outputs.identityClientId : ''
 
