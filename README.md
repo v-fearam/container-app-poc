@@ -197,10 +197,18 @@ cd src/tools/ServiceBusEnqueuer
 dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
 ```
 
-### Paso 6: Verificar scaling
+### Paso 6: Verificar queue y scaling
 
 ```bash
-# Ver réplicas activas
+SB_NAME=$(az servicebus namespace list -g $RG --query '[0].name' -o tsv)
+
+# Ver tamaño de la cola (mensajes activos + DLQ)
+az servicebus queue show -g $RG \
+  --namespace-name $SB_NAME \
+  --name weather-jobs \
+  --query '{active: countDetails.activeMessageCount, deadLetter: countDetails.deadLetterMessageCount, scheduled: countDetails.scheduledMessageCount}' -o table
+
+# Ver réplicas activas del worker
 az containerapp replica list -n ca-weather-worker-dev -g $RG -o table
 
 # Ver logs en tiempo real
