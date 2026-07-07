@@ -50,7 +50,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: acrName
 }
 
-resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource workerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
   name: containerAppName
   location: location
   identity: {
