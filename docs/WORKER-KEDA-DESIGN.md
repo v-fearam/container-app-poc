@@ -71,10 +71,63 @@ Probar un **worker** en Azure Container Apps que escale automáticamente con KED
 **Lógica del procesamiento:**
 1. Recibe mensaje (PeekLock — el mensaje queda invisible para otros)
 2. Log: "Procesando mensaje #{number}"
-3. Simula trabajo: `await Task.Delay(random 1-30s)`
-4. Si `DeliveryCount >= 3` → `DeadLetterMessageAsync` con razón "Max retries exceeded"
-5. Si éxito → `CompleteMessageAsync`
-6. Si excepción → No hacer nada (el lock expira y Service Bus re-entrega automáticamente)
+3. Evalúa escenarios de simulación (ver abajo)
+4. Si procesamiento normal → Simula trabajo: `await Task.Delay(random 1-30s)` → `CompleteMessageAsync`
+5. Si excepción no controlada → No hacer nada (el lock expira y Service Bus re-entrega)
+
+**Simulaciones de DLQ y errores (mensajes especiales):**
+
+| Mensaje # | Comportamiento | Resultado esperado |
+|-----------|---------------|-------------------|
+| **10** | Lanza `InvalidOperationException("Simulated processing failure")` siempre | Se reintenta 3 veces (maxDeliveryCount), luego Service Bus lo envía a DLQ automáticamente con razón "MaxDeliveryCountExceeded" |
+| **20** | Llama `DeadLetterMessageAsync` explícitamente con razón `"Validation failed: invalid parameter"` | Va directo a DLQ sin reintentos — simula validación de negocio |
+| **30** | Ejecuta `await Task.Delay(TimeSpan.FromMinutes(10))` (excede el lock de 5min) | El lock expira, Service Bus re-entrega a otra instancia. Después de 3 entregas → DLQ con "MaxDeliveryCountExceeded" |
+| Otros | Procesamiento normal: sleep random 1-30s → Complete | Se completa exitosamente |
+
+**Pseudocódigo:**
+```csharp
+async Task ProcessMessage(ProcessMessageEventArgs args)
+{
+    var number = GetNumberFromBody(args.Message);
+    logger.LogInformation("Procesando mensaje #{Number}, DeliveryCount={Count}", number, args.Message.DeliveryCount);
+
+    switch (number)
+    {
+        case 10:
+            // Simula fallo no controlado → Service Bus reintenta hasta maxDeliveryCount → DLQ
+            throw new InvalidOperationException($"Simulated processing failure for message #{number}");
+
+        case 20:
+            // Simula validación de negocio fallida → DLQ explícito inmediato
+            await args.DeadLetterMessageAsync(args.Message,
+                deadLetterReason: "ValidationFailed",
+                deadLetterErrorDescription: "Validation failed: invalid parameter value in message #20");
+            logger.LogWarning("Mensaje #{Number} enviado a DLQ por validación", number);
+            return;
+
+        case 30:
+            // Simula timeout — excede lock duration (5min) → lock expira → re-entrega → DLQ
+            logger.LogWarning("Mensaje #{Number} simulando timeout largo...", number);
+            await Task.Delay(TimeSpan.FromMinutes(10), args.CancellationToken);
+            break;
+
+        default:
+            // Procesamiento normal
+            var delay = Random.Shared.Next(1000, 30001);
+            logger.LogInformation("Mensaje #{Number} — trabajando {Delay}ms", number, delay);
+            await Task.Delay(delay, args.CancellationToken);
+            break;
+    }
+
+    await args.CompleteMessageAsync(args.Message);
+    logger.LogInformation("Mensaje #{Number} completado", number);
+}
+```
+
+> 💡 **Observación en App Insights**: después del test podrás ver en la DLQ:
+> - Msg #10: `DeadLetterReason = "MaxDeliveryCountExceeded"` (reintento automático)
+> - Msg #20: `DeadLetterReason = "ValidationFailed"` (enviado por código)
+> - Msg #30: `DeadLetterReason = "MaxDeliveryCountExceeded"` (lock timeout)
 
 ### 2. Enqueuer (App .NET local)
 
