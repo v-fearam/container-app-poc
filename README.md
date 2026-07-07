@@ -174,10 +174,22 @@ Esto crea:
 - **User Managed Identity** con roles `Service Bus Data Receiver` + `Sender` + `AcrPull`
 - **Worker Container App** con KEDA scaler (1 replica por cada 5 msgs, min:0, max:10)
 
-### Paso 4: Test — Encolar mensajes (local)
+### Paso 4: Asignar rol de Service Bus a tu usuario (para el enqueuer local)
 
 ```bash
-# Requiere az login con permisos de Service Bus Data Sender
+# Tu usuario necesita "Azure Service Bus Data Sender" para enviar mensajes desde local
+USER_OID=$(az ad signed-in-user show --query id -o tsv)
+SB_ID=$(az servicebus namespace list -g $RG --query '[0].id' -o tsv)
+
+az role assignment create \
+  --assignee $USER_OID \
+  --role "Azure Service Bus Data Sender" \
+  --scope $SB_ID
+```
+
+### Paso 5: Test — Encolar mensajes (local)
+
+```bash
 SB_NS=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
 
@@ -185,7 +197,7 @@ cd src/tools/ServiceBusEnqueuer
 dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
 ```
 
-### Paso 5: Verificar scaling
+### Paso 6: Verificar scaling
 
 ```bash
 # Ver réplicas activas
