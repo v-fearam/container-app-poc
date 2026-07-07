@@ -98,7 +98,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
               type: 'azure-servicebus'
               metadata: {
                 queueName: serviceBusQueueName
-                namespace: serviceBusNamespaceFqdn
+                namespace: replace(serviceBusNamespaceFqdn, '.servicebus.windows.net', '')
                 messageCount: kedaMessageCount
               }
               #disable-next-line BCP037
