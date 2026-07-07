@@ -8,8 +8,9 @@ POC de Azure Container Apps con Easy Auth (Entra ID), React + .NET 10, telemetr�
 |------|-----------|
 | Frontend | React 18 + TypeScript + Vite + Tailwind CSS + Nginx |
 | Backend | .NET 10 API (Controllers + Easy Auth service) |
+| Worker | .NET 10 Worker Service + Service Bus + KEDA (scale 0→10) |
 | Auth | Easy Auth (Custom OIDC) + App Roles (User/Admin) |
-| Infra | Azure Container Apps + ACR + App Insights + Log Analytics |
+| Infra | Azure Container Apps + ACR + Service Bus + App Insights |
 | IaC | Bicep (main.bicep + easyauth.bicep separados) |
 
 ## Estructura
@@ -131,6 +132,81 @@ az deployment group create -g $RG \
 
 ---
 
+## 🔧 Worker + KEDA (extender ambiente existente)
+
+Si ya tenés la infra base deployada, corré estos pasos para agregar el worker:
+
+### Paso 1: Extender infraestructura (agrega Service Bus + MI + Worker App)
+
+```bash
+# Re-correr main.bicep es idempotente — solo crea lo nuevo
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters deployWorker=true
+```
+
+Esto crea:
+- **Service Bus Namespace** (Standard) + Queue `weather-jobs` (DLQ, maxDeliveryCount:3, lock:5min)
+- **User Managed Identity** con roles `Service Bus Data Receiver` + `Sender`
+- **Worker Container App** con KEDA scaler (1 replica por cada 5 msgs, min:0, max:10)
+
+### Paso 2: Build y push imagen del worker
+
+```bash
+ACR_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.acrName.value' -o tsv)
+
+az acr build --registry $ACR_NAME \
+  --image weather-worker:latest \
+  --file src/worker/WeatherWorker/Dockerfile \
+  src/worker/WeatherWorker
+```
+
+### Paso 3: Update Worker Container App con la imagen
+
+```bash
+az containerapp update -n ca-weather-worker-dev -g $RG \
+  --image ${ACR_NAME}.azurecr.io/weather-worker:latest
+```
+
+### Paso 4: Test — Encolar mensajes (local)
+
+```bash
+# Requiere az login con permisos de Service Bus Data Sender
+SB_NS=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
+
+cd src/tools/ServiceBusEnqueuer
+dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
+```
+
+### Paso 5: Verificar scaling
+
+```bash
+# Ver réplicas activas
+az containerapp replica list -n ca-weather-worker-dev -g $RG -o table
+
+# Ver logs en tiempo real
+az containerapp logs show -n ca-weather-worker-dev -g $RG --follow
+```
+
+### Verificar DLQ
+
+Los mensajes #10 (exception), #20 (validación) y #30 (timeout) van a la Dead Letter Queue:
+
+```bash
+# Contar mensajes en DLQ
+az servicebus queue show -g $RG \
+  --namespace-name $(az servicebus namespace list -g $RG --query '[0].name' -o tsv) \
+  --name weather-jobs \
+  --query 'countDetails.deadLetterMessageCount' -o tsv
+```
+
+Ver [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) para el diseño completo.
+
+---
+
 ## 🔄 Actualizar código (rebuild + redeploy)
 
 ```bash
@@ -191,7 +267,8 @@ traces | where timestamp > ago(24h) and customDimensions.CategoryName startswith
 
 | Doc | Contenido |
 |-----|-----------|
-| [docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md) | Guía completa Easy Auth: App Registrations, Token Store, Custom OIDC, roles, troubleshooting |
+| [docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md) | Guía completa Easy Auth: App Registrations, Token Store, Custom OIDC, roles |
+| [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) | Diseño Worker + KEDA + Service Bus: arquitectura, DLQ, scaling |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Desarrollo local |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Detalles de deployment |
 
