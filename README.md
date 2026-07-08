@@ -20,21 +20,33 @@ container-app-poc/
 ├── src/
 │   ├── frontend/               # React SPA + nginx
 │   │   ├── src/context/        # AuthContext (Easy Auth)
-│   │   ├── src/hooks/          # useApi (Bearer interceptor)
+│   │   ├── src/hooks/          # useApi
 │   │   ├── src/pages/          # HomePage, AdminPage
 │   │   ├── nginx.conf          # /_authinfo endpoint
 │   │   └── Dockerfile
-│   └── backend/WeatherApi/     # .NET 10 API
-│       ├── Controllers/        # Weather, Auth controllers
-│       ├── Attributes/         # RequireAuth, RequireRole
-│       ├── Services/           # EasyAuthService
-│       └── Dockerfile
+│   ├── backend/WeatherApi/     # .NET 10 API
+│   │   ├── Controllers/        # Weather, Auth controllers
+│   │   ├── Attributes/         # RequireAuth, RequireRole
+│   │   ├── Services/           # EasyAuthService
+│   │   └── Dockerfile
+│   ├── worker/WeatherWorker/   # .NET 10 Worker Service (Service Bus + KEDA)
+│   │   ├── Worker.cs           # ServiceBusProcessor + DLQ simulations
+│   │   ├── Program.cs          # DI + OpenTelemetry
+│   │   └── Dockerfile
+│   └── tools/ServiceBusEnqueuer/ # Console app — encola mensajes para testing
+│       └── Program.cs
 ├── biceps/
-│   ├── main.bicep              # Infra base (sin auth)
+│   ├── main.bicep              # Infra completa (Worker opcional)
 │   ├── easyauth.bicep          # Easy Auth (separado)
-│   └── modules/                # Módulos reutilizables
+│   └── modules/
+│       ├── container-registry.bicep
+│       ├── container-app.bicep
+│       ├── worker-container-app.bicep  # Worker + KEDA scaler
+│       ├── service-bus.bicep           # Service Bus + Queue + DLQ
+│       └── managed-identity.bicep      # MI + roles (SB + AcrPull)
 └── docs/
-    └── EASY-AUTH-TUTORIAL.md   # Guía completa de Easy Auth
+    ├── EASY-AUTH-TUTORIAL.md   # Guía completa de Easy Auth
+    └── WORKER-KEDA-DESIGN.md  # Diseño Worker + KEDA + Service Bus
 ```
 
 ---
