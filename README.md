@@ -194,7 +194,7 @@ SB_NS=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
 
 cd src/tools/ServiceBusEnqueuer
-dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
+dotnet run -- --namespace $SB_NS --queue weather-jobs --count 1000
 ```
 
 ### Paso 6: Verificar queue y scaling
