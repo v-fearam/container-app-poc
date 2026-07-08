@@ -3,7 +3,7 @@ using WeatherWorker;
 using Azure.Identity;
 using Azure.Messaging.ServiceBus;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
-using WeatherWorker;
+using OpenTelemetry.Resources;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -13,10 +13,17 @@ var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CON
 
 if (!string.IsNullOrEmpty(appInsightsConnectionString))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
-    {
-        options.ConnectionString = appInsightsConnectionString;
-    });
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(r => r.AddService("WeatherWorker"))
+        .UseAzureMonitor(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+        });
+    builder.Logging.AddOpenTelemetry(o => o.IncludeFormattedMessage = true);
+}
+else
+{
+    Console.WriteLine("WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING not set — telemetry disabled");
 }
 
 // Service Bus client (Managed Identity in Azure, az login locally)
