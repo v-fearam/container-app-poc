@@ -8,6 +8,9 @@ using WeatherWorker.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+// ─── Enable Azure SDK distributed tracing (creates Activity spans per message) ─
+AppContext.SetSwitch("Azure.Experimental.EnableActivitySource", true);
+
 // ─── Configuration (Options pattern) ────────────────────────────────────────
 builder.Services.Configure<ServiceBusOptions>(builder.Configuration.GetSection(ServiceBusOptions.SectionName));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.SectionName));
@@ -22,7 +25,11 @@ if (!string.IsNullOrEmpty(appInsightsCs))
         .ConfigureResource(r => r.AddService("WeatherWorker"))
         .UseAzureMonitor(o => o.ConnectionString = appInsightsCs);
 
-    builder.Logging.AddOpenTelemetry(o => o.IncludeFormattedMessage = true);
+    builder.Logging.AddOpenTelemetry(o =>
+    {
+        o.IncludeFormattedMessage = true;
+        o.IncludeScopes = true;
+    });
 }
 else
 {
