@@ -252,6 +252,182 @@ Ver [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) para el diseño com
 
 ---
 
+## 📊 Dashboard POC (monitoreo + DLQ management)
+
+Si ya tenés Worker + KEDA funcionando, podés extender el ambiente con el **Dashboard POC**: frontend en tiempo real para KPIs, gestión de DLQ, y health de componentes.
+
+**Arquitectura:**
+- **SQL Database** (Basic 5 DTUs) — almacena contadores por vertical + queue + processType + fecha
+- **Service Bus Topic `nd-dashboard-events`** + subscription `counter-updater`
+- **DashboardWorker** — consume eventos del topic, actualiza contadores en SQL (KEDA topic subscription scaler)
+- **Backend APIs** — `/api/dashboard/kpi`, `/api/dlq/*`, `/api/health/components`
+- **Frontend** — DashboardPage, DlqManagerPage, HealthPage (auto-refresh)
+
+### Paso 1: Deploy infra del Dashboard (SQL + Topic + Subscription)
+
+```bash
+# Prereqs: ACR, Container App Environment, Service Bus ya deployados con Worker
+# Obtener info del SQL admin (tu usuario de Entra ID)
+USER_OID=$(az ad signed-in-user show --query id -o tsv)
+USER_UPN=$(az ad signed-in-user show --query userPrincipalName -o tsv)
+
+# Deploy SQL Database + topic + subscription (NO el Dashboard Worker Container App aún)
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters deployDashboard=true \
+    sqlServerName="sql-weather-dash-$RANDOM" \
+    sqlAdminObjectId="$USER_OID" \
+    sqlAdminLogin="$USER_UPN"
+```
+
+**Salida esperada:** SQL Server + Database `dashboard-db`, Topic `nd-dashboard-events`, Subscription `counter-updater`.
+
+### Paso 2: Crear schema SQL
+
+```bash
+# Obtener nombre del SQL Server
+SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+
+# Conectar como Entra ID admin y ejecutar el schema
+az sql server show -g $RG --name ${SQL_SERVER%%.database.windows.net} --query fullyQualifiedDomainName
+
+# Usando sqlcmd o Azure Portal Query Editor:
+sqlcmd -S $SQL_SERVER -d dashboard-db -G -i sql/001-dashboard-schema.sql
+```
+
+Si no tenés `sqlcmd`, usá **Azure Portal → SQL Database → Query editor (preview)** y pegá el contenido de `sql/001-dashboard-schema.sql`.
+
+### Paso 3: Mapear Managed Identity como usuario SQL (MANUAL)
+
+**⚠️ Paso manual obligatorio**: conectar como Entra ID admin y ejecutar:
+
+```sql
+-- Reemplazar 'identity-weather-dev' con el nombre de tu User Assigned Managed Identity
+CREATE USER [identity-weather-dev] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [identity-weather-dev];
+ALTER ROLE db_datawriter ADD MEMBER [identity-weather-dev];
+GO
+```
+
+Para obtener el nombre de la identity:
+
+```bash
+az deployment group show -g $RG --name main \
+  --query 'properties.outputs.managedIdentityName.value' -o tsv
+```
+
+### Paso 4: Build imágenes Dashboard (backend + DashboardWorker)
+
+```bash
+ACR_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.acrName.value' -o tsv)
+
+# Backend (rebuild para incluir nuevos controllers)
+az acr build --registry $ACR_NAME \
+  --image weather-api:latest \
+  --file src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+# Dashboard Worker (nuevo)
+az acr build --registry $ACR_NAME \
+  --image dashboard-worker:latest \
+  --file src/worker/DashboardWorker/Dockerfile \
+  src/worker/DashboardWorker
+```
+
+### Paso 5: Redeploy backend + deploy DashboardWorker Container App
+
+```bash
+# Redeploy backend (actualiza con nuevos controllers)
+az containerapp update -n ca-weather-be-dev -g $RG
+
+# Obtener SQL connection string
+SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+SQL_CONN="Server=${SQL_SERVER};Database=dashboard-db;Authentication=Active Directory Default"
+
+# Deploy DashboardWorker Container App con SQL connection string
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/modules/dashboard-worker-container-app.bicep \
+  --parameters \
+    containerAppName="ca-dashboard-worker-dev" \
+    environmentId="$(az deployment group show -g $RG --name main --query 'properties.outputs.containerAppEnvironmentId.value' -o tsv)" \
+    containerImage="${ACR_NAME}.azurecr.io/dashboard-worker:latest" \
+    acrName="$ACR_NAME" \
+    managedIdentityId="$(az deployment group show -g $RG --name main --query 'properties.outputs.managedIdentityId.value' -o tsv)" \
+    managedIdentityClientId="$(az deployment group show -g $RG --name main --query 'properties.outputs.managedIdentityClientId.value' -o tsv)" \
+    serviceBusNamespaceFqdn="$(az deployment group show -g $RG --name main --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)" \
+    sqlConnectionString="$SQL_CONN" \
+    appInsightsConnectionString="$(az monitor app-insights component show -g $RG --query '[0].connectionString' -o tsv)"
+```
+
+### Paso 6: Test — Encolar mensajes y verificar eventos
+
+```bash
+SB_NS=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
+
+# El enqueuer ahora publica eventos a nd-dashboard-events
+cd src/tools/ServiceBusEnqueuer
+dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
+```
+
+### Paso 7: Verificar Dashboard Worker escalando
+
+```bash
+# Ver mensajes en subscription
+SB_NAME=$(az servicebus namespace list -g $RG --query '[0].name' -o tsv)
+az servicebus topic subscription show -g $RG \
+  --namespace-name $SB_NAME \
+  --topic-name nd-dashboard-events \
+  --name counter-updater \
+  --query 'countDetails.{active:activeMessageCount,deadLetter:deadLetterMessageCount}' -o table
+
+# Ver réplicas del Dashboard Worker (KEDA topic subscription scaler)
+az containerapp replica list -n ca-dashboard-worker-dev -g $RG -o table
+
+# Logs del Dashboard Worker
+az containerapp logs show -n ca-dashboard-worker-dev -g $RG --follow
+```
+
+### Paso 8: Acceder al Dashboard UI
+
+```bash
+FRONTEND_URL=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.frontendAppUrl.value' -o tsv)
+
+echo "Dashboard: ${FRONTEND_URL}/dashboard"
+echo "Health:    ${FRONTEND_URL}/health"
+echo "DLQ Mgmt:  ${FRONTEND_URL}/dashboard/dlq/weather-jobs"
+```
+
+**Páginas:**
+- `/dashboard` — KPIs en tiempo real (auto-refresh 5s): contadores por vertical + queue + processType
+- `/dashboard/dlq/:queueName` — Gestión de DLQ: peek, editar body, reencolar, descartar
+- `/health` — Estado de componentes (auto-refresh 30s)
+
+### Paso 9: Verificar end-to-end
+
+```sql
+-- Consultar contadores en SQL
+SELECT vertical, queueName, processType, date, enqueuedCount, processedCount, dlqCount
+FROM QueueCounters
+ORDER BY date DESC, vertical, queueName, processType;
+```
+
+**Flujo completo:**
+1. `ServiceBusEnqueuer` → envía mensaje a `weather-jobs` + publica `MessageEnqueued` a topic
+2. `WeatherWorker` (KEDA queue scaler) → procesa mensaje → publica `MessageProcessed` a topic
+3. `DashboardWorker` (KEDA topic scaler) → consume eventos → UPSERT en SQL
+4. Frontend `/dashboard` → GET `/api/dashboard/kpi` → muestra contadores + DLQ counts live
+
+Ver [docs/dashboard-poc.md](docs/dashboard-poc.md) para el diseño completo.
+
+---
+
 ## 🔄 Actualizar código (rebuild + redeploy)
 
 ```bash
@@ -314,6 +490,8 @@ traces | where timestamp > ago(24h) and customDimensions.CategoryName startswith
 |-----|-----------|
 | [docs/EASY-AUTH-TUTORIAL.md](docs/EASY-AUTH-TUTORIAL.md) | Guía completa Easy Auth: App Registrations, Token Store, Custom OIDC, roles |
 | [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) | Diseño Worker + KEDA + Service Bus: arquitectura, DLQ, scaling |
+| [docs/dashboard-poc.md](docs/dashboard-poc.md) | Dashboard POC: diseño completo, arquitectura, implementación paso a paso |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Desarrollo local |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Detalles de deployment |
+
 
