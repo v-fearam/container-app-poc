@@ -961,13 +961,14 @@ Response:
 ### Fase 1 — Infraestructura (Bicep — nuevos módulos en `biceps/modules/`)
 > 🔧 Skills: `writing-bicep-templates` para estructura y best practices, `update-avm-modules-in-bicep` para usar Azure Verified Modules, `microsoft-docs` para validar API versions
 > ⚠️ **Validación:** Después de cada cambio en Bicep, hacer `az deployment group what-if` y luego deploy. Confirmar que los recursos existentes (Easy Auth, Worker, Service Bus) siguen funcionando.
-1. Crear módulo `sql-database.bicep` — Azure SQL Database + firewall/private endpoint
-2. Configurar Entra ID admin (usuario de deploy) en el SQL Server
-3. Mapear la User Assigned Managed Identity existente (`managed-identity.bicep`) como usuario SQL con `db_datareader` + `db_datawriter`
-4. Crear tablas `dbo.QueueCounters` + `dbo.ComponentHealth` (script SQL versionado en `docs/` o `sql/`)
-5. Agregar topic `nd-dashboard-events` + suscripción `counter-updater` al módulo `service-bus.bicep` existente
-6. Agregar role assignment `Azure Service Bus Data Owner` a la UMI en `managed-identity.bicep` (para el API — admin + DLQ ops)
-7. ~~Crear Application Insights~~ ✅ Ya existe (`application-insights.bicep`)
+1. ✅ Crear módulo `sql-database.bicep` — Azure SQL Database + firewall/private endpoint
+2. ⏭️ Configurar Entra ID admin (usuario de deploy) en el SQL Server — **MANUAL post-deploy**
+3. ⏭️ Mapear la User Assigned Managed Identity existente (`managed-identity.bicep`) como usuario SQL con `db_datareader` + `db_datawriter` — **MANUAL post-deploy**
+4. ✅ Crear tablas `dbo.QueueCounters` + `dbo.ComponentHealth` (script SQL versionado en `sql/`)
+5. ✅ Agregar topic `nd-dashboard-events` + suscripción `counter-updater` al módulo `service-bus.bicep` existente
+6. ✅ Agregar role assignment `Azure Service Bus Data Owner` a la UMI en `managed-identity.bicep` (para el API — admin + DLQ ops)
+7. ✅ ~~Crear Application Insights~~ Ya existe (`application-insights.bicep`)
+8. ✅ Integrar `sql-database.bicep` en `main.bicep` con parámetro `deployDashboard`
 
 ### Fase 2 — Backend (`src/backend/WeatherApi`)
 > 🔧 Skill: `microsoft-docs` para APIs de ServiceBusAdministrationClient, SqlClient, Health Checks
