@@ -2,6 +2,15 @@
 
 POC de Azure Container Apps con Easy Auth (Entra ID), React + .NET 10, telemetría con Application Insights.
 
+## Tags de referencia
+
+| Tag | Descripción | Cuándo volver |
+|-----|-------------|---------------|
+| `v0.2-stable` | Easy Auth + Worker + KEDA funcionando end-to-end | Si algo se rompe durante la implementación del Dashboard, comparar con `git diff v0.2-stable` |
+
+Para volver a este punto: `git checkout v0.2-stable`
+Para comparar cambios: `git diff v0.2-stable..HEAD`
+
 ## Stack
 
 | Capa | Tecnología |
