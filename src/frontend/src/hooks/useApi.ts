@@ -44,5 +44,34 @@ export function useApi() {
     [accessToken],
   );
 
-  return { get, baseUrl };
+  const post = useCallback(
+    async <T>(path: string, body?: unknown): Promise<T> => {
+      if (!baseUrl) {
+        throw new ApiError(0, 'API URL no configurada. Define API_URL (runtime) o VITE_API_URL (build).');
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!res.ok) {
+        throw new ApiError(res.status, await res.text());
+      }
+
+      return res.json() as Promise<T>;
+    },
+    [accessToken],
+  );
+
+  return { get, post, baseUrl };
 }

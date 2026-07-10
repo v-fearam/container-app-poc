@@ -24,6 +24,12 @@ export function Navbar() {
                 <Link to="/" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
                   Inicio
                 </Link>
+                <Link to="/dashboard" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                  Dashboard
+                </Link>
+                <Link to="/health" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                  Health
+                </Link>
                 {user?.roles.includes('Admin') && (
                   <Link to="/admin" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
                     Admin
