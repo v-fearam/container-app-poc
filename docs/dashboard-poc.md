@@ -994,17 +994,17 @@ Response:
 
 ### Fase 4 — Modificar Enqueuer y Worker existentes
 > 🔧 Skill: `microsoft-docs` para ServiceBusSender fire-and-forget patterns
-24. **ServiceBusEnqueuer** (`src/tools/ServiceBusEnqueuer/Program.cs`):
+24. ✅ **ServiceBusEnqueuer** (`src/tools/ServiceBusEnqueuer/Program.cs`):
     - Agregar `processType` aleatorio (`weather1`/`weather2`) al payload del mensaje
     - Crear `ServiceBusSender` adicional para el topic `nd-dashboard-events`
     - Publicar `MessageEnqueued` fire-and-forget después de cada `SendMessageAsync` a la queue
-25. **WeatherWorker** (`src/worker/WeatherWorker/Handlers/DefaultMessageHandler.cs`):
+25. ✅ **WeatherWorker** (`src/worker/WeatherWorker/Handlers/DefaultMessageHandler.cs`):
     - Después del `CompleteMessageAsync` exitoso (línea 21), publicar `MessageProcessed` al topic
     - Agregar `ServiceBusSender` para el topic en DI (`Program.cs`)
     - Fire-and-forget con try/catch (no bloquear el flujo principal)
-26. ~~CancellationToken~~ ✅ Ya se propaga correctamente en todos los handlers
-27. Agregar heartbeat a `ComponentHealth` en ambos workers (periódico, cada 30s)
-28. ~~OpenTelemetry~~ ✅ Ya configurado en `WeatherWorker` con `UseAzureMonitor()` + `ActivitySource`
+26. ✅ ~~CancellationToken~~ Ya se propaga correctamente en todos los handlers
+27. ⏭️ Agregar heartbeat a `ComponentHealth` en ambos workers (periódico, cada 30s) — **DEFERRED** (no crítico)
+28. ✅ ~~OpenTelemetry~~ Ya configurado en `WeatherWorker` con `UseAzureMonitor()` + `ActivitySource`
 
 ### Fase 5 — Frontend (`src/frontend`)
 > 🎨 Skill: `ui-ux-pro-max` para diseño visual ANTES de codear
