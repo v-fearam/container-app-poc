@@ -1020,6 +1020,23 @@ Response:
 41. Verificar graceful shutdown del DashboardWorker (SIGTERM → drain → mensaje re-entregado)
 42. Verificar health checks y probes de Container Apps (`/health/live`, `/health/ready`)
 
+### Fase 7 — Documentación (README como tutorial paso a paso)
+> ⚠️ **Obligatorio:** Al finalizar la implementación, el README debe ser un tutorial ejecutable de principio a fin. Cualquier persona debe poder seguir los pasos y tener el ambiente completo andando.
+
+43. Actualizar `README.md` con una **nueva sección "Dashboard POC"** que incluya:
+    - Prerequisitos adicionales (SQL Database, topic, subscription)
+    - Pasos de deploy Bicep incluyendo los módulos nuevos (`sql-database.bicep`, topic en `service-bus.bicep`)
+    - Paso manual post-deploy: configurar Entra ID admin en SQL Server + `CREATE USER ... FROM EXTERNAL PROVIDER`
+    - Build & push de la imagen `DashboardWorker` al ACR (mismo patrón que WeatherWorker)
+    - Deploy del Container App del DashboardWorker
+    - Cómo correr el `ServiceBusEnqueuer` con eventos habilitados
+    - Cómo verificar que los contadores se actualizan (query SQL o endpoint `/api/dashboard/kpi`)
+    - Cómo verificar el DLQ Manager (forzar fallos y gestionar desde el frontend)
+    - Cómo verificar distributed tracing en App Insights (query KQL de ejemplo)
+44. Mantener la estructura actual del README (Easy Auth + Worker siguen siendo las primeras secciones)
+45. Agregar diagrama de arquitectura simplificado (Mermaid) al README mostrando todos los componentes
+46. Verificar que siguiendo el README desde cero en un subscription limpio, todo funciona end-to-end
+
 ---
 
 ## 12. Referencias
