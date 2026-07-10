@@ -972,14 +972,14 @@ Response:
 
 ### Fase 2 — Backend (`src/backend/WeatherApi`)
 > 🔧 Skill: `microsoft-docs` para APIs de ServiceBusAdministrationClient, SqlClient, Health Checks
-8. Agregar NuGets: `Microsoft.Data.SqlClient`, `Azure.Messaging.ServiceBus` (para `ServiceBusAdministrationClient`)
-9. Crear `Controllers/DashboardController.cs` con endpoints KPI y DLQ Manager
-10. Implementar `ServiceBusAdministrationClient` para `DeadLetterMessageCount` (queue `weather-jobs` + subscription `counter-updater`)
-11. Implementar operaciones DLQ (peek, requeue con edición opcional, discard)
-12. Implementar lectura de `QueueCounters` desde SQL con `DefaultAzureCredential`
-13. Reemplazar endpoint `/health` actual (línea 39 de Program.cs) por `AddHealthChecks()` con checks de SQL + Service Bus + liveness/readiness separados
-14. Implementar endpoint `/api/health/components` (agrega heartbeat de workers desde `ComponentHealth`)
-15. ~~Configurar OpenTelemetry~~ ✅ Ya existe (`UseAzureMonitor()` en Program.cs)
+8. ✅ Agregar NuGets: `Microsoft.Data.SqlClient`, `Azure.Messaging.ServiceBus` (para `ServiceBusAdministrationClient`)
+9. ✅ Crear `Controllers/DashboardController.cs` con endpoint KPI
+10. ✅ Implementar `ServiceBusAdministrationClient` para `DeadLetterMessageCount` (queue `weather-jobs` + subscription `counter-updater`)
+11. ✅ Implementar operaciones DLQ (peek, requeue con edición opcional, discard) — `DlqManagerController.cs`
+12. ✅ Implementar lectura de `QueueCounters` desde SQL con `DefaultAzureCredential`
+13. ✅ Reemplazar endpoint `/health` actual por `AddHealthChecks()` con checks de SQL + Service Bus + liveness/readiness separados
+14. ✅ Implementar endpoint `/api/health/components` (agrega heartbeat de workers desde `ComponentHealth`)
+15. ✅ ~~Configurar OpenTelemetry~~ Ya existe (`UseAzureMonitor()` en Program.cs)
 
 ### Fase 3 — Worker Dashboard (nuevo: `src/worker/DashboardWorker`)
 > 🔧 Skill: `microsoft-docs` para patrón ServiceBusProcessor con topic subscription
