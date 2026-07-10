@@ -137,7 +137,7 @@ Para demostrar que el mismo Dashboard soporta ambos modelos:
 - Refresh automático cada **5 segundos** (configurable, en prod será mayor)
 - Una fila por combinación de vertical + cola + tipo de proceso, para el día de hoy
 - Los genéricos se agrupan por **vertical + tipo de proceso** (`processType`) por día
-- En la POC el generador asigna aleatoriamente `processType = "weather1"` o `"weather2"` a cada mensaje, simulando un caso real donde distintos procesos comparten la misma cola
+- En la POC el generador hardcodea `vertical = "Vertical1"` y asigna aleatoriamente `processType = "weather1"` o `"weather2"` a cada mensaje, simulando un caso real donde distintos procesos comparten la misma cola
 - Las colas no son dinámicas por configuración — cada cola tiene su tabla en SQL
 
 ### 2.2 Vista DLQ Manager (click en el contador DLQ)
@@ -159,15 +159,15 @@ Para demostrar que el mismo Dashboard soporta ambos modelos:
 ### 2.3 Generación de eventos
 
 - El **productor** (generador existente de la POC) al encolar un mensaje en la cola de trabajo:
-  1. Asigna un `processType` aleatorio (`"weather1"` o `"weather2"`) al mensaje de trabajo (como property o dentro del body)
-  2. Publica un evento `MessageEnqueued` al **topic `nd-dashboard-events`** incluyendo `queueName` y `processType`
-- El **worker existente**, después de procesar exitosamente un mensaje y **después de completar el PeekLock**, publica un evento `MessageProcessed` al topic incluyendo el mismo `processType` que traía el mensaje original
+  1. Hardcodea `vertical = "Vertical1"` y asigna un `processType` aleatorio (`"weather1"` o `"weather2"`) al mensaje de trabajo (como property o dentro del body)
+  2. Publica un evento `MessageEnqueued` al **topic `nd-dashboard-events`** incluyendo `vertical`, `queueName` y `processType`
+- El **worker existente**, después de procesar exitosamente un mensaje y **después de completar el PeekLock**, publica un evento `MessageProcessed` al topic incluyendo `vertical` y `processType` que traía el mensaje original
 - Los eventos son **fire-and-forget** — si el topic no está disponible, el worker no falla
 
 ### 2.4 Worker de Dashboard (nuevo)
 
 - Nuevo Container App Job que consume la suscripción `counter-updater` del topic `nd-dashboard-events`
-- Toma cada evento y hace `+1` en la tabla SQL correspondiente para la **cola + tipo de proceso + día de hoy**
+- Toma cada evento y hace `+1` en la tabla SQL correspondiente para la **vertical + cola + tipo de proceso + día de hoy**
 - Escala de **0 a 10 réplicas**, con **1 réplica cada 15 mensajes** pendientes en la suscripción
 
 ### 2.5 Contador de DLQ
