@@ -130,13 +130,13 @@ Para demostrar que el mismo Dashboard soporta ambos modelos:
 
 ### 2.1 Pantalla KPI (nueva, accesible desde Home)
 
-- Mostrar contadores **por cola + tipo de proceso + día**:
+- Mostrar contadores **por vertical + cola + tipo de proceso + día**:
   - **Encolados**: cantidad de mensajes que entraron a la cola
   - **Procesados**: cantidad de mensajes completados exitosamente
   - **En DLQ**: cantidad de mensajes en la Dead Letter Queue
 - Refresh automático cada **5 segundos** (configurable, en prod será mayor)
-- Una fila por combinación de cola + tipo de proceso, para el día de hoy
-- Los genéricos se agrupan por **tipo de proceso** (`processType`) por día
+- Una fila por combinación de vertical + cola + tipo de proceso, para el día de hoy
+- Los genéricos se agrupan por **vertical + tipo de proceso** (`processType`) por día
 - En la POC el generador asigna aleatoriamente `processType = "weather1"` o `"weather2"` a cada mensaje, simulando un caso real donde distintos procesos comparten la misma cola
 - Las colas no son dinámicas por configuración — cada cola tiene su tabla en SQL
 
