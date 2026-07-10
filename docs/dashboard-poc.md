@@ -932,7 +932,30 @@ Response:
 
 > **Nota:** Los items marcados con ✅ ya están resueltos por la POC existente (`container-app-poc`). El plan solo lista lo que hay que **agregar o modificar**.
 
+### Directivas de implementación (skills y librerías)
+
+| Área | Skill a invocar | Notas |
+|------|-----------------|-------|
+| Diseño UI/UX (wireframes, layout, colores, componentes visuales) | `ui-ux-pro-max` | Invocar **antes** de escribir código de frontend para definir diseño |
+| Código .NET (backend, workers, Bicep) | `nestjs-best-practices` → NO — usar `microsoft-docs` | Consultar siempre Microsoft Learn para patrones .NET actualizados |
+| Código React (frontend) | `vercel-react-best-practices` | Invocar al construir componentes, hooks, páginas |
+| Consultas de documentación Azure/.NET | `microsoft-docs` | Invocar **siempre** para validar APIs, configuraciones y patrones |
+| Composición de componentes React | `vercel-composition-patterns` | Para layouts, composición avanzada, slot patterns |
+
+**Regla general:** Usar siempre la **última versión disponible** de cada librería/SDK. Verificar en `microsoft-docs` antes de instalar NuGets o npm packages. Si hay una versión preview estable, preferirla sobre la GA anterior.
+
+**Librerías target (latest al momento de la POC):**
+- .NET 10 (ya en uso)
+- `Azure.Messaging.ServiceBus` ≥ 7.18+
+- `Microsoft.Data.SqlClient` ≥ 6.0+
+- `Azure.Monitor.OpenTelemetry.AspNetCore` ≥ 1.3+
+- `Azure.Identity` ≥ 1.13+
+- React 19+ (ya en uso)
+- `@tanstack/react-query` para data fetching (evaluar vs SWR)
+- Tailwind CSS (ya en uso)
+
 ### Fase 1 — Infraestructura (Bicep — nuevos módulos en `biceps/modules/`)
+> 🔧 Skill: `microsoft-docs` para validar propiedades Bicep y API versions
 1. Crear módulo `sql-database.bicep` — Azure SQL Database + firewall/private endpoint
 2. Configurar Entra ID admin (usuario de deploy) en el SQL Server
 3. Mapear la User Assigned Managed Identity existente (`managed-identity.bicep`) como usuario SQL con `db_datareader` + `db_datawriter`
@@ -942,6 +965,7 @@ Response:
 7. ~~Crear Application Insights~~ ✅ Ya existe (`application-insights.bicep`)
 
 ### Fase 2 — Backend (`src/backend/WeatherApi`)
+> 🔧 Skill: `microsoft-docs` para APIs de ServiceBusAdministrationClient, SqlClient, Health Checks
 8. Agregar NuGets: `Microsoft.Data.SqlClient`, `Azure.Messaging.ServiceBus` (para `ServiceBusAdministrationClient`)
 9. Crear `Controllers/DashboardController.cs` con endpoints KPI y DLQ Manager
 10. Implementar `ServiceBusAdministrationClient` para `DeadLetterMessageCount` (queue `weather-jobs` + subscription `counter-updater`)
@@ -952,6 +976,7 @@ Response:
 15. ~~Configurar OpenTelemetry~~ ✅ Ya existe (`UseAzureMonitor()` en Program.cs)
 
 ### Fase 3 — Worker Dashboard (nuevo: `src/worker/DashboardWorker`)
+> 🔧 Skill: `microsoft-docs` para patrón ServiceBusProcessor con topic subscription
 16. Crear proyecto — mismo patrón que `WeatherWorker`: `BackgroundService` + `ServiceBusProcessor`
 17. Configurar para consumir **topic subscription** (`CreateProcessor("nd-dashboard-events", "counter-updater", ...)`)
 18. Implementar UPSERT concurrency-safe en SQL (patrón UPDATE-first)
@@ -962,6 +987,7 @@ Response:
 23. Crear `Dockerfile` (copiar patrón de `src/worker/WeatherWorker/Dockerfile`)
 
 ### Fase 4 — Modificar Enqueuer y Worker existentes
+> 🔧 Skill: `microsoft-docs` para ServiceBusSender fire-and-forget patterns
 24. **ServiceBusEnqueuer** (`src/tools/ServiceBusEnqueuer/Program.cs`):
     - Agregar `processType` aleatorio (`weather1`/`weather2`) al payload del mensaje
     - Crear `ServiceBusSender` adicional para el topic `nd-dashboard-events`
@@ -975,6 +1001,8 @@ Response:
 28. ~~OpenTelemetry~~ ✅ Ya configurado en `WeatherWorker` con `UseAzureMonitor()` + `ActivitySource`
 
 ### Fase 5 — Frontend (`src/frontend`)
+> 🎨 Skill: `ui-ux-pro-max` para diseño visual ANTES de codear
+> 🔧 Skill: `vercel-react-best-practices` + `vercel-composition-patterns` para implementación
 29. Crear `src/pages/DashboardPage.tsx` — pantalla KPI con polling cada 5 segundos
 30. Incluir DLQ de `weather-jobs` + DLQ de subscription `counter-updater` en la tabla KPI
 31. Crear `src/pages/DlqManagerPage.tsx` — gestión DLQ con edición opcional al re-encolar
