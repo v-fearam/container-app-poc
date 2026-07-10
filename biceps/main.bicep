@@ -57,6 +57,18 @@ param serviceBusNamespaceName string = 'sb-${workloadName}-${environmentShortNam
 @description('Managed identity name for worker')
 param workerIdentityName string = 'id-${workloadName}-worker-${environmentShortName}'
 
+@description('Deploy Dashboard infrastructure (SQL Database)')
+param deployDashboard bool = false
+
+@description('SQL Server name (required if deployDashboard=true)')
+param sqlServerName string = ''
+
+@description('Entra ID admin object ID for SQL Server (required if deployDashboard=true)')
+param sqlAdminObjectId string = ''
+
+@description('Entra ID admin login (UPN) for SQL Server (required if deployDashboard=true)')
+param sqlAdminLogin string = ''
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -180,6 +192,26 @@ module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && depl
   }
 }
 
+// =============================================================================
+// Dashboard Infrastructure (SQL Database)
+// =============================================================================
+
+// Azure SQL Database for Dashboard counters and health
+module sqlDatabase 'modules/sql-database.bicep' = if (deployDashboard) {
+  name: 'sql-database-deployment'
+  params: {
+    location: location
+    serverName: sqlServerName
+    databaseName: 'dashboard-poc'
+    entraAdminObjectId: sqlAdminObjectId
+    entraAdminLogin: sqlAdminLogin
+    tags: {
+      workload: workloadName
+      environment: environmentShortName
+    }
+  }
+}
+
 // Outputs
 output backendAppUrl string = deployContainerApps ? backendApp!.outputs.containerAppUrl : ''
 output frontendAppUrl string = deployContainerApps ? frontendApp!.outputs.containerAppUrl : ''
@@ -190,4 +222,7 @@ output appInsightsName string = appInsights.outputs.appInsightsName
 output containerAppEnvironmentName string = environment.outputs.environmentName
 output serviceBusNamespaceFqdn string = deployWorker ? serviceBus!.outputs.namespaceFqdn : ''
 output workerIdentityClientId string = deployWorker ? workerIdentity!.outputs.identityClientId : ''
+output sqlServerFqdn string = deployDashboard ? sqlDatabase!.outputs.sqlServerFqdn : ''
+output sqlDatabaseName string = deployDashboard ? sqlDatabase!.outputs.databaseName : ''
+output sqlConnectionString string = deployDashboard ? sqlDatabase!.outputs.connectionString : ''
 
