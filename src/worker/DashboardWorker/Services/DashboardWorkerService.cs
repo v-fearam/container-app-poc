@@ -87,7 +87,7 @@ public class DashboardWorkerService : BackgroundService
             if (dashboardEvent == null)
             {
                 _logger.LogWarning("Failed to deserialize dashboard event. Completing message to avoid infinite retry.");
-                await args.CompleteMessageAsync(args.CancellationToken);
+                await args.CompleteMessageAsync(args.Message, args.CancellationToken);
                 return;
             }
 
@@ -95,7 +95,7 @@ public class DashboardWorkerService : BackgroundService
             await UpsertCounterAsync(dashboardEvent, args.CancellationToken);
 
             // Complete message (remove from subscription)
-            await args.CompleteMessageAsync(args.CancellationToken);
+            await args.CompleteMessageAsync(args.Message, args.CancellationToken);
 
             _logger.LogInformation("Dashboard event processed successfully. EventType={EventType} Vertical={Vertical} Queue={Queue} ProcessType={ProcessType}",
                 dashboardEvent.EventType, dashboardEvent.Vertical, dashboardEvent.QueueName, dashboardEvent.ProcessType);
@@ -106,7 +106,7 @@ public class DashboardWorkerService : BackgroundService
                 args.Message.MessageId, args.Message.DeliveryCount);
 
             // Abandon message (will be redelivered or go to DLQ after max delivery count)
-            await args.AbandonMessageAsync(cancellationToken: args.CancellationToken);
+            await args.AbandonMessageAsync(args.Message, cancellationToken: args.CancellationToken);
         }
     }
 

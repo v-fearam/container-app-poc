@@ -22,7 +22,7 @@ builder.Services.AddWeatherCors(builder.Configuration);
 // Health Checks
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("API is running"))
-    .AddCheck("sql", async () =>
+    .AddAsyncCheck("sql", async (ct) =>
     {
         try
         {
@@ -30,7 +30,7 @@ builder.Services.AddHealthChecks()
             if (string.IsNullOrEmpty(connString)) return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded("SQL not configured");
             
             using var conn = new Microsoft.Data.SqlClient.SqlConnection(connString);
-            await conn.OpenAsync();
+            await conn.OpenAsync(ct);
             return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("SQL connected");
         }
         catch (Exception ex)
