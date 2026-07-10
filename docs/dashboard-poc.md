@@ -983,14 +983,14 @@ Response:
 
 ### Fase 3 — Worker Dashboard (nuevo: `src/worker/DashboardWorker`)
 > 🔧 Skill: `microsoft-docs` para patrón ServiceBusProcessor con topic subscription
-16. Crear proyecto — mismo patrón que `WeatherWorker`: `BackgroundService` + `ServiceBusProcessor`
-17. Configurar para consumir **topic subscription** (`CreateProcessor("nd-dashboard-events", "counter-updater", ...)`)
-18. Implementar UPSERT concurrency-safe en SQL (patrón UPDATE-first)
-19. Crear módulo Bicep `dashboard-worker-container-app.bicep` con KEDA topic subscription scaler
-20. ~~CancellationToken~~ ✅ Seguir mismo patrón del `WeatherWorker` (ya propagado correctamente)
-21. Agregar heartbeat a tabla `ComponentHealth`
-22. Configurar OpenTelemetry (`UseAzureMonitor()` + `ActivitySource` — copiar de `WeatherWorker/Program.cs`)
-23. Crear `Dockerfile` (copiar patrón de `src/worker/WeatherWorker/Dockerfile`)
+16. ✅ Crear proyecto — mismo patrón que `WeatherWorker`: `BackgroundService` + `ServiceBusProcessor`
+17. ✅ Configurar para consumir **topic subscription** (`CreateProcessor("nd-dashboard-events", "counter-updater", ...)`)
+18. ✅ Implementar UPSERT concurrency-safe en SQL (patrón UPDATE-first)
+19. ✅ Crear módulo Bicep `dashboard-worker-container-app.bicep` con KEDA topic subscription scaler
+20. ✅ ~~CancellationToken~~ Seguir mismo patrón del `WeatherWorker` (ya propagado correctamente)
+21. ⏭️ Agregar heartbeat a tabla `ComponentHealth` — **DEFERRED** (no crítico para POC inicial)
+22. ✅ Configurar OpenTelemetry (`UseAzureMonitor()` + `ActivitySource` — copiar de `WeatherWorker/Program.cs`)
+23. ✅ Crear `Dockerfile` (copiar patrón de `src/worker/WeatherWorker/Dockerfile`)
 
 ### Fase 4 — Modificar Enqueuer y Worker existentes
 > 🔧 Skill: `microsoft-docs` para ServiceBusSender fire-and-forget patterns
