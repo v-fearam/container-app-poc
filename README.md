@@ -377,14 +377,20 @@ Ver [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) para el diseño com
 
 ## 📊 Dashboard POC (monitoreo + DLQ management)
 
-Si ya tenés Worker + KEDA funcionando, podés extender el ambiente con el **Dashboard POC**: frontend en tiempo real para KPIs, gestión de DLQ, y health de componentes.
+**⚠️ Prerrequisito:** Esta sección asume que ya seguiste los pasos de **"🚀 Despliegue Completo (desde cero)"** y **"🔧 Worker + KEDA"** arriba, es decir, ya tenés:
+- ACR con imágenes del backend, frontend y WeatherWorker
+- Container App Environment
+- Service Bus con queue `weather-jobs`
+- Managed Identity
 
-**Arquitectura:**
+Si estás empezando desde cero, **primero completá esas secciones**. Esta sección es para **extender** el ambiente existente con el Dashboard POC.
+
+**Qué agrega el Dashboard POC:**
 - **SQL Database** (Basic 5 DTUs) — almacena contadores por vertical + queue + processType + fecha
 - **Service Bus Topic `nd-dashboard-events`** + subscription `counter-updater`
 - **DashboardWorker** — consume eventos del topic, actualiza contadores en SQL (KEDA topic subscription scaler)
-- **Backend APIs** — `/api/dashboard/kpi`, `/api/dlq/*`, `/api/health/components`
-- **Frontend** — DashboardPage, DlqManagerPage, HealthPage (auto-refresh)
+- **Backend APIs actualizados** — `/api/dashboard/kpi`, `/api/dlq/*`, `/api/health/components`
+- **Frontend actualizado** — DashboardPage, DlqManagerPage, HealthPage (auto-refresh)
 
 ### Paso 1: Deploy infra del Dashboard (SQL + Topic + Subscription)
 
@@ -441,37 +447,59 @@ az deployment group show -g $RG --name main \
   --query 'properties.outputs.managedIdentityName.value' -o tsv
 ```
 
-### Paso 4: Build imágenes Dashboard (backend + DashboardWorker)
+### Paso 4: Rebuild imágenes (Backend + WeatherWorker + nuevo DashboardWorker)
+
+**⚠️ Importante:** Si venís de hacer el deploy inicial, las imágenes del backend y WeatherWorker ya existen en el ACR pero están desactualizadas (no tienen el código del Dashboard POC). Necesitás **rebuild** de las 3 imágenes:
 
 ```bash
 ACR_NAME=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.acrName.value' -o tsv)
 
-# Backend (rebuild para incluir nuevos controllers)
+# Backend (REBUILD para incluir nuevos controllers: Dashboard, DlqManager, Health)
 az acr build --registry $ACR_NAME \
   --image weather-api:latest \
   --file src/backend/WeatherApi/Dockerfile \
   src/backend/WeatherApi
 
-# Dashboard Worker (nuevo)
+# WeatherWorker (REBUILD para incluir publicación de eventos al topic)
+az acr build --registry $ACR_NAME \
+  --image weather-worker:latest \
+  --file src/worker/WeatherWorker/Dockerfile \
+  src/worker/WeatherWorker
+
+# DashboardWorker (NUEVO - primera vez)
 az acr build --registry $ACR_NAME \
   --image dashboard-worker:latest \
   --file src/worker/DashboardWorker/Dockerfile \
   src/worker/DashboardWorker
+
+# Frontend (REBUILD para incluir nuevas páginas: Dashboard, DlqManager, Health)
+az acr build --registry $ACR_NAME \
+  --image weather-frontend:latest \
+  --file src/frontend/Dockerfile \
+  src/frontend
 ```
 
-### Paso 5: Redeploy backend + deploy DashboardWorker Container App
+### Paso 5: Redeploy Backend + Frontend + WeatherWorker, y deploy DashboardWorker
+
+Ahora que las 4 imágenes están actualizadas en el ACR, redeploy los Container Apps existentes y crea el nuevo DashboardWorker:
 
 ```bash
-# Redeploy backend (actualiza con nuevos controllers)
+# Redeploy Backend (pull nueva imagen con controllers Dashboard/DlqManager/Health)
 az containerapp update -n ca-weather-be-dev -g $RG
+
+# Redeploy Frontend (pull nueva imagen con páginas Dashboard/DlqManager/Health)
+az containerapp update -n ca-weather-fe-dev -g $RG
+
+# Redeploy WeatherWorker (pull nueva imagen con publicación de eventos)
+az containerapp update -n ca-weather-worker-dev -g $RG
 
 # Obtener SQL connection string
 SQL_SERVER=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
 SQL_CONN="Server=${SQL_SERVER};Database=dashboard-db;Authentication=Active Directory Default"
 
-# Deploy DashboardWorker Container App con SQL connection string
+# Deploy DashboardWorker Container App (NUEVO - primera vez)
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/modules/dashboard-worker-container-app.bicep \
