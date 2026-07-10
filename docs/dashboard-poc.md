@@ -191,10 +191,10 @@ El contador de DLQ **no se alimenta del topic** — los mensajes van a DLQ por f
 
 ## 3. Requerimientos de infraestructura
 
-### 3.1 SQL Server
+### 3.1 SQL Database
 
-- Crear un **Azure SQL Database** (no MI — es una POC, SQL Database es más simple y barato)
-- Acceso **exclusivamente por User Managed Identity** — sin connection strings con password
+- Crear un **Azure SQL Database** (no Managed Instance — es una POC, SQL Database es más simple y barato)
+- Acceso **por User Assigned Managed Identity** — sin connection strings con password
 - Agregar el usuario de deploy como **administrador de Entra ID** del SQL Server
 - Sin acceso público — Private Endpoint o firewall rules según la VNet de la POC
 
