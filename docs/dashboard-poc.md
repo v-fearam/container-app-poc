@@ -83,6 +83,49 @@ Además, validar la gestión de DLQ desde el Dashboard (inspeccionar, re-encolar
 
 ---
 
+## 1.1 Concepto de Verticales y Modelos de Acumulación
+
+### Contexto: NDv2 tiene 3 verticales
+
+En producción (NDv2), el sistema maneja 3 verticales independientes que comparten infraestructura pero acumulan contadores de manera diferente:
+
+| Vertical | Trigger | Agrupación de contadores | Ejemplo |
+|----------|---------|--------------------------|---------|
+| **Genéricos** | Request individual (real-time) | `tipoProceso + fecha` | recupero-clave, 2026-07-10 |
+| **Negocio** | Timer CRON diario (batch) | `loteId + tipoProceso` | lote-uuid + aviso-deuda |
+| **Campañas** | Operador programa ejecución | `loteId + tipoProceso` (cada campaña = un lote) | lote-uuid + campaña-factura-digital |
+
+**Diferencia clave de acumulación:**
+- **Genéricos**: No tienen lote — cada comunicación es independiente. Los contadores se agrupan por `tipoProceso + fecha` (cuántos recuperos de clave se enviaron hoy).
+- **Negocio/Campañas**: Se organizan en lotes. Los contadores se agrupan por `loteId + tipoProceso` (cuántas del aviso-deuda de este lote se enviaron). Un lote "converge" cuando `Entregadas + Rebotadas ≈ Enviadas`.
+
+### Cómo lo modelamos en la POC
+
+Un solo Dashboard atiende a todas las verticales. En la POC simulamos con **una vertical ficticia** (`Vertical1`) para validar la mecánica:
+
+| Campo en el evento | Qué representa | Valores en la POC |
+|---|---|---|
+| `vertical` | A qué vertical pertenece el evento | `"Vertical1"` (fijo en la POC) |
+| `processType` | Tipo de proceso dentro de la vertical | `"weather1"` o `"weather2"` (aleatorio) |
+| `queueName` | Cola de origen | `"weather-jobs"` |
+| `loteId` | (solo negocio/campañas) ID del lote | `null` en la POC (simula genéricos por fecha) |
+
+### Modelos de acumulación en la POC
+
+Para demostrar que el mismo Dashboard soporta ambos modelos:
+
+1. **Modo Genéricos** (default): Contadores por `queueName + processType + fecha`
+   - Simula el caso real de genéricos (recupero-clave por día)
+   - Es lo que ya tiene el `QueueCounters` actual
+
+2. **Modo Negocio** (futuro): Contadores por `loteId + processType`
+   - Se agrega cuando se implemente la simulación de lotes
+   - Tabla separada: `LoteCounters`
+
+**En esta iteración de la POC nos enfocamos en el modo Genéricos** (por fecha), que es suficiente para validar el pipeline completo.
+
+---
+
 ## 2. Requerimientos funcionales
 
 ### 2.1 Pantalla KPI (nueva, accesible desde Home)
@@ -166,6 +209,23 @@ El contador de DLQ **no se alimenta del topic** — los mensajes van a DLQ por f
 >
 > Con `Authentication=Active Directory Default` y `User Id=<client-id>`, SqlClient usa `DefaultAzureCredential` con la User Managed Identity especificada. En desarrollo local usa las credenciales de Visual Studio / Azure CLI.
 
+**⚠️ Paso manual post-deploy (no automatizable en Bicep):**
+
+Después del deploy de la infra (Bicep crea el SQL Server con Entra ID admin), hay que mapear la UAMI como usuario SQL. Conectarse con el admin de Entra ID y ejecutar:
+
+```sql
+-- Mapear la User Assigned Managed Identity como usuario de la DB
+CREATE USER [id-weather-worker-dev] FROM EXTERNAL PROVIDER;
+
+-- Permisos para el API (lectura de contadores)
+ALTER ROLE db_datareader ADD MEMBER [id-weather-worker-dev];
+
+-- Permisos para el Worker Dashboard (escritura de contadores)
+ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];
+```
+
+> **Requisito:** El SQL Server debe tener un Entra ID administrator configurado (puede ser tu usuario de deploy). Solo un usuario con ese rol puede ejecutar `CREATE USER ... FROM EXTERNAL PROVIDER`.
+
 ### 3.2 Service Bus — Topic de Dashboard
 
 - Crear topic: **`nd-dashboard-events`**
@@ -198,12 +258,12 @@ scale:
       metadata:
         topicName: nd-dashboard-events
         subscriptionName: counter-updater
-        namespace: <service-bus-namespace>
+        namespace: <service-bus-namespace-name>  # Solo el nombre, sin .servicebus.windows.net
         messageCount: "15"
-      auth:
-        - secretRef: azure-managed-identity
-          triggerParameter: connection
+      identity: <managed-identity-resource-id>  # KEDA usa MI directamente (no secretRef)
 ```
+
+> **Nota:** El campo `namespace` solo lleva el nombre (e.g., `sb-weather-dev-u6qlzs`), no el FQDN. KEDA agrega `.servicebus.windows.net` automáticamente. El campo `identity` toma el resource ID completo de la User Assigned Managed Identity.
 
 > **Referencia:** [Set scaling rules in Azure Container Apps](https://learn.microsoft.com/azure/container-apps/scale-app)
 
@@ -237,30 +297,55 @@ Todos los componentes acceden por **User Assigned Managed Identity (UAMI)**.
 
 ## 4. Modelo de datos (SQL)
 
+### 4.1 QueueCounters — Modo Genéricos (por fecha)
+
 ```sql
--- Contadores por cola + tipo de proceso + día
--- Cada combinación cola/processType genera una fila por día
+-- Contadores por vertical + cola + tipo de proceso + día
+-- Cada combinación genera una fila por día
 CREATE TABLE dbo.QueueCounters (
     Id INT IDENTITY(1,1) PRIMARY KEY,
+    Vertical NVARCHAR(50) NOT NULL,
     QueueName NVARCHAR(100) NOT NULL,
     ProcessType NVARCHAR(100) NOT NULL,
     Fecha DATE NOT NULL DEFAULT CAST(GETUTCDATE() AS DATE),
     Encolados INT NOT NULL DEFAULT 0,
     Procesados INT NOT NULL DEFAULT 0,
-    CONSTRAINT UQ_QueueCounters_Queue_Process_Fecha UNIQUE (QueueName, ProcessType, Fecha)
+    CONSTRAINT UQ_QueueCounters UNIQUE (Vertical, QueueName, ProcessType, Fecha)
 );
 
 -- Índice para la query principal del dashboard
 CREATE NONCLUSTERED INDEX IX_QueueCounters_Fecha
-ON dbo.QueueCounters (Fecha, QueueName, ProcessType)
+ON dbo.QueueCounters (Fecha, Vertical, QueueName, ProcessType)
 INCLUDE (Encolados, Procesados);
 ```
 
+### 4.2 LoteCounters — Modo Negocio (por loteId) — Futuro
+
+```sql
+-- Contadores por lote + tipo de proceso (Negocio y Campañas)
+-- Se crea al publicar NuevoLote, se incrementa con cada evento
+CREATE TABLE dbo.LoteCounters (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Vertical NVARCHAR(50) NOT NULL,
+    LoteId NVARCHAR(100) NOT NULL,
+    ProcessType NVARCHAR(100) NOT NULL,
+    FechaCreacion DATE NOT NULL DEFAULT CAST(GETUTCDATE() AS DATE),
+    Creadas INT NOT NULL DEFAULT 0,
+    Enviadas INT NOT NULL DEFAULT 0,
+    Entregadas INT NOT NULL DEFAULT 0,
+    Rebotadas INT NOT NULL DEFAULT 0,
+    CONSTRAINT UQ_LoteCounters UNIQUE (LoteId, ProcessType)
+);
+```
+
+> **Nota:** En esta iteración de la POC solo implementamos `QueueCounters`. `LoteCounters` queda documentado como referencia para cuando se agregue la simulación de lotes (modo Negocio).
+
 **Notas:**
-- La granularidad es **cola + tipo de proceso + día** — en la POC veremos filas como `(nd-poc-queue, weather1, 2026-07-10)` y `(nd-poc-queue, weather2, 2026-07-10)`
+- La granularidad de genéricos es **vertical + cola + tipo de proceso + día** — en la POC veremos filas como `(Vertical1, weather-jobs, weather1, 2026-07-10)`
 - No hay columna `DLQ` — ese dato se obtiene en tiempo real del Service Bus Management API
-- El Worker de Dashboard hace `UPSERT` (INSERT si no existe la fila del día para esa cola+processType, UPDATE +1 si existe)
+- El Worker de Dashboard hace `UPSERT` (INSERT si no existe la fila, UPDATE +1 si existe)
 - La fecha se deriva del `EnqueuedTimeUtc` del mensaje del topic (consistente con el doc de arquitectura)
+- El campo `Vertical` permite que el Dashboard filtre/agrupe por vertical
 
 **UPSERT del worker (concurrency-safe, sin MERGE):**
 
@@ -271,7 +356,8 @@ INCLUDE (Encolados, Procesados);
 UPDATE dbo.QueueCounters
 SET Encolados = Encolados + @DeltaEncolados,
     Procesados = Procesados + @DeltaProcesados
-WHERE QueueName = @QueueName
+WHERE Vertical = @Vertical
+  AND QueueName = @QueueName
   AND ProcessType = @ProcessType
   AND Fecha = @Fecha;
 
@@ -279,8 +365,8 @@ WHERE QueueName = @QueueName
 IF @@ROWCOUNT = 0
 BEGIN
     BEGIN TRY
-        INSERT INTO dbo.QueueCounters (QueueName, ProcessType, Fecha, Encolados, Procesados)
-        VALUES (@QueueName, @ProcessType, @Fecha, @DeltaEncolados, @DeltaProcesados);
+        INSERT INTO dbo.QueueCounters (Vertical, QueueName, ProcessType, Fecha, Encolados, Procesados)
+        VALUES (@Vertical, @QueueName, @ProcessType, @Fecha, @DeltaEncolados, @DeltaProcesados);
     END TRY
     BEGIN CATCH
         -- Race condition: otra réplica insertó entre el UPDATE y el INSERT
@@ -288,7 +374,8 @@ BEGIN
             UPDATE dbo.QueueCounters
             SET Encolados = Encolados + @DeltaEncolados,
                 Procesados = Procesados + @DeltaProcesados
-            WHERE QueueName = @QueueName
+            WHERE Vertical = @Vertical
+              AND QueueName = @QueueName
               AND ProcessType = @ProcessType
               AND Fecha = @Fecha;
     END CATCH
@@ -310,16 +397,24 @@ END
 ```json
 {
   "eventType": "MessageEnqueued | MessageProcessed",
-  "queueName": "nd-poc-queue",
+  "vertical": "Vertical1",
+  "queueName": "weather-jobs",
   "processType": "weather1",
+  "loteId": null,
   "timestamp": "2026-07-10T12:00:00Z"
 }
 ```
 
 - `eventType` como **Application Property** del mensaje de Service Bus (permite filtros futuros en suscripciones)
+- `vertical` identifica la vertical de origen (en la POC: `"Vertical1"` fijo; en prod: `"Genericos"`, `"Negocio"`, `"Campanas"`)
 - `queueName` identifica la cola de origen
-- `processType` identifica el tipo de proceso dentro de esa cola (en la POC: `"weather1"` o `"weather2"`)
+- `processType` identifica el tipo de proceso dentro de esa vertical (en la POC: `"weather1"` o `"weather2"`)
+- `loteId` (nullable) — solo presente para Negocio/Campañas. Si es `null`, los contadores se acumulan por `processType + fecha` (modo genéricos)
 - `timestamp` es informativo; la fecha para los contadores se toma del `EnqueuedTimeUtc` del broker
+
+**Regla de acumulación en el Worker Dashboard:**
+- Si `loteId != null` → acumula en tabla `LoteCounters` por `loteId + processType`
+- Si `loteId == null` → acumula en tabla `QueueCounters` por `queueName + processType + fecha`
 
 ### Quién publica y cuándo
 
@@ -338,9 +433,15 @@ var processType = Random.Shared.Next(2) == 0 ? "weather1" : "weather2";
 try
 {
     await topicSender.SendMessageAsync(new ServiceBusMessage(
-        JsonSerializer.Serialize(new { eventType = "MessageEnqueued", queueName = "nd-poc-queue", processType }))
+        JsonSerializer.Serialize(new {
+            eventType = "MessageEnqueued",
+            vertical = "Vertical1",
+            queueName = "weather-jobs",
+            processType,
+            loteId = (string?)null
+        }))
     {
-        ApplicationProperties = { ["eventType"] = "MessageEnqueued" }
+        ApplicationProperties = { ["eventType"] = "MessageEnqueued", ["vertical"] = "Vertical1" }
     });
 }
 catch (Exception ex)
@@ -357,14 +458,15 @@ catch (Exception ex)
 ### KPI
 
 ```
-GET /api/dashboard/kpi?fecha=2026-07-10
+GET /api/dashboard/kpi?fecha=2026-07-10&vertical=Vertical1
 ```
 
 **Response:**
 ```json
 [
   {
-    "queueName": "nd-poc-queue",
+    "vertical": "Vertical1",
+    "queueName": "weather-jobs",
     "processType": "weather1",
     "fecha": "2026-07-10",
     "encolados": 812,
@@ -372,7 +474,8 @@ GET /api/dashboard/kpi?fecha=2026-07-10
     "dlq": 2
   },
   {
-    "queueName": "nd-poc-queue",
+    "vertical": "Vertical1",
+    "queueName": "weather-jobs",
     "processType": "weather2",
     "fecha": "2026-07-10",
     "encolados": 711,
