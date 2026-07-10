@@ -124,46 +124,61 @@ graph TB
 | Capa | Tecnología |
 |------|-----------|
 | Frontend | React 18 + TypeScript + Vite + Tailwind CSS + Nginx |
-| Backend | .NET 10 API (Controllers + Easy Auth service) |
-| Worker | .NET 10 Worker Service + Service Bus + KEDA (scale 0→10) |
+| Backend | .NET 10 API (Controllers + Easy Auth service + Dashboard APIs) |
+| Workers | .NET 10 Worker Service + Service Bus + KEDA (scale 0→10) |
+| Database | Azure SQL Database (Basic 5 DTUs) |
 | Auth | Easy Auth (Custom OIDC) + App Roles (User/Admin) |
-| Infra | Azure Container Apps + ACR + Service Bus + App Insights |
-| IaC | Bicep (main.bicep + easyauth.bicep separados) |
+| Infra | Azure Container Apps + ACR + Service Bus + SQL + App Insights |
+| IaC | Bicep (main.bicep + easyauth.bicep + módulos) |
 
 ## Estructura
 
 ```
 container-app-poc/
 ├── src/
-│   ├── frontend/               # React SPA + nginx
-│   │   ├── src/context/        # AuthContext (Easy Auth)
-│   │   ├── src/hooks/          # useApi
-│   │   ├── src/pages/          # HomePage, AdminPage
-│   │   ├── nginx.conf          # /_authinfo endpoint
+│   ├── frontend/                       # React SPA + nginx
+│   │   ├── src/context/                # AuthContext (Easy Auth)
+│   │   ├── src/hooks/                  # useApi (get + post)
+│   │   ├── src/pages/                  # HomePage, AdminPage, DashboardPage, DlqManagerPage, HealthPage
+│   │   ├── nginx.conf                  # /_authinfo endpoint
 │   │   └── Dockerfile
-│   ├── backend/WeatherApi/     # .NET 10 API
-│   │   ├── Controllers/        # Weather, Auth controllers
-│   │   ├── Attributes/         # RequireAuth, RequireRole
-│   │   ├── Services/           # EasyAuthService
+│   ├── backend/WeatherApi/             # .NET 10 API
+│   │   ├── Controllers/                # Weather, Auth, Dashboard, DlqManager, Health
+│   │   ├── Models/                     # DashboardModels (DTOs)
+│   │   ├── Attributes/                 # RequireAuth, RequireRole
+│   │   ├── Services/                   # EasyAuthService
 │   │   └── Dockerfile
-│   ├── worker/WeatherWorker/   # .NET 10 Worker Service (Service Bus + KEDA)
-│   │   ├── Worker.cs           # ServiceBusProcessor + DLQ simulations
-│   │   ├── Program.cs          # DI + OpenTelemetry
-│   │   └── Dockerfile
-│   └── tools/ServiceBusEnqueuer/ # Console app — encola mensajes para testing
+│   ├── worker/
+│   │   ├── WeatherWorker/              # .NET 10 Worker Service (Service Bus queue + KEDA)
+│   │   │   ├── Handlers/               # MessageDispatcher, DefaultHandler, DLQ simulations
+│   │   │   ├── Services/               # ServiceBusWorker
+│   │   │   ├── Program.cs              # DI + OpenTelemetry + Topic Sender
+│   │   │   └── Dockerfile
+│   │   └── DashboardWorker/            # .NET 10 Worker Service (Service Bus topic + KEDA)
+│   │       ├── Services/               # DashboardWorkerService (topic processor + SQL UPSERT)
+│   │       ├── Models/                 # DashboardEvent
+│   │       ├── Configuration/          # ServiceBusOptions, SqlOptions
+│   │       ├── Program.cs              # DI + OpenTelemetry
+│   │       └── Dockerfile
+│   └── tools/ServiceBusEnqueuer/       # Console app — encola mensajes + publica eventos
 │       └── Program.cs
 ├── biceps/
-│   ├── main.bicep              # Infra completa (Worker opcional)
-│   ├── easyauth.bicep          # Easy Auth (separado)
+│   ├── main.bicep                      # Orquestador principal (Worker + Dashboard opcionales)
+│   ├── easyauth.bicep                  # Easy Auth config (separado)
 │   └── modules/
 │       ├── container-registry.bicep
-│       ├── container-app.bicep
-│       ├── worker-container-app.bicep  # Worker + KEDA scaler
-│       ├── service-bus.bicep           # Service Bus + Queue + DLQ
-│       └── managed-identity.bicep      # MI + roles (SB + AcrPull)
+│       ├── container-app.bicep         # Frontend + Backend Container Apps
+│       ├── worker-container-app.bicep  # WeatherWorker + KEDA queue scaler
+│       ├── dashboard-worker-container-app.bicep  # DashboardWorker + KEDA topic scaler
+│       ├── service-bus.bicep           # Service Bus + Queue (weather-jobs) + Topic (nd-dashboard-events) + Subscription
+│       ├── sql-database.bicep          # SQL Server + Database (Entra ID admin)
+│       └── managed-identity.bicep      # User Assigned MI + roles (SB Data Owner, AcrPull, SQL)
+├── sql/
+│   └── 001-dashboard-schema.sql        # QueueCounters + ComponentHealth tables
 └── docs/
-    ├── EASY-AUTH-TUTORIAL.md   # Guía completa de Easy Auth
-    └── WORKER-KEDA-DESIGN.md  # Diseño Worker + KEDA + Service Bus
+    ├── EASY-AUTH-TUTORIAL.md           # Guía completa de Easy Auth
+    ├── WORKER-KEDA-DESIGN.md           # Diseño Worker + KEDA + Service Bus
+    └── dashboard-poc.md                # Dashboard POC: diseño, arquitectura, implementación
 ```
 
 ---
