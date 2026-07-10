@@ -45,7 +45,34 @@ resource queue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
   }
 }
 
+// Topic for dashboard events
+resource dashboardTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' = {
+  parent: serviceBusNamespace
+  name: 'nd-dashboard-events'
+  properties: {
+    defaultMessageTimeToLive: defaultMessageTimeToLive
+    enablePartitioning: false
+    supportOrdering: false
+  }
+}
+
+// Subscription for dashboard worker (counter updater)
+resource counterUpdaterSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' = {
+  parent: dashboardTopic
+  name: 'counter-updater'
+  properties: {
+    lockDuration: 'PT30S' // 30 seconds - fast SQL UPDATE
+    maxDeliveryCount: 5
+    defaultMessageTimeToLive: defaultMessageTimeToLive
+    deadLetteringOnMessageExpiration: true
+    enableBatchedOperations: true
+    requiresSession: false
+  }
+}
+
 output namespaceName string = serviceBusNamespace.name
 output namespaceId string = serviceBusNamespace.id
 output namespaceFqdn string = '${serviceBusNamespace.name}.servicebus.windows.net'
 output queueName string = queue.name
+output topicName string = dashboardTopic.name
+output subscriptionName string = counterUpdaterSubscription.name

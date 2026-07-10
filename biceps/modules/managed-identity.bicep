@@ -40,6 +40,17 @@ resource sbDataSenderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   }
 }
 
+// Azure Service Bus Data Owner — allows the API to read DLQ runtime properties and manage messages
+resource sbDataOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(serviceBusNamespaceId, managedIdentity.id, '090c5cfd-751d-490a-894a-3ce6f1109419')
+  scope: serviceBusNamespace
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '090c5cfd-751d-490a-894a-3ce6f1109419')
+  }
+}
+
 // Reference to existing Service Bus namespace for scoping role assignments
 resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2024-01-01' existing = {
   name: last(split(serviceBusNamespaceId, '/'))
