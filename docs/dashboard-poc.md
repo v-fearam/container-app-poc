@@ -1009,13 +1009,13 @@ Response:
 ### Fase 5 — Frontend (`src/frontend`)
 > 🎨 Skill: `ui-ux-pro-max` para diseño visual ANTES de codear
 > 🔧 Skill: `vercel-react-best-practices` + `vercel-composition-patterns` para implementación
-29. Crear `src/pages/DashboardPage.tsx` — pantalla KPI con polling cada 5 segundos
-30. Incluir DLQ de `weather-jobs` + DLQ de subscription `counter-updater` en la tabla KPI
-31. Crear `src/pages/DlqManagerPage.tsx` — gestión DLQ con edición opcional al re-encolar
-32. Crear `src/pages/HealthPage.tsx` — estado de componentes (polling cada 30s)
-33. Agregar rutas en `App.tsx`: `/dashboard`, `/dashboard/dlq/:queueName`, `/health`
-34. Agregar links en `Navbar.tsx`: "Dashboard" y "Health" (visibles para todos, no requieren rol Admin)
-35. Agregar método `post()` al hook `useApi.ts` (actualmente solo tiene `get`)
+29. ✅ Crear `src/pages/DashboardPage.tsx` — pantalla KPI con polling cada 5 segundos
+30. ✅ Incluir DLQ de `weather-jobs` + DLQ de subscription `counter-updater` en la tabla KPI
+31. ✅ Crear `src/pages/DlqManagerPage.tsx` — gestión DLQ con edición opcional al re-encolar
+32. ✅ Crear `src/pages/HealthPage.tsx` — estado de componentes (polling cada 30s)
+33. ✅ Agregar rutas en `App.tsx`: `/dashboard`, `/dashboard/dlq/:queueName`, `/health`
+34. ✅ Agregar links en `Navbar.tsx`: "Dashboard" y "Health" (visibles para todos, no requieren rol Admin)
+35. ✅ Agregar método `post()` al hook `useApi.ts` (actualmente solo tiene `get`)
 
 ### Fase 6 — Validación
 36. Correr `ServiceBusEnqueuer --count 100` y verificar contadores (weather1 y weather2 por separado)
