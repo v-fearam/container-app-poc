@@ -937,12 +937,16 @@ Response:
 | Área | Skill a invocar | Notas |
 |------|-----------------|-------|
 | Diseño UI/UX (wireframes, layout, colores, componentes visuales) | `ui-ux-pro-max` | Invocar **antes** de escribir código de frontend para definir diseño |
-| Código .NET (backend, workers, Bicep) | `nestjs-best-practices` → NO — usar `microsoft-docs` | Consultar siempre Microsoft Learn para patrones .NET actualizados |
+| Infraestructura Bicep (módulos, resources) | `writing-bicep-templates` + `update-avm-modules-in-bicep` | Invocar para escribir Bicep con best practices y usar Azure Verified Modules |
+| Diagramas desde Bicep | `bicep-diagrams` | Para generar diagramas de arquitectura desde los `.bicep` existentes |
+| Código .NET (backend, workers) | `microsoft-docs` | Consultar siempre Microsoft Learn para patrones .NET actualizados |
 | Código React (frontend) | `vercel-react-best-practices` | Invocar al construir componentes, hooks, páginas |
 | Consultas de documentación Azure/.NET | `microsoft-docs` | Invocar **siempre** para validar APIs, configuraciones y patrones |
 | Composición de componentes React | `vercel-composition-patterns` | Para layouts, composición avanzada, slot patterns |
 
 **Regla general:** Usar siempre la **última versión disponible** de cada librería/SDK. Verificar en `microsoft-docs` antes de instalar NuGets o npm packages. Si hay una versión preview estable, preferirla sobre la GA anterior.
+
+**Regla de no-regresión:** Después de cada fase, validar que lo existente sigue funcionando. Los recursos actuales (Easy Auth, WeatherWorker, Service Bus queue, KEDA scaling) no deben romperse. Si un cambio en Bicep modifica un recurso existente, hacer `what-if` primero y confirmar que no hay deletes inesperados.
 
 **Librerías target (latest al momento de la POC):**
 - .NET 10 (ya en uso)
@@ -955,7 +959,8 @@ Response:
 - Tailwind CSS (ya en uso)
 
 ### Fase 1 — Infraestructura (Bicep — nuevos módulos en `biceps/modules/`)
-> 🔧 Skill: `microsoft-docs` para validar propiedades Bicep y API versions
+> 🔧 Skills: `writing-bicep-templates` para estructura y best practices, `update-avm-modules-in-bicep` para usar Azure Verified Modules, `microsoft-docs` para validar API versions
+> ⚠️ **Validación:** Después de cada cambio en Bicep, hacer `az deployment group what-if` y luego deploy. Confirmar que los recursos existentes (Easy Auth, Worker, Service Bus) siguen funcionando.
 1. Crear módulo `sql-database.bicep` — Azure SQL Database + firewall/private endpoint
 2. Configurar Entra ID admin (usuario de deploy) en el SQL Server
 3. Mapear la User Assigned Managed Identity existente (`managed-identity.bicep`) como usuario SQL con `db_datareader` + `db_datawriter`
