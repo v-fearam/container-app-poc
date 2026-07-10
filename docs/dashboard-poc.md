@@ -1040,8 +1040,8 @@ Response:
     - Cómo verificar el DLQ Manager (forzar fallos y gestionar desde el frontend)
     - Cómo verificar distributed tracing en App Insights (query KQL de ejemplo)
 44. ✅ Mantener la estructura actual del README (Easy Auth + Worker siguen siendo las primeras secciones)
-45. ⏭️ Agregar diagrama de arquitectura simplificado (Mermaid) al README mostrando todos los componentes — **DEFERRED**
-46. ⏭️ Verificar que siguiendo el README desde cero en un subscription limpio, todo funciona end-to-end — **User will test**
+45. ✅ Agregar diagrama de arquitectura simplificado (Mermaid) al README mostrando todos los componentes
+46. ⏭️ Verificar que siguiendo el README desde cero en un subscription limpio, todo funciona end-to-end — **User will test on Monday**
 
 ---
 

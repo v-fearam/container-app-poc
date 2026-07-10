@@ -11,6 +11,114 @@ POC de Azure Container Apps con Easy Auth (Entra ID), React + .NET 10, telemetr�
 Para volver a este punto: `git checkout v0.2-stable`
 Para comparar cambios: `git diff v0.2-stable..HEAD`
 
+## Arquitectura
+
+```mermaid
+graph TB
+    subgraph "User"
+        Browser[🌐 Browser]
+    end
+
+    subgraph "Azure Container Apps Environment"
+        subgraph "Frontend"
+            FE[React SPA<br/>Nginx<br/>Easy Auth]
+        end
+        
+        subgraph "Backend"
+            BE[.NET 10 API<br/>Weather/Dashboard/DLQ/Health<br/>Easy Auth]
+        end
+        
+        subgraph "Workers"
+            WW[WeatherWorker<br/>.NET 10<br/>KEDA Queue Scaler]
+            DW[DashboardWorker<br/>.NET 10<br/>KEDA Topic Scaler]
+        end
+    end
+
+    subgraph "Azure Services"
+        ACR[Container Registry<br/>ACR]
+        SB[Service Bus<br/>Standard]
+        SQL[SQL Database<br/>Basic 5 DTUs]
+        AI[Application Insights<br/>OpenTelemetry]
+        ENTRA[Entra ID<br/>App Registrations<br/>Custom OIDC]
+    end
+
+    subgraph "Service Bus Resources"
+        Q[Queue: weather-jobs<br/>+ DLQ]
+        T[Topic: nd-dashboard-events]
+        S[Subscription: counter-updater<br/>+ DLQ]
+    end
+
+    subgraph "SQL Database Tables"
+        QC[QueueCounters<br/>vertical+queue+processType+date]
+        CH[ComponentHealth<br/>worker heartbeats]
+    end
+
+    subgraph "Managed Identity"
+        MI[User Assigned MI<br/>Roles:<br/>- SB Data Owner<br/>- AcrPull<br/>- SQL db_reader/writer]
+    end
+
+    %% User interactions
+    Browser -->|HTTPS| FE
+    FE -->|Easy Auth redirect| ENTRA
+    FE -->|API calls| BE
+    
+    %% Backend interactions
+    BE -->|Query counters + DLQ| SB
+    BE -->|Query SQL| SQL
+    BE -->|Telemetry| AI
+    
+    %% Worker flows
+    WW -->|Pull messages| Q
+    WW -->|Publish MessageProcessed| T
+    DW -->|Consume events| S
+    DW -->|UPSERT counters| QC
+    DW -->|Heartbeat| CH
+    
+    %% Service Bus topology
+    SB -.->|Contains| Q
+    SB -.->|Contains| T
+    T -.->|Routes to| S
+    
+    %% SQL topology
+    SQL -.->|Contains| QC
+    SQL -.->|Contains| CH
+    
+    %% ACR
+    ACR -->|Pull images| FE
+    ACR -->|Pull images| BE
+    ACR -->|Pull images| WW
+    ACR -->|Pull images| DW
+    
+    %% Managed Identity auth
+    MI -->|Authenticate| WW
+    MI -->|Authenticate| DW
+    MI -->|Authenticate| BE
+    
+    %% Telemetry
+    FE -->|Page views| AI
+    WW -->|Traces| AI
+    DW -->|Traces| AI
+
+    %% Styling
+    classDef azure fill:#0078D4,stroke:#fff,stroke-width:2px,color:#fff
+    classDef servicebus fill:#59B4D9,stroke:#fff,stroke-width:2px,color:#fff
+    classDef worker fill:#68217A,stroke:#fff,stroke-width:2px,color:#fff
+    classDef database fill:#E81123,stroke:#fff,stroke-width:2px,color:#fff
+    classDef frontend fill:#00BCF2,stroke:#fff,stroke-width:2px,color:#fff
+    
+    class ACR,AI,ENTRA,SB azure
+    class Q,T,S servicebus
+    class WW,DW worker
+    class SQL,QC,CH database
+    class FE,BE frontend
+```
+
+**Flujo end-to-end:**
+1. `ServiceBusEnqueuer` → envía mensaje a `weather-jobs` + publica `MessageEnqueued` a `nd-dashboard-events`
+2. `WeatherWorker` (KEDA queue scaler 0→10) → procesa mensaje → publica `MessageProcessed` a topic
+3. `DashboardWorker` (KEDA topic scaler 0→10) → consume eventos → UPSERT en SQL `QueueCounters`
+4. Frontend `/dashboard` → GET `/api/dashboard/kpi` → muestra contadores + DLQ counts en tiempo real (refresh 5s)
+
 ## Stack
 
 | Capa | Tecnología |
