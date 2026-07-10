@@ -43,6 +43,13 @@ var sbNamespace = builder.Configuration["ServiceBus:Namespace"]
 
 builder.Services.AddSingleton(new ServiceBusClient(sbNamespace, new DefaultAzureCredential()));
 
+// ─── Service Bus sender for Dashboard events topic ─
+builder.Services.AddSingleton(sp =>
+{
+    var client = sp.GetRequiredService<ServiceBusClient>();
+    return client.CreateSender("nd-dashboard-events");
+});
+
 // ─── Message handlers (registered as singletons for reuse across concurrent calls) ─
 builder.Services.AddSingleton<DefaultMessageHandler>();
 builder.Services.AddSingleton<DlqSimulationHandlers.UnhandledExceptionHandler>();
