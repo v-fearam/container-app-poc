@@ -605,7 +605,7 @@ az group delete --name $RG --yes --no-wait
 
 ---
 
-## 📊 Monitoreo
+## 📊 Monitoreo y Observabilidad
 
 Telemetría end-to-end con **OpenTelemetry + Azure Monitor**:
 
@@ -613,6 +613,11 @@ Telemetría end-to-end con **OpenTelemetry + Azure Monitor**:
 - Paquete: `Azure.Monitor.OpenTelemetry.AspNetCore` → `UseAzureMonitor()`
 - Auto-recolecta: HTTP requests, dependencies, ILogger logs, exceptions, metrics
 - [Docs: Enable OpenTelemetry](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-enable)
+
+**Workers (.NET 10)**:
+- `AppContext.SetSwitch("Azure.Experimental.EnableActivitySource", true)` habilita Service Bus Activities
+- Cada mensaje procesado genera un Activity span con `operation_Id` para correlación
+- [Docs: Distributed tracing](https://learn.microsoft.com/azure/azure-monitor/app/distributed-tracing-telemetry-correlation)
 
 **Frontend (React SPA)**:
 - Page views, custom events, route tracking via Application Insights JS SDK
@@ -624,14 +629,230 @@ Telemetría end-to-end con **OpenTelemetry + Azure Monitor**:
 
 **Arquitectura dual**: la app envía directo a App Insights (via SDK) + el managed agent captura logs/traces adicionales a nivel plataforma. Esto garantiza visibilidad completa.
 
-```kql
-// Requests últimas 24h
-requests | where timestamp > ago(24h)
-| summarize count(), avg(duration) by name, resultCode
+---
 
-// ILogger traces
-traces | where timestamp > ago(24h) and customDimensions.CategoryName startswith "WeatherApi"
+### Queries KQL útiles
+
+**1. Dashboard general — métricas de todos los componentes (últimas 24h)**
+
+```kql
+// Resumen de requests por componente
+requests 
+| where timestamp > ago(24h)
+| summarize 
+    Total = count(),
+    Exitosos = countif(success == true),
+    Fallidos = countif(success == false),
+    DuracionPromedio = avg(duration),
+    P95 = percentile(duration, 95)
+  by cloud_RoleName, name
+| order by Total desc
 ```
+
+**2. Frontend — Page views y rutas más visitadas**
+
+```kql
+pageViews 
+| where timestamp > ago(24h)
+| summarize Visitas = count(), UsuariosUnicos = dcount(user_Id)
+  by name, url
+| order by Visitas desc
+```
+
+**3. Backend API — requests por endpoint con tasa de error**
+
+```kql
+requests 
+| where timestamp > ago(24h)
+| where cloud_RoleName == "WeatherApi"
+| summarize 
+    Total = count(),
+    Exitosos = countif(success),
+    Fallidos = countif(not(success)),
+    TasaError = round(100.0 * countif(not(success)) / count(), 2),
+    DuracionP95 = percentile(duration, 95)
+  by name
+| order by Total desc
+```
+
+**4. Workers — mensajes procesados y tasa de éxito**
+
+```kql
+// WeatherWorker y DashboardWorker
+traces 
+| where timestamp > ago(24h)
+| where cloud_RoleName in ("WeatherWorker", "DashboardWorker")
+| where message contains "procesado" or message contains "completado" or message contains "processed"
+| summarize 
+    MensajesProcesados = count()
+  by cloud_RoleName, bin(timestamp, 5m)
+| render timechart 
+```
+
+**5. Workers — errores y excepciones con detalles**
+
+```kql
+exceptions 
+| where timestamp > ago(24h)
+| where cloud_RoleName in ("WeatherWorker", "DashboardWorker")
+| project 
+    timestamp,
+    Worker = cloud_RoleName,
+    TipoError = type,
+    Mensaje = outerMessage,
+    MessageId = customDimensions.MessageId,
+    DeliveryCount = customDimensions.DeliveryCount,
+    Stack = details[0].parsedStack
+| order by timestamp desc
+```
+
+**6. Distributed Tracing — Flujo completo: Enqueuer → WeatherWorker → Topic → DashboardWorker**
+
+Esta query muestra la correlación end-to-end de un mensaje desde que se encola hasta que actualiza SQL:
+
+```kql
+// Encontrar operation_Id de una operación reciente del WeatherWorker
+let sampleOperation = dependencies
+| where timestamp > ago(1h)
+| where cloud_RoleName == "WeatherWorker"
+| where type == "Azure Service Bus"
+| take 1
+| project operation_Id;
+// Trazar toda la cadena de eventos para ese operation_Id
+union requests, dependencies, traces, exceptions
+| where operation_Id in (sampleOperation)
+| project 
+    timestamp,
+    Componente = cloud_RoleName,
+    Tipo = itemType,
+    Nombre = coalesce(name, message),
+    Duracion = duration,
+    Exito = success,
+    operation_Id,
+    operation_ParentId
+| order by timestamp asc
+```
+
+**7. Distributed Tracing — Correlación Backend API → Service Bus → Worker**
+
+Cuando el backend llama `/api/dlq/requeue`, trace hasta el reprocessing:
+
+```kql
+// Buscar una request de requeue
+let reqOp = requests
+| where timestamp > ago(1h)
+| where name == "POST /api/dlq/requeue"
+| take 1
+| project operation_Id;
+// Ver toda la transacción distribuida
+union requests, dependencies, traces
+| where operation_Id in (reqOp)
+| project 
+    timestamp,
+    Componente = cloud_RoleName,
+    Operacion = coalesce(name, message),
+    Duracion = duration,
+    Detalles = customDimensions
+| order by timestamp asc
+```
+
+**8. Dashboard Worker — UPSERT SQL performance y errores de concurrencia**
+
+```kql
+traces 
+| where timestamp > ago(24h)
+| where cloud_RoleName == "DashboardWorker"
+| where message contains "UPSERT" or message contains "UPDATE" or message contains "INSERT"
+| extend 
+    Vertical = tostring(customDimensions.Vertical),
+    QueueName = tostring(customDimensions.Queue),
+    ProcessType = tostring(customDimensions.ProcessType),
+    EventType = tostring(customDimensions.EventType)
+| summarize 
+    Eventos = count()
+  by EventType, Vertical, QueueName, ProcessType, bin(timestamp, 5m)
+| render timechart
+```
+
+**9. Service Bus DLQ — mensajes que fueron a dead-letter (correlación con worker failures)**
+
+```kql
+// Traces de DLQ con contexto del worker
+traces 
+| where timestamp > ago(24h)
+| where message contains "DLQ" or message contains "dead" or message contains "DeadLetter"
+| project 
+    timestamp,
+    Worker = cloud_RoleName,
+    Mensaje = message,
+    MessageId = customDimensions.MessageId,
+    Razon = customDimensions.DeadLetterReason,
+    Descripcion = customDimensions.DeadLetterErrorDescription,
+    operation_Id
+| order by timestamp desc
+```
+
+**10. Performance — operaciones más lentas (P95) por componente**
+
+```kql
+union requests, dependencies
+| where timestamp > ago(24h)
+| summarize 
+    P95 = percentile(duration, 95),
+    P99 = percentile(duration, 99),
+    Max = max(duration),
+    Promedio = avg(duration),
+    Total = count()
+  by cloud_RoleName, name, type
+| where P95 > 100  // Operaciones > 100ms en P95
+| order by P95 desc
+```
+
+**11. KEDA Scaling — correlación entre queue depth y réplicas activas**
+
+```kql
+// Combinar métricas de Service Bus con traces de workers
+let queueMetrics = customMetrics
+| where timestamp > ago(1h)
+| where name == "ActiveMessages"  // Métrica de Service Bus (si está configurada)
+| project timestamp, ActiveMessages = value;
+let workerInstances = traces
+| where timestamp > ago(1h)
+| where cloud_RoleName in ("WeatherWorker", "DashboardWorker")
+| summarize Instancias = dcount(cloud_RoleInstance) by bin(timestamp, 1m), cloud_RoleName;
+workerInstances
+| join kind=leftouter (queueMetrics) on timestamp
+| project timestamp, Worker = cloud_RoleName, Instancias, ActiveMessages
+| render timechart
+```
+
+**12. Health Checks — disponibilidad de componentes**
+
+```kql
+requests 
+| where timestamp > ago(24h)
+| where url endswith "/health/ready" or url endswith "/health/live"
+| summarize 
+    Total = count(),
+    Healthy = countif(success),
+    Unhealthy = countif(not(success)),
+    Disponibilidad = round(100.0 * countif(success) / count(), 2)
+  by cloud_RoleName, name
+| order by Disponibilidad asc
+```
+
+---
+
+### Dashboard Application Insights recomendado
+
+Crear un workbook con estos paneles:
+
+1. **Overview**: requests/sec, success rate, P95 latency por componente
+2. **Frontend**: page views, user sessions, errores JavaScript
+3. **Backend API**: top endpoints, error rate, slow queries (P95 > 500ms)
+4. **Workers**: mensajes procesados/min, DLQ count, excepciones
+5. **Distributed Traces**: mapa de dependencias, end-to-end latency
+6. **Alerts**: > 5% error rate, P95 > 2s, DLQ count > 10
 
 ---
 
