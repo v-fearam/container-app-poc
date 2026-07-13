@@ -9,17 +9,12 @@ interface QueueCounter {
   date: string;
   enqueuedCount: number;
   processedCount: number;
-  dlqCount: number;
-}
-
-interface DashboardKpi {
-  counters: QueueCounter[];
-  timestamp: string;
+  deadLetterCount: number;
 }
 
 export function DashboardPage() {
   const { get } = useApi();
-  const [data, setData] = useState<DashboardKpi | null>(null);
+  const [data, setData] = useState<QueueCounter[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -29,7 +24,7 @@ export function DashboardPage() {
 
     const fetchData = async () => {
       try {
-        const result = await get<DashboardKpi>('/api/dashboard/kpi');
+        const result = await get<QueueCounter[]>('/api/dashboard/kpi');
         if (isMounted) {
           setData(result);
           setLastRefresh(new Date());
@@ -98,27 +93,38 @@ export function DashboardPage() {
   }
 
   // Group by vertical + queue + processType
-  const groupedData = data?.counters.reduce((acc, item) => {
-    const key = `${item.vertical}|${item.queueName}|${item.processType}`;
-    if (!acc[key]) {
-      acc[key] = {
-        vertical: item.vertical,
-        queueName: item.queueName,
-        processType: item.processType,
-        totalEnqueued: 0,
-        totalProcessed: 0,
-        totalDlq: 0,
-        dates: [] as QueueCounter[],
-      };
-    }
-    acc[key].totalEnqueued += item.enqueuedCount;
-    acc[key].totalProcessed += item.processedCount;
-    acc[key].totalDlq += item.dlqCount;
-    acc[key].dates.push(item);
-    return acc;
-  }, {} as Record<string, { vertical: string; queueName: string; processType: string; totalEnqueued: number; totalProcessed: number; totalDlq: number; dates: QueueCounter[] }>);
+  // Group by vertical + queue (DLQ is per queue, not per processType)
+  const queueGroups = data ? (() => {
+    const byQueue: Record<string, {
+      vertical: string;
+      queueName: string;
+      dlqCount: number;
+      processes: { processType: string; enqueuedCount: number; processedCount: number; date: string }[];
+    }> = {};
 
-  const groups = groupedData ? Object.values(groupedData) : [];
+    for (const item of data) {
+      const qKey = `${item.vertical}|${item.queueName}`;
+      if (!byQueue[qKey]) {
+        byQueue[qKey] = {
+          vertical: item.vertical,
+          queueName: item.queueName,
+          dlqCount: item.deadLetterCount,
+          processes: [],
+        };
+      }
+      byQueue[qKey].processes.push({
+        processType: item.processType,
+        enqueuedCount: item.enqueuedCount,
+        processedCount: item.processedCount,
+        date: item.date,
+      });
+    }
+    return Object.values(byQueue);
+  })() : [];
+
+  const totalEnqueued = queueGroups.reduce((sum, q) => sum + q.processes.reduce((s, p) => s + p.enqueuedCount, 0), 0);
+  const totalProcessed = queueGroups.reduce((sum, q) => sum + q.processes.reduce((s, p) => s + p.processedCount, 0), 0);
+  const totalDlq = queueGroups.reduce((sum, q) => sum + q.dlqCount, 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -154,7 +160,7 @@ export function DashboardPage() {
         </div>
 
         {/* Empty State with Icon */}
-        {groups.length === 0 ? (
+        {queueGroups.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-16 text-center">
             <div className="max-w-md mx-auto">
               {/* Icon */}
@@ -208,7 +214,7 @@ export function DashboardPage() {
                   </svg>
                 </div>
                 <div className="text-4xl font-bold">
-                  {groups.reduce((sum, g) => sum + g.totalEnqueued, 0).toLocaleString()}
+                  {totalEnqueued.toLocaleString()}
                 </div>
               </div>
 
@@ -220,126 +226,97 @@ export function DashboardPage() {
                   </svg>
                 </div>
                 <div className="text-4xl font-bold">
-                  {groups.reduce((sum, g) => sum + g.totalProcessed, 0).toLocaleString()}
+                  {totalProcessed.toLocaleString()}
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
+              <Link to={`/dashboard/dlq/${encodeURIComponent('nd-dashboard-events/counter-updater')}`} className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:from-red-600 hover:to-red-700 transition-all duration-200">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-red-100 text-sm font-medium uppercase tracking-wide">Total DLQ</div>
+                  <div className="text-red-100 text-sm font-medium uppercase tracking-wide">DLQ (Cola)</div>
                   <svg className="w-8 h-8 text-red-200/50" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="text-4xl font-bold">
-                  {groups.reduce((sum, g) => sum + g.totalDlq, 0).toLocaleString()}
+                  {totalDlq.toLocaleString()}
                 </div>
-              </div>
+                <p className="text-red-200 text-xs mt-2">Click para gestionar →</p>
+              </Link>
             </div>
 
             {/* Queue Groups */}
-            {groups.map((group) => (
-              <div key={`${group.vertical}-${group.queueName}-${group.processType}`} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
-                {/* Group Header */}
+            {queueGroups.map((queue) => (
+              <div key={`${queue.vertical}-${queue.queueName}`} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
+                {/* Queue Header */}
                 <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-200">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-xl font-semibold text-slate-900 mb-1">
-                        {group.vertical} <span className="text-slate-400">·</span> {group.queueName}
+                        {queue.vertical} <span className="text-slate-400">·</span> {queue.queueName}
                       </h2>
-                      <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M13 7H7v6h6V7z" />
-                          <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
-                        </svg>
-                        {group.processType}
-                      </div>
                     </div>
                     <div className="flex items-center gap-8">
                       <div className="text-right">
                         <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Encolados</p>
-                        <p className="text-3xl font-bold text-slate-900">{group.totalEnqueued.toLocaleString()}</p>
+                        <p className="text-3xl font-bold text-slate-900">{queue.processes.reduce((s, p) => s + p.enqueuedCount, 0).toLocaleString()}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-1">Procesados</p>
-                        <p className="text-3xl font-bold text-green-600">{group.totalProcessed.toLocaleString()}</p>
+                        <p className="text-3xl font-bold text-green-600">{queue.processes.reduce((s, p) => s + p.processedCount, 0).toLocaleString()}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ</p>
-                        <p className="text-3xl font-bold text-red-600">{group.totalDlq.toLocaleString()}</p>
-                      </div>
+                      {queue.dlqCount > 0 && (
+                        <Link to={`/dashboard/dlq/${encodeURIComponent('nd-dashboard-events/counter-updater')}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity">
+                          <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ</p>
+                          <p className="text-3xl font-bold text-red-600">{queue.dlqCount.toLocaleString()}</p>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Dates Table */}
+                {/* Process Types Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Tipo Proceso</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Fecha</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Encolados</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Procesados</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">DLQ</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Pendientes</th>
-                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {group.dates.map((item, idx) => {
-                        const pending = item.enqueuedCount - item.processedCount;
-                        const processingRate = item.enqueuedCount > 0 ? (item.processedCount / item.enqueuedCount * 100) : 0;
+                      {queue.processes.map((proc, idx) => {
+                        const pending = proc.enqueuedCount - proc.processedCount;
+                        const processingRate = proc.enqueuedCount > 0 ? (proc.processedCount / proc.enqueuedCount * 100) : 0;
                         
                         return (
                           <tr key={idx} className="hover:bg-slate-50 transition-colors duration-150">
                             <td className="px-6 py-4">
-                              <span className="font-mono text-sm font-medium text-slate-900">{item.date}</span>
+                              <span className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                                {proc.processType}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="font-mono text-sm font-medium text-slate-900">{proc.date.split('T')[0]}</span>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <span className="text-sm font-medium text-slate-900">{item.enqueuedCount.toLocaleString()}</span>
+                              <span className="text-sm font-medium text-slate-900">{proc.enqueuedCount.toLocaleString()}</span>
                             </td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <span className="text-sm font-medium text-green-600">{item.processedCount.toLocaleString()}</span>
+                                <span className="text-sm font-medium text-green-600">{proc.processedCount.toLocaleString()}</span>
                                 <span className="text-xs text-slate-500">({processingRate.toFixed(1)}%)</span>
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              {item.dlqCount > 0 ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                  </svg>
-                                  {item.dlqCount}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-right">
                               {pending > 0 ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                  </svg>
                                   {pending}
                                 </span>
                               ) : (
-                                <span className="text-sm text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              {item.dlqCount > 0 && (
-                                <Link
-                                  to={`/dashboard/dlq/${encodeURIComponent(item.queueName)}`}
-                                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 cursor-pointer"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
-                                  Gestionar DLQ
-                                </Link>
+                                <span className="text-sm text-green-500">✓</span>
                               )}
                             </td>
                           </tr>

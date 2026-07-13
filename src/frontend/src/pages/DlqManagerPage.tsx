@@ -4,11 +4,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 
 interface DlqMessage {
   messageId: string;
-  enqueuedTime: string;
+  enqueuedTimeUtc: string;
   deliveryCount: number;
   deadLetterReason?: string;
   deadLetterErrorDescription?: string;
-  body: string;
+  bodyJson: string;
+  queueName: string;
 }
 
 export function DlqManagerPage() {
@@ -147,7 +148,7 @@ export function DlqManagerPage() {
                     <p className="text-sm text-slate-600">ID:</p>
                     <p className="font-mono text-sm text-slate-900">{msg.messageId}</p>
                     <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
-                      <span>Encolado: {new Date(msg.enqueuedTime).toLocaleString()}</span>
+                      <span>Encolado: {new Date(msg.enqueuedTimeUtc).toLocaleString()}</span>
                       <span>·</span>
                       <span>Intentos: {msg.deliveryCount}</span>
                     </div>
@@ -192,8 +193,14 @@ export function DlqManagerPage() {
                     </div>
                   </div>
                 ) : (
-                  <pre className="bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto text-sm font-mono text-slate-900">
-                    {msg.body}
+                  <pre className="bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto text-sm font-mono text-slate-900 whitespace-pre-wrap break-all">
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(msg.bodyJson), null, 2);
+                      } catch {
+                        return msg.bodyJson || '(vacío)';
+                      }
+                    })()}
                   </pre>
                 )}
               </div>
@@ -209,7 +216,7 @@ export function DlqManagerPage() {
                     {actionLoading === msg.messageId ? 'Procesando...' : 'Reencolar sin cambios'}
                   </button>
                   <button
-                    onClick={() => setEditingBody({ messageId: msg.messageId, body: msg.body })}
+                    onClick={() => setEditingBody({ messageId: msg.messageId, body: msg.bodyJson })}
                     className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     Editar y Reencolar
