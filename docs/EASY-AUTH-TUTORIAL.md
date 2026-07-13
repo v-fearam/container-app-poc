@@ -78,22 +78,25 @@ Easy Auth se configura con un Bicep **separado** (`biceps/easyauth.bicep`), que 
 2. App Registrations creadas (ver sección "Pre-requisitos: App Registrations" abajo)
 3. Client secrets generados
 
-### Paso 1: Setear secrets en Container Apps
+### Paso 1: Setear secrets DUMMY en Container Apps
 
-> ⚠️ El secret `token-store-sas` se setea con un placeholder porque el valor real
-> lo genera el deployment de easyauth.bicep. Se actualiza en el Paso 3.
+> ⚠️ **MÉTODO RECOMENDADO**: Usar valores dummy (`temp-secret-fe`, `temp-secret-be`, etc.) ahora
+> y actualizarlos con valores reales después de obtenerlos de Azure Portal.
+> Esto permite avanzar con el deployment sin esperar a los valores finales.
 
 ```bash
 RG="rg-far-container-app-easyauth"
 
-# Frontend: client secret + placeholder para token store SAS
+# Frontend: client secret dummy + token-store-sas placeholder
 az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<FRONTEND_CLIENT_SECRET>" \
-  token-store-sas="placeholder"
+  microsoft-provider-authentication-secret="temp-secret-fe" \
+  token-store-sas="placeholder-will-update"
 
-# Backend: client secret
+# Backend: client secret dummy
 az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<BACKEND_CLIENT_SECRET>"
+  microsoft-provider-authentication-secret="temp-secret-be"
+
+echo "✅ Secrets dummy establecidos. Se actualizarán en los Pasos 3 y 5."
 ```
 
 ### Paso 2: Deploy Easy Auth + Token Store
@@ -130,6 +133,22 @@ CALLBACK_URL=$(az deployment group show -g $RG \
 
 echo "Agregar como Redirect URI (Web) en la App Registration del frontend:"
 echo "$CALLBACK_URL"
+```
+
+### Paso 5: Actualizar client secrets con valores reales
+
+Después de obtener los valores reales desde **Azure Portal → Entra ID → App Registrations → Certificates & secrets**:
+
+```bash
+# Frontend (reemplaza con el value real del secret del frontend)
+az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
+  microsoft-provider-authentication-secret="<REAL_FE_CLIENT_SECRET>"
+
+# Backend (reemplaza con el value real del secret del backend)
+az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
+  microsoft-provider-authentication-secret="<REAL_BE_CLIENT_SECRET>"
+
+echo "✅ Client secrets actualizados con valores reales"
 ```
 
 ### Qué despliega `easyauth.bicep`
@@ -172,6 +191,7 @@ az deployment group create -g $RG \
    - Description: `easy-auth-secret`
    - Expires: 6 months (o lo que aplique)
    - **COPIAR el Value** inmediatamente (no se puede ver después)
+   - ✅ **Usar este value en el Paso 5**
 
 4. **Habilitar ID tokens**:
    - **Authentication** → marcar ✅ **ID tokens (used for implicit and hybrid flows)**
