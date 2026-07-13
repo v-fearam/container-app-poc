@@ -96,16 +96,20 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           identity: userAssignedIdentity.id
         }
       ]
-      secrets: [
-        {
-          name: 'appinsights-connection-string'
-          value: appInsightsConnectionString
-        }
-        {
-          name: 'sql-connection-string'
-          value: sqlConnectionString
-        }
-      ]
+      secrets: union(
+        [
+          {
+            name: 'appinsights-connection-string'
+            value: appInsightsConnectionString
+          }
+        ],
+        !empty(sqlConnectionString) ? [
+          {
+            name: 'sql-connection-string'
+            value: sqlConnectionString
+          }
+        ] : []
+      )
     }
     template: {
       containers: [
@@ -116,36 +120,44 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json(cpu)
             memory: memory
           }
-          env: [
-            {
-              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-              secretRef: 'appinsights-connection-string'
-            }
-            {
-              name: 'ASPNETCORE_ENVIRONMENT'
-              value: 'Production'
-            }
-            {
-              name: 'CORS_ALLOWED_ORIGINS'
-              value: corsAllowedOrigins
-            }
-            {
-              name: 'CORS_ALLOWED_ORIGIN_SUFFIXES'
-              value: corsAllowedOriginSuffixes
-            }
-            {
-              name: 'SQL_CONNECTION_STRING'
-              secretRef: 'sql-connection-string'
-            }
-            {
-              name: 'ServiceBus__Namespace'
-              value: serviceBusNamespaceFqdn
-            }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: managedIdentityClientId
-            }
-          ]
+          env: union(
+            [
+              {
+                name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+                secretRef: 'appinsights-connection-string'
+              }
+              {
+                name: 'ASPNETCORE_ENVIRONMENT'
+                value: 'Production'
+              }
+              {
+                name: 'CORS_ALLOWED_ORIGINS'
+                value: corsAllowedOrigins
+              }
+              {
+                name: 'CORS_ALLOWED_ORIGIN_SUFFIXES'
+                value: corsAllowedOriginSuffixes
+              }
+            ],
+            !empty(sqlConnectionString) ? [
+              {
+                name: 'SQL_CONNECTION_STRING'
+                secretRef: 'sql-connection-string'
+              }
+            ] : [],
+            !empty(serviceBusNamespaceFqdn) ? [
+              {
+                name: 'ServiceBus__Namespace'
+                value: serviceBusNamespaceFqdn
+              }
+            ] : [],
+            !empty(managedIdentityClientId) ? [
+              {
+                name: 'AZURE_CLIENT_ID'
+                value: managedIdentityClientId
+              }
+            ] : []
+          )
         }
       ]
       scale: {

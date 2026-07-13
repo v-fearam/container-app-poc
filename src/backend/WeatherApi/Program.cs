@@ -55,9 +55,13 @@ if (!string.IsNullOrEmpty(serviceBusNamespace))
     });
 }
 
-// Business Services (Service Layer)
-builder.Services.AddScoped<IDashboardService, DashboardService>();
-builder.Services.AddScoped<IDlqService, DlqService>();
+// Business Services (Service Layer) - conditional based on dependencies
+if (!string.IsNullOrEmpty(sqlConnectionString) && !string.IsNullOrEmpty(serviceBusNamespace))
+{
+    builder.Services.AddScoped<IDashboardService, DashboardService>();
+    builder.Services.AddScoped<IDlqService, DlqService>();
+}
+
 builder.Services.AddScoped<IHealthService, HealthService>();
 
 // Health Checks
