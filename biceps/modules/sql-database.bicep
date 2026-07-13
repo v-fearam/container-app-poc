@@ -23,7 +23,7 @@ param sqlAdminUsername string = 'sqladmin'
 
 @description('SQL admin password (temporary, will use Entra ID)')
 @secure()
-param sqlAdminPassword string = uniqueString(resourceGroup().id, serverName)
+param sqlAdminPassword string = 'P@ssw0rd-${uniqueString(resourceGroup().id, serverName)}'
 
 @description('Tags for all resources')
 param tags object = {}
