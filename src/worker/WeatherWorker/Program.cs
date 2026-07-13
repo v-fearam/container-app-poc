@@ -1,6 +1,6 @@
 using Azure.Identity;
-using Azure.Messaging.ServiceBus;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Microsoft.Extensions.Azure;
 using OpenTelemetry.Resources;
 using WeatherWorker.Configuration;
 using WeatherWorker.Handlers;
@@ -36,17 +36,24 @@ else
     Console.WriteLine("WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING not set — telemetry disabled");
 }
 
-// ─── Service Bus client (Managed Identity in Azure, DefaultAzureCredential locally) ─
+// ─── Azure SDK Clients (Service Bus) ────────────────────────────────────────
 var sbNamespace = builder.Configuration["ServiceBus:Namespace"]
     ?? Environment.GetEnvironmentVariable("ServiceBus__Namespace")
     ?? throw new InvalidOperationException("ServiceBus:Namespace is required. Set in appsettings or env var.");
 
-builder.Services.AddSingleton(new ServiceBusClient(sbNamespace, new DefaultAzureCredential()));
+builder.Services.AddAzureClients(clientBuilder =>
+{
+    // Use DefaultAzureCredential for all clients (works both locally and in Azure)
+    clientBuilder.UseCredential(new DefaultAzureCredential());
+
+    // Register Service Bus client
+    clientBuilder.AddServiceBusClientWithNamespace(sbNamespace);
+});
 
 // ─── Service Bus sender for Dashboard events topic ─
 builder.Services.AddSingleton(sp =>
 {
-    var client = sp.GetRequiredService<ServiceBusClient>();
+    var client = sp.GetRequiredService<Azure.Messaging.ServiceBus.ServiceBusClient>();
     return client.CreateSender("nd-dashboard-events");
 });
 
