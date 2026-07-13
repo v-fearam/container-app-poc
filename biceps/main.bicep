@@ -128,6 +128,9 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     maxReplicas: 3
     cpu: '0.5'
     memory: '1.0Gi'
+    sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase.outputs.sqlServerFqdn};Database=${sqlDatabase.outputs.databaseName};Authentication=Active Directory Default' : ''
+    serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus.outputs.namespaceFqdn : ''
+    managedIdentityClientId: (deployWorker || deployDashboard) ? workerIdentity.outputs.identityClientId : ''
   }
 }
 
@@ -154,8 +157,8 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
 // Worker Infrastructure (Service Bus + Managed Identity + Worker Container App)
 // =============================================================================
 
-// Service Bus Namespace + Queue
-module serviceBus 'modules/service-bus.bicep' = if (deployWorker) {
+// Service Bus Namespace + Queue + Dashboard Topic
+module serviceBus 'modules/service-bus.bicep' = if (deployWorker || deployDashboard) {
   name: 'service-bus-deployment'
   params: {
     location: location
@@ -164,12 +167,12 @@ module serviceBus 'modules/service-bus.bicep' = if (deployWorker) {
 }
 
 // Managed Identity for Worker (Service Bus Data Receiver + Sender + AcrPull)
-module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker) {
+module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker || deployDashboard) {
   name: 'worker-identity-deployment'
   params: {
     location: location
     identityName: workerIdentityName
-    serviceBusNamespaceId: deployWorker ? serviceBus!.outputs.namespaceId : ''
+    serviceBusNamespaceId: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceId : ''
     acrName: containerRegistryName
   }
 }

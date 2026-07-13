@@ -25,6 +25,16 @@ param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
 @description('Comma-separated host suffixes allowed for CORS origins')
 param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 
+@description('Optional SQL connection string for Dashboard features')
+@secure()
+param sqlConnectionString string = ''
+
+@description('Optional Service Bus namespace FQDN for Dashboard features')
+param serviceBusNamespaceFqdn string = ''
+
+@description('Optional Managed Identity Client ID for Service Bus and SQL auth')
+param managedIdentityClientId string = ''
+
 @description('Target port for the container')
 param targetPort int = 8080
 
@@ -91,6 +101,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'appinsights-connection-string'
           value: appInsightsConnectionString
         }
+        {
+          name: 'sql-connection-string'
+          value: sqlConnectionString
+        }
       ]
     }
     template: {
@@ -118,6 +132,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'CORS_ALLOWED_ORIGIN_SUFFIXES'
               value: corsAllowedOriginSuffixes
+            }
+            {
+              name: 'SQL_CONNECTION_STRING'
+              secretRef: 'sql-connection-string'
+            }
+            {
+              name: 'ServiceBus__Namespace'
+              value: serviceBusNamespaceFqdn
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: managedIdentityClientId
             }
           ]
         }
