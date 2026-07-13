@@ -28,7 +28,6 @@ builder.Services.AddWeatherCors(builder.Configuration);
 // Entity Framework Core (SQL Database with Managed Identity)
 // Optional: Only register if connection string is provided
 var sqlConnectionString = builder.Configuration["SQL_CONNECTION_STRING"];
-Console.WriteLine($"[DEBUG] SQL_CONNECTION_STRING is {(string.IsNullOrEmpty(sqlConnectionString) ? "EMPTY" : "SET")}");
 
 if (!string.IsNullOrEmpty(sqlConnectionString))
 {
@@ -39,7 +38,6 @@ if (!string.IsNullOrEmpty(sqlConnectionString))
 // Azure SDK Clients (Service Bus, Service Bus Administration)
 // Optional: Only register if Service Bus namespace is provided
 var serviceBusNamespace = builder.Configuration["ServiceBus:Namespace"];
-Console.WriteLine($"[DEBUG] ServiceBus:Namespace is {(string.IsNullOrEmpty(serviceBusNamespace) ? "EMPTY" : serviceBusNamespace)}");
 
 if (!string.IsNullOrEmpty(serviceBusNamespace))
 {
@@ -60,13 +58,8 @@ if (!string.IsNullOrEmpty(serviceBusNamespace))
 // Business Services (Service Layer) - conditional based on dependencies
 if (!string.IsNullOrEmpty(sqlConnectionString) && !string.IsNullOrEmpty(serviceBusNamespace))
 {
-    Console.WriteLine("[DEBUG] Registering DashboardService and DlqService");
     builder.Services.AddScoped<IDashboardService, DashboardService>();
     builder.Services.AddScoped<IDlqService, DlqService>();
-}
-else
-{
-    Console.WriteLine($"[DEBUG] NOT registering DashboardService - SQL={!string.IsNullOrEmpty(sqlConnectionString)}, ServiceBus={!string.IsNullOrEmpty(serviceBusNamespace)}");
 }
 
 builder.Services.AddScoped<IHealthService, HealthService>();
