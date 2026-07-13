@@ -58,13 +58,28 @@ export function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-slate-200 rounded w-64 mb-8"></div>
-          <div className="space-y-4">
-            <div className="h-24 bg-slate-200 rounded"></div>
-            <div className="h-24 bg-slate-200 rounded"></div>
-            <div className="h-24 bg-slate-200 rounded"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          {/* Header Skeleton */}
+          <div className="mb-8">
+            <div className="h-10 bg-white/60 rounded-lg w-96 mb-3 animate-pulse"></div>
+            <div className="h-5 bg-white/40 rounded w-64 animate-pulse"></div>
+          </div>
+
+          {/* Stats Grid Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-pulse">
+                <div className="h-4 bg-slate-200 rounded w-24 mb-4"></div>
+                <div className="h-8 bg-slate-200 rounded w-32"></div>
+              </div>
+            ))}
+          </div>
+
+          {/* Chart Skeleton */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-pulse">
+            <div className="h-6 bg-slate-200 rounded w-48 mb-6"></div>
+            <div className="h-64 bg-slate-100 rounded"></div>
           </div>
         </div>
       </div>
@@ -106,114 +121,238 @@ export function DashboardPage() {
   const groups = groupedData ? Object.values(groupedData) : [];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Dashboard - Monitoreo de Colas</h1>
-          <p className="text-sm text-slate-600 mt-2">
-            Actualización automática cada 5s · Última actualización:{' '}
-            <span className="font-mono">{lastRefresh.toLocaleTimeString()}</span>
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-slate-900 mb-2">
+                Dashboard POC
+              </h1>
+              <p className="text-slate-600">
+                Monitoreo de mensajería en tiempo real
+              </p>
+            </div>
+            <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-lg shadow-sm border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                <span className="text-sm font-medium text-slate-700">En vivo</span>
+              </div>
+              <span className="text-slate-300">·</span>
+              <span className="text-sm text-slate-600">
+                Actualiza cada 5s
+              </span>
+            </div>
+          </div>
+          <div className="text-sm text-slate-500">
+            Última actualización: <span className="font-mono font-medium text-slate-700">{lastRefresh.toLocaleTimeString()}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-          <span className="text-sm text-slate-600">En vivo</span>
-        </div>
-      </div>
 
-      {/* KPI Cards */}
-      {groups.length === 0 ? (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-12 text-center">
-          <p className="text-slate-600">No hay datos disponibles aún</p>
-          <p className="text-sm text-slate-500 mt-2">Los contadores se mostrarán cuando se procesen mensajes</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <div key={`${group.vertical}-${group.queueName}-${group.processType}`} className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-              {/* Group Header */}
-              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      {group.vertical} · {group.queueName} · <span className="text-blue-600">{group.processType}</span>
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-sm text-slate-600">Encolados</p>
-                      <p className="text-2xl font-bold text-slate-900">{group.totalEnqueued}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-600">Procesados</p>
-                      <p className="text-2xl font-bold text-green-600">{group.totalProcessed}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-600">DLQ</p>
-                      <p className="text-2xl font-bold text-red-600">{group.totalDlq}</p>
-                    </div>
-                  </div>
+        {/* Empty State with Icon */}
+        {groups.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-16 text-center">
+            <div className="max-w-md mx-auto">
+              {/* Icon */}
+              <div className="mb-6 flex justify-center">
+                <div className="rounded-full bg-slate-100 p-6">
+                  <svg className="w-16 h-16 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+              </div>
+              
+              <h3 className="text-xl font-semibold text-slate-900 mb-3">
+                No hay datos disponibles
+              </h3>
+              <p className="text-slate-600 mb-6">
+                El dashboard se poblará automáticamente cuando los workers procesen mensajes del Service Bus
+              </p>
+              
+              {/* Info Cards */}
+              <div className="grid grid-cols-2 gap-4 text-left">
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                  <div className="text-sm font-medium text-blue-900 mb-1">✓ Backend API</div>
+                  <div className="text-xs text-blue-700">Conectado y funcionando</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                  <div className="text-sm font-medium text-green-900 mb-1">✓ Auto-refresh</div>
+                  <div className="text-xs text-green-700">Actualizando cada 5s</div>
                 </div>
               </div>
 
-              {/* Dates Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-100 border-b border-slate-200">
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Fecha</th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Encolados</th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Procesados</th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">DLQ</th>
-                      <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Pendientes</th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.dates.map((item, idx) => {
-                      const pending = item.enqueuedCount - item.processedCount;
-                      return (
-                        <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-mono text-slate-900">{item.date}</td>
-                          <td className="px-6 py-4 text-sm text-right text-slate-900">{item.enqueuedCount}</td>
-                          <td className="px-6 py-4 text-sm text-right text-green-600">{item.processedCount}</td>
-                          <td className="px-6 py-4 text-sm text-right">
-                            {item.dlqCount > 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                {item.dlqCount}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">0</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-right">
-                            {pending > 0 ? (
-                              <span className="text-amber-600 font-medium">{pending}</span>
-                            ) : (
-                              <span className="text-slate-400">0</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {item.dlqCount > 0 && (
-                              <Link
-                                to={`/dashboard/dlq/${encodeURIComponent(item.queueName)}`}
-                                className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                              >
-                                Gestionar DLQ
-                              </Link>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* Instructions */}
+              <div className="mt-8 text-left bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div className="text-sm font-medium text-slate-900 mb-2">💡 Para generar datos:</div>
+                <ol className="text-sm text-slate-600 space-y-1.5 list-decimal list-inside">
+                  <li>Ejecuta el Service Bus Enqueuer para enviar mensajes</li>
+                  <li>Los workers procesarán los mensajes automáticamente</li>
+                  <li>Los contadores aparecerán aquí en tiempo real</li>
+                </ol>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-blue-100 text-sm font-medium uppercase tracking-wide">Total Encolados</div>
+                  <svg className="w-8 h-8 text-blue-200/50" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                  </svg>
+                </div>
+                <div className="text-4xl font-bold">
+                  {groups.reduce((sum, g) => sum + g.totalEnqueued, 0).toLocaleString()}
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-green-100 text-sm font-medium uppercase tracking-wide">Total Procesados</div>
+                  <svg className="w-8 h-8 text-green-200/50" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="text-4xl font-bold">
+                  {groups.reduce((sum, g) => sum + g.totalProcessed, 0).toLocaleString()}
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-red-100 text-sm font-medium uppercase tracking-wide">Total DLQ</div>
+                  <svg className="w-8 h-8 text-red-200/50" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="text-4xl font-bold">
+                  {groups.reduce((sum, g) => sum + g.totalDlq, 0).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Queue Groups */}
+            {groups.map((group) => (
+              <div key={`${group.vertical}-${group.queueName}-${group.processType}`} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
+                {/* Group Header */}
+                <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-900 mb-1">
+                        {group.vertical} <span className="text-slate-400">·</span> {group.queueName}
+                      </h2>
+                      <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M13 7H7v6h6V7z" />
+                          <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
+                        </svg>
+                        {group.processType}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-8">
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Encolados</p>
+                        <p className="text-3xl font-bold text-slate-900">{group.totalEnqueued.toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-1">Procesados</p>
+                        <p className="text-3xl font-bold text-green-600">{group.totalProcessed.toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ</p>
+                        <p className="text-3xl font-bold text-red-600">{group.totalDlq.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dates Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Fecha</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Encolados</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Procesados</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">DLQ</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Pendientes</th>
+                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {group.dates.map((item, idx) => {
+                        const pending = item.enqueuedCount - item.processedCount;
+                        const processingRate = item.enqueuedCount > 0 ? (item.processedCount / item.enqueuedCount * 100) : 0;
+                        
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50 transition-colors duration-150">
+                            <td className="px-6 py-4">
+                              <span className="font-mono text-sm font-medium text-slate-900">{item.date}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <span className="text-sm font-medium text-slate-900">{item.enqueuedCount.toLocaleString()}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-sm font-medium text-green-600">{item.processedCount.toLocaleString()}</span>
+                                <span className="text-xs text-slate-500">({processingRate.toFixed(1)}%)</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {item.dlqCount > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {item.dlqCount}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {pending > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                  </svg>
+                                  {pending}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {item.dlqCount > 0 && (
+                                <Link
+                                  to={`/dashboard/dlq/${encodeURIComponent(item.queueName)}`}
+                                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150 cursor-pointer"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  Gestionar DLQ
+                                </Link>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
