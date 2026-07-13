@@ -26,28 +26,34 @@ builder.Services.AddEasyAuth();
 builder.Services.AddWeatherCors(builder.Configuration);
 
 // Entity Framework Core (SQL Database with Managed Identity)
-var sqlConnectionString = builder.Configuration["SQL_CONNECTION_STRING"]
-    ?? throw new InvalidOperationException("SQL_CONNECTION_STRING is required");
+// Optional: Only register if connection string is provided
+var sqlConnectionString = builder.Configuration["SQL_CONNECTION_STRING"];
 
-builder.Services.AddDbContext<DashboardDbContext>(options =>
-    options.UseSqlServer(sqlConnectionString));
+if (!string.IsNullOrEmpty(sqlConnectionString))
+{
+    builder.Services.AddDbContext<DashboardDbContext>(options =>
+        options.UseSqlServer(sqlConnectionString));
+}
 
 // Azure SDK Clients (Service Bus, Service Bus Administration)
-var serviceBusNamespace = builder.Configuration["ServiceBus__Namespace"]
-    ?? throw new InvalidOperationException("ServiceBus__Namespace is required");
+// Optional: Only register if Service Bus namespace is provided
+var serviceBusNamespace = builder.Configuration["ServiceBus__Namespace"];
 
-builder.Services.AddAzureClients(clientBuilder =>
+if (!string.IsNullOrEmpty(serviceBusNamespace))
 {
-    // Use DefaultAzureCredential for all clients (works both locally and in Azure)
-    clientBuilder.UseCredential(new DefaultAzureCredential());
+    builder.Services.AddAzureClients(clientBuilder =>
+    {
+        // Use DefaultAzureCredential for all clients (works both locally and in Azure)
+        clientBuilder.UseCredential(new DefaultAzureCredential());
 
-    // Register Service Bus client for DLQ operations
-    clientBuilder.AddServiceBusClientWithNamespace(serviceBusNamespace);
+        // Register Service Bus client for DLQ operations
+        clientBuilder.AddServiceBusClientWithNamespace(serviceBusNamespace);
 
-    // Register Service Bus Administration client for DLQ metrics
-    clientBuilder.AddClient<Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient, Azure.Messaging.ServiceBus.ServiceBusClientOptions>(
-        (options, credential, _) => new Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient(serviceBusNamespace, credential));
-});
+        // Register Service Bus Administration client for DLQ metrics
+        clientBuilder.AddClient<Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient, Azure.Messaging.ServiceBus.ServiceBusClientOptions>(
+            (options, credential, _) => new Azure.Messaging.ServiceBus.Administration.ServiceBusAdministrationClient(serviceBusNamespace, credential));
+    });
+}
 
 // Business Services (Service Layer)
 builder.Services.AddScoped<IDashboardService, DashboardService>();
@@ -55,15 +61,34 @@ builder.Services.AddScoped<IDlqService, DlqService>();
 builder.Services.AddScoped<IHealthService, HealthService>();
 
 // Health Checks
-builder.Services.AddHealthChecks()
-    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("API is running"))
-    .AddDbContextCheck<DashboardDbContext>("sql", tags: new[] { "db", "sql" })
-    .AddCheck("servicebus", () =>
-    {
-        var ns = builder.Configuration["ServiceBus__Namespace"];
-        if (string.IsNullOrEmpty(ns)) return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded("Service Bus not configured");
-        return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Service Bus configured");
-    });
+var healthChecksBuilder = builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("API is running"));
+
+// SQL Database health check
+if (!string.IsNullOrEmpty(sqlConnectionString))
+{
+    healthChecksBuilder.AddDbContextCheck<DashboardDbContext>("sql", tags: new[] { "db", "sql" });
+}
+else
+{
+    // Report SQL as degraded when not configured (useful to see app started without DB)
+    healthChecksBuilder.AddCheck("sql", () =>
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded("SQL Database not configured - SQL_CONNECTION_STRING missing"),
+        tags: new[] { "db", "sql" });
+}
+
+// Service Bus health check
+if (!string.IsNullOrEmpty(serviceBusNamespace))
+{
+    healthChecksBuilder.AddCheck("servicebus", () =>
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy($"Service Bus configured: {serviceBusNamespace}"));
+}
+else
+{
+    // Report Service Bus as degraded when not configured
+    healthChecksBuilder.AddCheck("servicebus", () =>
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded("Service Bus not configured - ServiceBus__Namespace missing"));
+}
 
 // OpenTelemetry + Azure Monitor (App Insights)
 // UseAzureMonitor() auto-collects: HTTP requests, dependencies, ILogger logs, exceptions, metrics
