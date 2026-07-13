@@ -3,7 +3,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 # Keep npm aligned with latest major used by the project build pipeline.
-RUN npm install -g npm@11.18.0
+RUN npm install -g npm@12.0.1
 
 # Copy package files
 COPY package*.json ./
