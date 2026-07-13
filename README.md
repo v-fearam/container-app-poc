@@ -418,59 +418,58 @@ az deployment group create \
 
 ### Paso 2: Crear schema SQL
 
-```bash
-# Obtener nombre del SQL Server
-SQL_SERVER=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+Usar **Azure Portal Query Editor** (no requiere instalar sqlcmd):
 
-# Conectar como Entra ID admin y ejecutar el schema
-az sql server show -g $RG --name ${SQL_SERVER%%.database.windows.net} --query fullyQualifiedDomainName
+1. Ir a: [Azure Portal](https://portal.azure.com) → SQL databases → `dashboard-poc` → **Query editor (preview)**
+2. Login con: **Active Directory authentication**
+3. Abrir el archivo `sql/001-dashboard-schema.sql` y copiar todo el contenido
+4. Pegar en el Query Editor y ejecutar (botón "Run")
 
-# Usando sqlcmd o Azure Portal Query Editor:
-sqlcmd -S $SQL_SERVER -d dashboard-poc -G -i sql/001-dashboard-schema.sql
-```
+✅ Deberías ver las tablas creadas: `WeatherCounters`, `HealthSnapshots`
 
-Si no tenés `sqlcmd`, usá **Azure Portal → SQL Database → Query editor (preview)** y pegá el contenido de `sql/001-dashboard-schema.sql`.
-
-### Paso 3: Mapear Managed Identity como usuario SQL (MANUAL)
+### Paso 3: Mapear Managed Identities como usuarios SQL (MANUAL)
 
 **⚠️ Paso manual obligatorio**: conectar como Entra ID admin y ejecutar:
 
 ```bash
-# Obtener el nombre de la Managed Identity
+# Obtener los nombres de las Managed Identities
 WORKER_IDENTITY_NAME=$(az identity list -g $RG \
   --query "[?contains(name, 'worker')].name" -o tsv)
 
+BACKEND_IDENTITY_NAME=$(az identity list -g $RG \
+  --query "[?contains(name, 'uami-ca-weather-be-dev')].name" -o tsv)
+
 echo "Worker Identity: $WORKER_IDENTITY_NAME"
-# Output: id-weather-worker-dev
+echo "Backend Identity: $BACKEND_IDENTITY_NAME"
+# Output esperado:
+# Worker Identity: id-weather-worker-dev
+# Backend Identity: uami-ca-weather-be-dev
 ```
 
-Luego, conectarse al SQL Server como Entra ID admin y ejecutar:
+**Cómo ejecutar el SQL:**
+
+1. Ir a: [Azure Portal](https://portal.azure.com) → SQL databases → `dashboard-poc` → **Query editor (preview)**
+2. Login con: **Active Directory authentication** (usa tu usuario `far@clariusconsulting.net`)
+3. Copiar y ejecutar el siguiente SQL:
 
 ```sql
--- Usar el nombre exacto de la Managed Identity (ej: id-weather-worker-dev)
+-- 1. Crear user para DashboardWorker (procesa mensajes de Service Bus)
 CREATE USER [id-weather-worker-dev] FROM EXTERNAL PROVIDER;
 ALTER ROLE db_datareader ADD MEMBER [id-weather-worker-dev];
 ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];
+
+-- 2. Crear user para Backend API (sirve el dashboard web)
+CREATE USER [uami-ca-weather-be-dev] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [uami-ca-weather-be-dev];
+ALTER ROLE db_datawriter ADD MEMBER [uami-ca-weather-be-dev];
 GO
 ```
 
-**Cómo conectarse como Entra ID admin:**
+✅ Si aparece "Commands completed successfully", ya está listo.
 
-Opción 1: Azure Portal Query Editor
-1. Portal → SQL Database `dashboard-poc` → Query editor
-2. Login con: "Active Directory authentication"
-3. Pegar el SQL de arriba
-
-Opción 2: sqlcmd con Entra ID
-```bash
-SQL_SERVER=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
-
-sqlcmd -S $SQL_SERVER -d dashboard-poc -G \
-  -Q "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER; ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME]; ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
-```
-```
+> **Nota:** Ambas identities necesitan acceso porque:
+> - `id-weather-worker-dev` → DashboardWorker lee mensajes del Service Bus y escribe en SQL
+> - `uami-ca-weather-be-dev` → Backend API lee de SQL para mostrar el dashboard
 
 ### Paso 4: Rebuild imágenes (Backend + WeatherWorker + nuevo DashboardWorker)
 
