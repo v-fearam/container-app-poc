@@ -50,6 +50,9 @@ param cpu string = '0.5'
 @description('Memory size')
 param memory string = '1.0Gi'
 
+@description('Timestamp for unique revision suffix')
+param timestamp string = utcNow()
+
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = {
   name: acrName
 }
@@ -112,6 +115,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       )
     }
     template: {
+      revisionSuffix: 't${uniqueString(timestamp)}'
       containers: [
         {
           name: containerAppName
