@@ -155,10 +155,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: serviceBusNamespaceFqdn
               }
             ] : [],
-            !empty(managedIdentityClientId) ? [
+            !empty(serviceBusNamespaceFqdn) || !empty(sqlConnectionString) ? [
               {
                 name: 'AZURE_CLIENT_ID'
-                value: managedIdentityClientId
+                value: userAssignedIdentity.properties.clientId
               }
             ] : []
           )

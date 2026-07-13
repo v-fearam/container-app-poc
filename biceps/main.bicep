@@ -128,9 +128,9 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     maxReplicas: 3
     cpu: '0.5'
     memory: '1.0Gi'
-    sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase.outputs.sqlServerFqdn};Database=${sqlDatabase.outputs.databaseName};Authentication=Active Directory Default' : ''
-    serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus.outputs.namespaceFqdn : ''
-    managedIdentityClientId: (deployWorker || deployDashboard) ? workerIdentity.outputs.identityClientId : ''
+    sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default' : ''
+    serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceFqdn : ''
+    managedIdentityClientId: '' // Backend uses its own User Assigned Managed Identity (created in backend-container-app.bicep)
   }
 }
 
