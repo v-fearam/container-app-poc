@@ -18,10 +18,17 @@ param entraAdminLogin string
 @description('Entra ID administrator tenant ID')
 param entraAdminTenantId string = subscription().tenantId
 
+@description('SQL admin username (temporary, will use Entra ID)')
+param sqlAdminUsername string = 'sqladmin'
+
+@description('SQL admin password (temporary, will use Entra ID)')
+@secure()
+param sqlAdminPassword string = uniqueString(resourceGroup().id, serverName)
+
 @description('Tags for all resources')
 param tags object = {}
 
-// SQL Server with Entra ID authentication only (no SQL auth)
+// SQL Server with both SQL auth (required) and Entra ID auth
 resource sqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   name: serverName
   location: location
@@ -29,6 +36,8 @@ resource sqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   properties: {
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
+    administratorLogin: sqlAdminUsername
+    administratorLoginPassword: sqlAdminPassword
   }
 }
 
