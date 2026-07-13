@@ -31,16 +31,8 @@ public class DlqManagerController : ControllerBase
     {
         _logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", queueName, maxCount);
 
-        try
-        {
-            var messages = await _dlqService.PeekDlqMessagesAsync(queueName, maxCount, cancellationToken);
-            return Ok(messages);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error peeking DLQ for queue={QueueName}", queueName);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to peek DLQ messages" });
-        }
+        var messages = await _dlqService.PeekDlqMessagesAsync(queueName, maxCount, cancellationToken);
+        return Ok(messages);
     }
 
     /// <summary>
@@ -54,25 +46,17 @@ public class DlqManagerController : ControllerBase
     {
         _logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", request.MessageId, request.QueueName);
 
-        try
-        {
-            var requeuedCount = await _dlqService.RequeueMessagesAsync(
-                request.QueueName,
-                new[] { request },
-                cancellationToken);
+        var requeuedCount = await _dlqService.RequeueMessagesAsync(
+            request.QueueName,
+            new[] { request },
+            cancellationToken);
 
-            if (requeuedCount == 0)
-            {
-                return NotFound(new { error = $"Message {request.MessageId} not found in DLQ" });
-            }
-
-            return Ok(new { success = true, message = $"Message {request.MessageId} requeued successfully" });
-        }
-        catch (Exception ex)
+        if (requeuedCount == 0)
         {
-            _logger.LogError(ex, "Error requeuing DLQ message={MessageId}", request.MessageId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to requeue message" });
+            return NotFound(new { error = $"Message {request.MessageId} not found in DLQ" });
         }
+
+        return Ok(new { success = true, message = $"Message {request.MessageId} requeued successfully" });
     }
 
     /// <summary>
@@ -86,24 +70,16 @@ public class DlqManagerController : ControllerBase
     {
         _logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", request.MessageId, request.QueueName);
 
-        try
-        {
-            var discardedCount = await _dlqService.DiscardMessagesAsync(
-                request.QueueName,
-                new[] { request },
-                cancellationToken);
+        var discardedCount = await _dlqService.DiscardMessagesAsync(
+            request.QueueName,
+            new[] { request },
+            cancellationToken);
 
-            if (discardedCount == 0)
-            {
-                return NotFound(new { error = $"Message {request.MessageId} not found in DLQ" });
-            }
-
-            return Ok(new { success = true, message = $"Message {request.MessageId} discarded successfully" });
-        }
-        catch (Exception ex)
+        if (discardedCount == 0)
         {
-            _logger.LogError(ex, "Error discarding DLQ message={MessageId}", request.MessageId);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to discard message" });
+            return NotFound(new { error = $"Message {request.MessageId} not found in DLQ" });
         }
+
+        return Ok(new { success = true, message = $"Message {request.MessageId} discarded successfully" });
     }
 }

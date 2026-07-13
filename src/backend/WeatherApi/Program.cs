@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Azure;
 using WeatherApi.Data;
 using WeatherApi.Extensions;
+using WeatherApi.Middleware;
 using WeatherApi.Services;
 
 // Load .env file for local development (file may not exist in production)
@@ -79,6 +80,9 @@ if (!string.IsNullOrEmpty(appInsightsConnectionString))
 }
 
 var app = builder.Build();
+
+// ─── Global Exception Handler (must be first) ───────────────────────────────
+app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 
 // Health endpoints (no auth, for Container Apps probes)
 app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

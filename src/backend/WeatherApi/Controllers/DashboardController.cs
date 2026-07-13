@@ -35,15 +35,7 @@ public class DashboardController : ControllerBase
 
         _logger.LogInformation("Getting Dashboard KPI for date={Date} vertical={Vertical}", targetDate, targetVertical);
 
-        try
-        {
-            var kpiResults = await _dashboardService.GetKpiAsync(targetDate, targetVertical, cancellationToken);
-            return Ok(kpiResults);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting Dashboard KPI");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to retrieve Dashboard KPI" });
-        }
+        var kpiResults = await _dashboardService.GetKpiAsync(targetDate, targetVertical, cancellationToken);
+        return Ok(kpiResults);
     }
 }

@@ -28,15 +28,7 @@ public class HealthController : ControllerBase
     {
         _logger.LogInformation("Getting component health status");
 
-        try
-        {
-            var components = await _healthService.GetComponentHealthAsync(cancellationToken);
-            return Ok(components);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting component health");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to retrieve component health" });
-        }
+        var components = await _healthService.GetComponentHealthAsync(cancellationToken);
+        return Ok(components);
     }
 }
