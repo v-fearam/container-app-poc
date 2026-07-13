@@ -407,13 +407,14 @@ az deployment group create \
   --parameters deployDashboard=true \
     sqlServerName="sql-weather-dash-$RANDOM" \
     sqlAdminObjectId="$USER_OID" \
-    sqlAdminLogin="$USER_UPN"
+    sqlAdminLogin="$USER_UPN" \
+    sqlLocation="centralus"
 
-# Si East US 2 no permite crear SQL Servers, usa otra región:
-# --parameters sqlLocation="eastus" \
+# Si Central US tampoco funciona, probar:
+# sqlLocation="westus2" o sqlLocation="westeurope"
 ```
 
-**Salida esperada:** SQL Server + Database `dashboard-db`, Topic `nd-dashboard-events`, Subscription `counter-updater`.
+**Salida esperada:** SQL Server + Database `dashboard-poc`, Topic `nd-dashboard-events`, Subscription `counter-updater`.
 
 ### Paso 2: Crear schema SQL
 
@@ -426,7 +427,7 @@ SQL_SERVER=$(az deployment group show -g $RG --name main \
 az sql server show -g $RG --name ${SQL_SERVER%%.database.windows.net} --query fullyQualifiedDomainName
 
 # Usando sqlcmd o Azure Portal Query Editor:
-sqlcmd -S $SQL_SERVER -d dashboard-db -G -i sql/001-dashboard-schema.sql
+sqlcmd -S $SQL_SERVER -d dashboard-poc -G -i sql/001-dashboard-schema.sql
 ```
 
 Si no tenés `sqlcmd`, usá **Azure Portal → SQL Database → Query editor (preview)** y pegá el contenido de `sql/001-dashboard-schema.sql`.
@@ -506,6 +507,24 @@ az acr build --registry $ACR_NAME \
 
 ### Paso 5: Redeploy Backend + Frontend + WeatherWorker, y deploy DashboardWorker
 
+**⚠️ Importante:** Antes de deployar el DashboardWorker, necesitás re-deployar el main.bicep para que los nuevos outputs (`containerAppEnvironmentId`, `workerIdentityId`) estén disponibles:
+
+```bash
+# Re-deploy main.bicep (actualiza outputs, no cambia recursos existentes)
+# IMPORTANTE: Usar el MISMO sqlServerName que ya existe (no generar uno nuevo con $RANDOM)
+SQL_SERVER_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
+
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters deployDashboard=true \
+    sqlServerName="$SQL_SERVER_NAME" \
+    sqlAdminObjectId="$USER_OID" \
+    sqlAdminLogin="$USER_UPN" \
+    sqlLocation="centralus"
+```
+
 Ahora que las 4 imágenes están actualizadas en el ACR, redeploy los Container Apps existentes y crea el nuevo DashboardWorker:
 
 ```bash
@@ -521,7 +540,9 @@ az containerapp update -n ca-weather-worker-dev -g $RG
 # Obtener SQL connection string
 SQL_SERVER=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
-SQL_CONN="Server=${SQL_SERVER};Database=dashboard-db;Authentication=Active Directory Default"
+SQL_DB=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
+SQL_CONN="Server=${SQL_SERVER};Database=${SQL_DB};Authentication=Active Directory Default"
 
 # Deploy DashboardWorker Container App (NUEVO - primera vez)
 az deployment group create \
@@ -532,11 +553,11 @@ az deployment group create \
     environmentId="$(az deployment group show -g $RG --name main --query 'properties.outputs.containerAppEnvironmentId.value' -o tsv)" \
     containerImage="${ACR_NAME}.azurecr.io/dashboard-worker:latest" \
     acrName="$ACR_NAME" \
-    managedIdentityId="$(az deployment group show -g $RG --name main --query 'properties.outputs.managedIdentityId.value' -o tsv)" \
-    managedIdentityClientId="$(az deployment group show -g $RG --name main --query 'properties.outputs.managedIdentityClientId.value' -o tsv)" \
+    managedIdentityId="$(az deployment group show -g $RG --name main --query 'properties.outputs.workerIdentityId.value' -o tsv)" \
+    managedIdentityClientId="$(az deployment group show -g $RG --name main --query 'properties.outputs.workerIdentityClientId.value' -o tsv)" \
     serviceBusNamespaceFqdn="$(az deployment group show -g $RG --name main --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)" \
     sqlConnectionString="$SQL_CONN" \
-    appInsightsConnectionString="$(az monitor app-insights component show -g $RG --query '[0].connectionString' -o tsv)"
+    appInsightsConnectionString="$(az deployment group show -g $RG --name main --query 'properties.outputs.appInsightsConnectionString.value' -o tsv)"
 ```
 
 ### Paso 6: Test — Encolar mensajes y verificar eventos
