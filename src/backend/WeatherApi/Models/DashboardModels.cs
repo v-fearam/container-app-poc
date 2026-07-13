@@ -53,9 +53,7 @@ public record DiscardDlqMessageRequest
 public record ComponentHealthDto
 {
     public required string ComponentName { get; init; }
-    public required string ComponentType { get; init; }
-    public required string InstanceId { get; init; }
     public required string Status { get; init; }
     public DateTime LastHeartbeat { get; init; }
-    public string? Version { get; init; }
+    public string? Metadata { get; init; }
 }

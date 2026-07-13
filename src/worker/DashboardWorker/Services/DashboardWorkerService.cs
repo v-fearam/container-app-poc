@@ -1,7 +1,9 @@
 using Azure.Messaging.ServiceBus;
 using DashboardWorker.Configuration;
+using DashboardWorker.Data;
+using DashboardWorker.Data.Entities;
 using DashboardWorker.Models;
-using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
 using System.Text.Json;
@@ -13,19 +15,19 @@ public class DashboardWorkerService : BackgroundService
     private readonly ILogger<DashboardWorkerService> _logger;
     private readonly ServiceBusClient _serviceBusClient;
     private readonly ServiceBusOptions _sbOptions;
-    private readonly SqlOptions _sqlOptions;
+    private readonly IServiceScopeFactory _scopeFactory;
     private ServiceBusProcessor? _processor;
 
     public DashboardWorkerService(
         ILogger<DashboardWorkerService> logger,
         ServiceBusClient serviceBusClient,
         IOptions<ServiceBusOptions> sbOptions,
-        IOptions<SqlOptions> sqlOptions)
+        IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
         _serviceBusClient = serviceBusClient;
         _sbOptions = sbOptions.Value;
-        _sqlOptions = sqlOptions.Value;
+        _scopeFactory = scopeFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -112,52 +114,71 @@ public class DashboardWorkerService : BackgroundService
 
     private async Task UpsertCounterAsync(DashboardEvent evt, CancellationToken cancellationToken)
     {
-        using var connection = new SqlConnection(_sqlOptions.ConnectionString);
-        await connection.OpenAsync(cancellationToken);
+        // Create scope to get DbContext (scoped lifetime)
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
 
-        // UPDATE-first pattern (concurrency-safe, avoids MERGE deadlocks)
-        var updateQuery = evt.EventType == "MessageEnqueued"
-            ? @"
-                UPDATE dbo.QueueCounters
-                SET EnqueuedCount = EnqueuedCount + 1, UpdatedAt = GETUTCDATE()
-                WHERE Vertical = @Vertical AND QueueName = @QueueName AND ProcessType = @ProcessType AND Date = @Date"
-            : @"
-                UPDATE dbo.QueueCounters
-                SET ProcessedCount = ProcessedCount + 1, UpdatedAt = GETUTCDATE()
-                WHERE Vertical = @Vertical AND QueueName = @QueueName AND ProcessType = @ProcessType AND Date = @Date";
+        var date = evt.Timestamp.Date;
 
-        using var updateCmd = new SqlCommand(updateQuery, connection);
-        updateCmd.Parameters.AddWithValue("@Vertical", evt.Vertical);
-        updateCmd.Parameters.AddWithValue("@QueueName", evt.QueueName);
-        updateCmd.Parameters.AddWithValue("@ProcessType", evt.ProcessType);
-        updateCmd.Parameters.AddWithValue("@Date", evt.Timestamp.Date);
-
-        var rowsAffected = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+        // EF Core: Try UPDATE first (concurrency-safe, avoids MERGE deadlocks)
+        var rowsAffected = evt.EventType == "MessageEnqueued"
+            ? await dbContext.QueueCounters
+                .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
+                .ExecuteUpdateAsync(q => q
+                    .SetProperty(x => x.EnqueuedCount, x => x.EnqueuedCount + 1)
+                    .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
+                    cancellationToken)
+            : await dbContext.QueueCounters
+                .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
+                .ExecuteUpdateAsync(q => q
+                    .SetProperty(x => x.ProcessedCount, x => x.ProcessedCount + 1)
+                    .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
+                    cancellationToken);
 
         if (rowsAffected == 0)
         {
             // Row doesn't exist yet — INSERT
-            var insertQuery = @"
-                INSERT INTO dbo.QueueCounters (Vertical, QueueName, ProcessType, Date, EnqueuedCount, ProcessedCount, CreatedAt, UpdatedAt)
-                VALUES (@Vertical, @QueueName, @ProcessType, @Date, @EnqueuedCount, @ProcessedCount, GETUTCDATE(), GETUTCDATE())";
+            var counter = new QueueCounter
+            {
+                Vertical = evt.Vertical,
+                QueueName = evt.QueueName,
+                ProcessType = evt.ProcessType,
+                Date = date,
+                EnqueuedCount = evt.EventType == "MessageEnqueued" ? 1 : 0,
+                ProcessedCount = evt.EventType == "MessageProcessed" ? 1 : 0,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
-            using var insertCmd = new SqlCommand(insertQuery, connection);
-            insertCmd.Parameters.AddWithValue("@Vertical", evt.Vertical);
-            insertCmd.Parameters.AddWithValue("@QueueName", evt.QueueName);
-            insertCmd.Parameters.AddWithValue("@ProcessType", evt.ProcessType);
-            insertCmd.Parameters.AddWithValue("@Date", evt.Timestamp.Date);
-            insertCmd.Parameters.AddWithValue("@EnqueuedCount", evt.EventType == "MessageEnqueued" ? 1 : 0);
-            insertCmd.Parameters.AddWithValue("@ProcessedCount", evt.EventType == "MessageProcessed" ? 1 : 0);
+            dbContext.QueueCounters.Add(counter);
 
             try
             {
-                await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
             }
-            catch (SqlException ex) when (ex.Number == 2627) // Unique constraint violation
+            catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
             {
                 // Another worker inserted between our UPDATE and INSERT — retry UPDATE
                 _logger.LogDebug("Unique constraint violation during INSERT. Retrying UPDATE.");
-                rowsAffected = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+                
+                // Create new scope for retry (previous context may be in bad state)
+                using var retryScope = _scopeFactory.CreateScope();
+                var retryDbContext = retryScope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+                
+                rowsAffected = evt.EventType == "MessageEnqueued"
+                    ? await retryDbContext.QueueCounters
+                        .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
+                        .ExecuteUpdateAsync(q => q
+                            .SetProperty(x => x.EnqueuedCount, x => x.EnqueuedCount + 1)
+                            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
+                            cancellationToken)
+                    : await retryDbContext.QueueCounters
+                        .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
+                        .ExecuteUpdateAsync(q => q
+                            .SetProperty(x => x.ProcessedCount, x => x.ProcessedCount + 1)
+                            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
+                            cancellationToken);
+                
                 if (rowsAffected == 0)
                 {
                     _logger.LogWarning("Retry UPDATE also failed. Counter may be inconsistent.");

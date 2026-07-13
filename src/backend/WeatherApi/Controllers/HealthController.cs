@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 using WeatherApi.Models;
+using WeatherApi.Services;
 
 namespace WeatherApi.Controllers;
 
@@ -8,12 +8,14 @@ namespace WeatherApi.Controllers;
 [Route("api/[controller]")]
 public class HealthController : ControllerBase
 {
-    private readonly IConfiguration _configuration;
+    private readonly IHealthService _healthService;
     private readonly ILogger<HealthController> _logger;
 
-    public HealthController(IConfiguration configuration, ILogger<HealthController> logger)
+    public HealthController(
+        IHealthService healthService,
+        ILogger<HealthController> logger)
     {
-        _configuration = configuration;
+        _healthService = healthService;
         _logger = logger;
     }
 
@@ -28,35 +30,7 @@ public class HealthController : ControllerBase
 
         try
         {
-            var connectionString = _configuration["SQL_CONNECTION_STRING"] 
-                ?? throw new InvalidOperationException("SQL_CONNECTION_STRING not configured");
-
-            var components = new List<ComponentHealthDto>();
-
-            using var connection = new SqlConnection(connectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            var query = @"
-                SELECT ComponentName, ComponentType, InstanceId, Status, LastHeartbeat, Version
-                FROM dbo.ComponentHealth
-                ORDER BY ComponentType, ComponentName, LastHeartbeat DESC";
-
-            using var command = new SqlCommand(query, connection);
-            using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                components.Add(new ComponentHealthDto
-                {
-                    ComponentName = reader.GetString(0),
-                    ComponentType = reader.GetString(1),
-                    InstanceId = reader.GetString(2),
-                    Status = reader.GetString(3),
-                    LastHeartbeat = reader.GetDateTime(4),
-                    Version = reader.IsDBNull(5) ? null : reader.GetString(5)
-                });
-            }
-
+            var components = await _healthService.GetComponentHealthAsync(cancellationToken);
             return Ok(components);
         }
         catch (Exception ex)

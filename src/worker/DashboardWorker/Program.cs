@@ -1,8 +1,10 @@
 using Azure.Identity;
-using Azure.Messaging.ServiceBus;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using DashboardWorker.Configuration;
+using DashboardWorker.Data;
 using DashboardWorker.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Azure;
 using OpenTelemetry.Resources;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -12,7 +14,28 @@ AppContext.SetSwitch("Azure.Experimental.EnableActivitySource", true);
 
 // ─── Configuration (Options pattern) ────────────────────────────────────────
 builder.Services.Configure<ServiceBusOptions>(builder.Configuration.GetSection(ServiceBusOptions.SectionName));
-builder.Services.Configure<SqlOptions>(builder.Configuration.GetSection(SqlOptions.SectionName));
+
+// ─── Entity Framework Core (SQL Database with Managed Identity) ─────────────
+var sqlConnectionString = builder.Configuration["Sql:ConnectionString"]
+    ?? Environment.GetEnvironmentVariable("Sql__ConnectionString")
+    ?? throw new InvalidOperationException("Sql:ConnectionString is required. Set in appsettings or env var.");
+
+builder.Services.AddDbContext<DashboardDbContext>(options =>
+    options.UseSqlServer(sqlConnectionString));
+
+// ─── Azure SDK Clients (Service Bus) ────────────────────────────────────────
+var serviceBusNamespace = builder.Configuration["ServiceBus:Namespace"]
+    ?? Environment.GetEnvironmentVariable("ServiceBus__Namespace")
+    ?? throw new InvalidOperationException("ServiceBus:Namespace is required. Set in appsettings or env var.");
+
+builder.Services.AddAzureClients(clientBuilder =>
+{
+    // Use DefaultAzureCredential for all clients (works both locally and in Azure)
+    clientBuilder.UseCredential(new DefaultAzureCredential());
+
+    // Register Service Bus client
+    clientBuilder.AddServiceBusClientWithNamespace(serviceBusNamespace);
+});
 
 // ─── Observability (OpenTelemetry + Azure Monitor) ──────────────────────────
 var appInsightsCs = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
@@ -34,13 +57,6 @@ else
 {
     Console.WriteLine("WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING not set — telemetry disabled");
 }
-
-// ─── Service Bus client (Managed Identity in Azure, DefaultAzureCredential locally) ─
-var sbNamespace = builder.Configuration["ServiceBus:Namespace"]
-    ?? Environment.GetEnvironmentVariable("ServiceBus__Namespace")
-    ?? throw new InvalidOperationException("ServiceBus:Namespace is required. Set in appsettings or env var.");
-
-builder.Services.AddSingleton(new ServiceBusClient(sbNamespace, new DefaultAzureCredential()));
 
 // ─── Hosted service ─────────────────────────────────────────────────────────
 builder.Services.AddHostedService<DashboardWorkerService>();
