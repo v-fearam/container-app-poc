@@ -29,14 +29,18 @@ resource sqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   properties: {
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
-    administrators: {
-      administratorType: 'ActiveDirectory'
-      principalType: 'User' // or 'Group'
-      login: entraAdminLogin
-      sid: entraAdminObjectId
-      tenantId: entraAdminTenantId
-      azureADOnlyAuthentication: false // Allow both Entra ID and SQL auth for now
-    }
+  }
+}
+
+// Entra ID administrator as a child resource (correct way for API version 2024-05-01-preview)
+resource sqlServerAdministrator 'Microsoft.Sql/servers/administrators@2024-05-01-preview' = {
+  parent: sqlServer
+  name: 'ActiveDirectory'
+  properties: {
+    administratorType: 'ActiveDirectory'
+    login: entraAdminLogin
+    sid: entraAdminObjectId
+    tenantId: entraAdminTenantId
   }
 }
 
