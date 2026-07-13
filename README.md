@@ -435,19 +435,40 @@ Si no tenés `sqlcmd`, usá **Azure Portal → SQL Database → Query editor (pr
 
 **⚠️ Paso manual obligatorio**: conectar como Entra ID admin y ejecutar:
 
+```bash
+# Obtener el nombre de la Managed Identity
+WORKER_IDENTITY_NAME=$(az identity list -g $RG \
+  --query "[?contains(name, 'worker')].name" -o tsv)
+
+echo "Worker Identity: $WORKER_IDENTITY_NAME"
+# Output: id-weather-worker-dev
+```
+
+Luego, conectarse al SQL Server como Entra ID admin y ejecutar:
+
 ```sql
--- Reemplazar 'identity-weather-dev' con el nombre de tu User Assigned Managed Identity
-CREATE USER [identity-weather-dev] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [identity-weather-dev];
-ALTER ROLE db_datawriter ADD MEMBER [identity-weather-dev];
+-- Usar el nombre exacto de la Managed Identity (ej: id-weather-worker-dev)
+CREATE USER [id-weather-worker-dev] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [id-weather-worker-dev];
+ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];
 GO
 ```
 
-Para obtener el nombre de la identity:
+**Cómo conectarse como Entra ID admin:**
 
+Opción 1: Azure Portal Query Editor
+1. Portal → SQL Database `dashboard-poc` → Query editor
+2. Login con: "Active Directory authentication"
+3. Pegar el SQL de arriba
+
+Opción 2: sqlcmd con Entra ID
 ```bash
-az deployment group show -g $RG --name main \
-  --query 'properties.outputs.managedIdentityName.value' -o tsv
+SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+
+sqlcmd -S $SQL_SERVER -d dashboard-poc -G \
+  -Q "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER; ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME]; ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
+```
 ```
 
 ### Paso 4: Rebuild imágenes (Backend + WeatherWorker + nuevo DashboardWorker)
