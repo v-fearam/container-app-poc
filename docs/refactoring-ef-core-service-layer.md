@@ -345,8 +345,142 @@ dotnet ef migrations script --project src/backend/WeatherApi --output migration.
 - [Service Layer Pattern](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection)
 - [ASP.NET Core Architecture](https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/)
 
-## Build Status
+## Organización de Servicios e Interfaces
 
-✅ Backend (WeatherApi): Build succeeded  
-✅ DashboardWorker: Build succeeded  
-✅ All projects: 0 warnings, 0 errors
+### Convención .NET Moderna
+
+**Services junto con sus interfaces** (no carpeta separada):
+
+```
+Services/
+├── IEasyAuthService.cs      # Interface
+├── EasyAuthService.cs        # Implementation
+├── IDashboardService.cs      # Interface
+├── DashboardService.cs       # Implementation
+├── IDlqService.cs            # Interface
+├── DlqService.cs             # Implementation
+├── IHealthService.cs         # Interface
+└── HealthService.cs          # Implementation
+```
+
+**Razones:**
+- ✅ Cohesión: Interface + Implementation juntos (misma carpeta)
+- ✅ Alfabético: Visual Studio los ordena naturalmente (IService antes de Service)
+- ✅ Simplicidad: No duplicar estructura de carpetas
+- ✅ Convención actual: Microsoft usa este patrón en sus templates
+
+**❌ Anti-pattern (no hacer):**
+```
+Abstractions/
+├── IEasyAuthService.cs
+├── IDashboardService.cs
+└── ...
+Services/
+├── EasyAuthService.cs
+├── DashboardService.cs
+└── ...
+```
+
+### Dependency Injection Pattern
+
+**Todos los servicios inyectados por interfaz:**
+
+```csharp
+// ❌ Malo - inyectar clase concreta
+public class AuthController
+{
+    private readonly EasyAuthService _service;
+    
+    public AuthController(EasyAuthService service) { ... }
+}
+
+// ✅ Bueno - inyectar interfaz
+public class AuthController
+{
+    private readonly IEasyAuthService _service;
+    
+    public AuthController(IEasyAuthService service) { ... }
+}
+```
+
+**Benefits:**
+1. **Testability:** Mock interfaces fácilmente
+2. **Loose Coupling:** Cambiar implementación sin tocar consumers
+3. **Best Practice:** "Program to an interface, not an implementation"
+4. **Future-proof:** Swap implementations (ej: InMemoryAuthService para tests)
+
+### Registración en Program.cs
+
+```csharp
+// Business Services (Service Layer)
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IDlqService, DlqService>();
+builder.Services.AddScoped<IHealthService, HealthService>();
+builder.Services.AddScoped<IEasyAuthService, EasyAuthService>();
+```
+
+**Lifetime guidelines:**
+- `AddScoped`: Por request (controllers, servicios con DbContext)
+- `AddSingleton`: App lifetime (stateless services, clients Azure)
+- `AddTransient`: Por uso (raramente necesario)
+
+### Interface Guidelines
+
+**Qué poner en la interfaz:**
+- ✅ Métodos públicos usados por consumers
+- ✅ Properties que forman parte del contrato
+- ✅ Métodos async (Task<T> en interfaz)
+
+**Qué NO poner:**
+- ❌ Métodos private helpers
+- ❌ Implementation details
+- ❌ Fields
+
+**Ejemplo:**
+```csharp
+public interface IEasyAuthService
+{
+    // ✅ Contrato público
+    ClientPrincipal? GetClientPrincipal();
+    List<string> GetRoles();
+    bool HasRole(string role);
+}
+
+public class EasyAuthService : IEasyAuthService
+{
+    // ✅ Private helpers OK (no en interfaz)
+    private static JsonSerializerOptions CreateOptions() { ... }
+}
+```
+
+## Servicios Actuales
+
+### Backend Services
+
+| Interfaz | Implementación | Lifetime | Dependencias |
+|----------|----------------|----------|--------------|
+| `IEasyAuthService` | `EasyAuthService` | Scoped | `IHttpContextAccessor` |
+| `IDashboardService` | `DashboardService` | Scoped | `DashboardDbContext`, `ServiceBusAdministrationClient` |
+| `IDlqService` | `DlqService` | Scoped | `ServiceBusClient` |
+| `IHealthService` | `HealthService` | Scoped | `DashboardDbContext` |
+
+### Workers
+
+**DashboardWorker:**
+- `DashboardWorkerService`: BackgroundService (no interfaz necesaria, solo 1 implementación)
+- Uses: `ServiceBusClient`, `IServiceScopeFactory` para DbContext scoped
+
+**WeatherWorker:**
+- `ServiceBusWorker`: BackgroundService (no interfaz necesaria)
+- `MessageDispatcher`: Singleton para routing
+- `DefaultMessageHandler`, `DlqSimulationHandlers.*`: Singletons
+
+**Cuándo NO necesitar interfaz:**
+- ✅ BackgroundService con una sola implementación
+- ✅ Handlers específicos (no swappable)
+- ✅ Static helpers / utilities
+
+**Cuándo SÍ necesitar interfaz:**
+- ✅ Business logic usado por controllers
+- ✅ Servicios que se pueden mockear para tests
+- ✅ Implementaciones swappables (ej: InMemoryService para dev)
