@@ -8,25 +8,17 @@ namespace WeatherApi.Services;
 /// <summary>
 /// DLQ management service implementation
 /// </summary>
-public class DlqService : IDlqService
+public class DlqService(
+    ServiceBusClient serviceBusClient,
+    ILogger<DlqService> logger) : IDlqService
 {
-    private readonly ServiceBusClient _serviceBusClient;
-    private readonly ILogger<DlqService> _logger;
-
-    public DlqService(
-        ServiceBusClient serviceBusClient,
-        ILogger<DlqService> logger)
-    {
-        _serviceBusClient = serviceBusClient;
-        _logger = logger;
-    }
 
     public async Task<IEnumerable<DlqMessageDto>> PeekDlqMessagesAsync(
         string queueName,
         int maxMessages = 10,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", queueName, maxMessages);
+        logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", queueName, maxMessages);
 
         ServiceBusReceiver receiver = CreateDlqReceiver(queueName);
 
@@ -65,7 +57,7 @@ public class DlqService : IDlqService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to requeue message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+                logger.LogError(ex, "Failed to requeue message={MessageId} from queue={QueueName}", request.MessageId, queueName);
             }
         }
 
@@ -88,7 +80,7 @@ public class DlqService : IDlqService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to discard message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+                logger.LogError(ex, "Failed to discard message={MessageId} from queue={QueueName}", request.MessageId, queueName);
             }
         }
 
@@ -100,7 +92,7 @@ public class DlqService : IDlqService
         RequeueDlqMessageRequest request,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+        logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", request.MessageId, queueName);
 
         // 1. Receive (with lock) the message from DLQ
         ServiceBusReceiver dlqReceiver = CreateDlqReceiver(queueName);
@@ -153,7 +145,7 @@ public class DlqService : IDlqService
 
             // 3. Send to original queue
             string originalQueueName = queueName.Contains('/') ? queueName.Split('/')[0] : queueName;
-            await using var sender = _serviceBusClient.CreateSender(originalQueueName);
+            await using var sender = serviceBusClient.CreateSender(originalQueueName);
             await sender.SendMessageAsync(newMessage, cancellationToken);
 
             // 4. Complete (remove) from DLQ
@@ -172,7 +164,7 @@ public class DlqService : IDlqService
         DiscardDlqMessageRequest request,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+        logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", request.MessageId, queueName);
 
         ServiceBusReceiver dlqReceiver = CreateDlqReceiver(queueName);
 
@@ -219,17 +211,18 @@ public class DlqService : IDlqService
         if (queueName.Contains('/'))
         {
             var parts = queueName.Split('/');
-            return _serviceBusClient.CreateReceiver(parts[0], parts[1], new ServiceBusReceiverOptions
+            return serviceBusClient.CreateReceiver(parts[0], parts[1], new ServiceBusReceiverOptions
             {
                 SubQueue = SubQueue.DeadLetter
             });
         }
         else
         {
-            return _serviceBusClient.CreateReceiver(queueName, new ServiceBusReceiverOptions
+            return serviceBusClient.CreateReceiver(queueName, new ServiceBusReceiverOptions
             {
                 SubQueue = SubQueue.DeadLetter
             });
         }
     }
 }
+

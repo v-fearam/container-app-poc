@@ -6,18 +6,10 @@ namespace WeatherApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class DashboardController : ControllerBase
+public class DashboardController(
+    IDashboardService dashboardService,
+    ILogger<DashboardController> logger) : ControllerBase
 {
-    private readonly IDashboardService _dashboardService;
-    private readonly ILogger<DashboardController> _logger;
-
-    public DashboardController(
-        IDashboardService dashboardService,
-        ILogger<DashboardController> logger)
-    {
-        _dashboardService = dashboardService;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Get Dashboard KPI for a specific date and vertical
@@ -33,9 +25,9 @@ public class DashboardController : ControllerBase
         var targetDate = fecha ?? DateTime.UtcNow.Date;
         var targetVertical = vertical ?? "Vertical1";
 
-        _logger.LogInformation("Getting Dashboard KPI for date={Date} vertical={Vertical}", targetDate, targetVertical);
+        logger.LogInformation("Getting Dashboard KPI for date={Date} vertical={Vertical}", targetDate, targetVertical);
 
-        var kpiResults = await _dashboardService.GetKpiAsync(targetDate, targetVertical, cancellationToken);
+        var kpiResults = await dashboardService.GetKpiAsync(targetDate, targetVertical, cancellationToken);
         return Ok(kpiResults);
     }
 }

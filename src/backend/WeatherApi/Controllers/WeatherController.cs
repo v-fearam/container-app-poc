@@ -10,21 +10,14 @@ namespace WeatherApi.Controllers;
 /// </summary>
 [ApiController]
 [Route("weatherforecast")]
-public class WeatherController : ControllerBase
+public class WeatherController(
+    IEasyAuthService easyAuthService,
+    ILogger<WeatherController> logger) : ControllerBase
 {
     private static readonly string[] Summaries =
     [
         "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
     ];
-
-    private readonly IEasyAuthService _easyAuthService;
-    private readonly ILogger<WeatherController> _logger;
-
-    public WeatherController(IEasyAuthService easyAuthService, ILogger<WeatherController> logger)
-    {
-        _easyAuthService = easyAuthService;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Returns a 5-day weather forecast. Works without auth; includes role info if logged in.
@@ -33,7 +26,7 @@ public class WeatherController : ControllerBase
     [ProducesResponseType(typeof(WeatherForecast[]), StatusCodes.Status200OK)]
     public IActionResult Get()
     {
-        var principal = _easyAuthService.GetClientPrincipal();
+        var principal = easyAuthService.GetClientPrincipal();
         var userRole = "";
 
         if (principal != null)
@@ -41,11 +34,11 @@ public class WeatherController : ControllerBase
             var user = principal.UserDetails ?? principal.UserId ?? "anonymous";
             var roleClaim = principal.Claims?.FirstOrDefault(c => c.Typ == "roles");
             userRole = roleClaim?.Val ?? "";
-            _logger.LogInformation("Weather forecast requested by {User} with role {Role}", user, userRole);
+            logger.LogInformation("Weather forecast requested by {User} with role {Role}", user, userRole);
         }
         else
         {
-            _logger.LogInformation("Weather forecast requested without authentication");
+            logger.LogInformation("Weather forecast requested without authentication");
         }
 
         var forecast = Enumerable.Range(1, 5).Select(index =>
@@ -69,8 +62,8 @@ public class WeatherController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public IActionResult GetForUser()
     {
-        var user = _easyAuthService.GetUserEmail() ?? "unknown";
-        _logger.LogInformation("User-role endpoint accessed by {User}", user);
+        var user = easyAuthService.GetUserEmail() ?? "unknown";
+        logger.LogInformation("User-role endpoint accessed by {User}", user);
 
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new WeatherForecast(
@@ -93,11 +86,11 @@ public class WeatherController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public IActionResult GetForAdmin()
     {
-        var principal = _easyAuthService.GetClientPrincipal()!;
+        var principal = easyAuthService.GetClientPrincipal()!;
         var requestedBy = principal.UserDetails ?? principal.UserId ?? "unknown";
         var claimsCount = principal.Claims?.Count ?? 0;
 
-        _logger.LogInformation("Admin endpoint accessed by {User} with {ClaimsCount} claims", requestedBy, claimsCount);
+        logger.LogInformation("Admin endpoint accessed by {User} with {ClaimsCount} claims", requestedBy, claimsCount);
 
         var forecast = Enumerable.Range(1, 5).Select(index =>
             new AdminWeatherForecast(

@@ -9,16 +9,10 @@ namespace WeatherApi.Controllers;
 /// Handles authentication and user identity endpoints.
 /// </summary>
 [ApiController]
-public class AuthController : ControllerBase
+public class AuthController(
+    IEasyAuthService easyAuthService,
+    ILogger<AuthController> logger) : ControllerBase
 {
-    private readonly IEasyAuthService _easyAuthService;
-    private readonly ILogger<AuthController> _logger;
-
-    public AuthController(IEasyAuthService easyAuthService, ILogger<AuthController> logger)
-    {
-        _easyAuthService = easyAuthService;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Returns information about the currently authenticated user.
@@ -27,11 +21,11 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(UserInfo), StatusCodes.Status200OK)]
     public IActionResult GetUserInfo()
     {
-        var principal = _easyAuthService.GetClientPrincipal();
+        var principal = easyAuthService.GetClientPrincipal();
 
         if (principal == null)
         {
-            _logger.LogWarning("Userinfo requested without authentication");
+            logger.LogWarning("Userinfo requested without authentication");
             return Ok(new UserInfo
             {
                 IsAuthenticated = false,
@@ -39,11 +33,11 @@ public class AuthController : ControllerBase
             });
         }
 
-        var email = _easyAuthService.GetUserEmail();
-        var name = _easyAuthService.GetUserName();
-        var roles = _easyAuthService.GetRoles();
+        var email = easyAuthService.GetUserEmail();
+        var name = easyAuthService.GetUserName();
+        var roles = easyAuthService.GetRoles();
 
-        _logger.LogInformation("Userinfo requested by {User} with roles [{Roles}]", email ?? name, string.Join(", ", roles));
+        logger.LogInformation("Userinfo requested by {User} with roles [{Roles}]", email ?? name, string.Join(", ", roles));
 
         return Ok(new UserInfo
         {
@@ -67,9 +61,9 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public IActionResult GetRoles()
     {
-        var roles = _easyAuthService.GetRoles();
-        var user = _easyAuthService.GetUserEmail() ?? "unknown";
-        _logger.LogInformation("Roles endpoint accessed by {User}: [{Roles}]", user, string.Join(", ", roles));
+        var roles = easyAuthService.GetRoles();
+        var user = easyAuthService.GetUserEmail() ?? "unknown";
+        logger.LogInformation("Roles endpoint accessed by {User}: [{Roles}]", user, string.Join(", ", roles));
         return Ok(new { roles });
     }
 }

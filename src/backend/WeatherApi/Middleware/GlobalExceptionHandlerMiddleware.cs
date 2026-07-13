@@ -7,27 +7,17 @@ namespace WeatherApi.Middleware;
 /// Global exception handling middleware that catches all unhandled exceptions
 /// and returns consistent error responses.
 /// </summary>
-public class GlobalExceptionHandlerMiddleware
+public class GlobalExceptionHandlerMiddleware(
+    RequestDelegate next,
+    ILogger<GlobalExceptionHandlerMiddleware> logger,
+    IWebHostEnvironment env)
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<GlobalExceptionHandlerMiddleware> _logger;
-    private readonly IWebHostEnvironment _env;
-
-    public GlobalExceptionHandlerMiddleware(
-        RequestDelegate next,
-        ILogger<GlobalExceptionHandlerMiddleware> logger,
-        IWebHostEnvironment env)
-    {
-        _next = next;
-        _logger = logger;
-        _env = env;
-    }
 
     public async Task InvokeAsync(HttpContext context)
     {
         try
         {
-            await _next(context);
+            await next(context);
         }
         catch (Exception ex)
         {
@@ -38,7 +28,7 @@ public class GlobalExceptionHandlerMiddleware
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         // Log the exception with full details
-        _logger.LogError(exception,
+        logger.LogError(exception,
             "Unhandled exception occurred. Path: {Path}, Method: {Method}, User: {User}",
             context.Request.Path,
             context.Request.Method,
@@ -63,7 +53,7 @@ public class GlobalExceptionHandlerMiddleware
             Error = error,
             Message = message,
             // Only include details in development
-            Details = _env.IsDevelopment() ? exception.ToString() : null,
+            Details = env.IsDevelopment() ? exception.ToString() : null,
             Path = context.Request.Path,
             Timestamp = DateTime.UtcNow
         };
@@ -86,3 +76,4 @@ public class GlobalExceptionHandlerMiddleware
         public DateTime Timestamp { get; init; }
     }
 }
+

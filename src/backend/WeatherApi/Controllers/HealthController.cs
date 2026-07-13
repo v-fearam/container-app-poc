@@ -6,19 +6,10 @@ namespace WeatherApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class HealthController : ControllerBase
+public class HealthController(
+    IHealthService healthService,
+    ILogger<HealthController> logger) : ControllerBase
 {
-    private readonly IHealthService _healthService;
-    private readonly ILogger<HealthController> _logger;
-
-    public HealthController(
-        IHealthService healthService,
-        ILogger<HealthController> logger)
-    {
-        _healthService = healthService;
-        _logger = logger;
-    }
-
     /// <summary>
     /// Get component health status from SQL (worker heartbeats)
     /// </summary>
@@ -26,9 +17,9 @@ public class HealthController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<ComponentHealthDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetComponentHealth(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting component health status");
+        logger.LogInformation("Getting component health status");
 
-        var components = await _healthService.GetComponentHealthAsync(cancellationToken);
+        var components = await healthService.GetComponentHealthAsync(cancellationToken);
         return Ok(components);
     }
 }

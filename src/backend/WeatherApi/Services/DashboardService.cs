@@ -8,31 +8,21 @@ namespace WeatherApi.Services;
 /// <summary>
 /// Dashboard service implementation with business logic for KPI calculations
 /// </summary>
-public class DashboardService : IDashboardService
+public class DashboardService(
+    DashboardDbContext dbContext,
+    ServiceBusAdministrationClient sbAdminClient,
+    ILogger<DashboardService> logger) : IDashboardService
 {
-    private readonly DashboardDbContext _dbContext;
-    private readonly ServiceBusAdministrationClient _sbAdminClient;
-    private readonly ILogger<DashboardService> _logger;
-
-    public DashboardService(
-        DashboardDbContext dbContext,
-        ServiceBusAdministrationClient sbAdminClient,
-        ILogger<DashboardService> logger)
-    {
-        _dbContext = dbContext;
-        _sbAdminClient = sbAdminClient;
-        _logger = logger;
-    }
 
     public async Task<IEnumerable<DashboardKpiResponse>> GetKpiAsync(
         DateTime date,
         string vertical,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting Dashboard KPI for date={Date} vertical={Vertical}", date, vertical);
+        logger.LogInformation("Getting Dashboard KPI for date={Date} vertical={Vertical}", date, vertical);
 
         // 1. Query EF Core for enqueued/processed counters (AsNoTracking for read-only)
-        var sqlCounters = await _dbContext.QueueCounters
+        var sqlCounters = await dbContext.QueueCounters
             .AsNoTracking()
             .Where(q => q.Date == date && q.Vertical == vertical)
             .ToListAsync(cancellationToken);
@@ -62,27 +52,28 @@ public class DashboardService : IDashboardService
         // Get DLQ count for weather-jobs queue
         try
         {
-            var queueProps = await _sbAdminClient.GetQueueRuntimePropertiesAsync("weather-jobs", cancellationToken);
+            var queueProps = await sbAdminClient.GetQueueRuntimePropertiesAsync("weather-jobs", cancellationToken);
             counts["weather-jobs"] = (int)queueProps.Value.DeadLetterMessageCount;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to get DLQ count for queue weather-jobs");
+            logger.LogWarning(ex, "Failed to get DLQ count for queue weather-jobs");
             counts["weather-jobs"] = 0;
         }
 
         // Get DLQ count for nd-dashboard-events subscription
         try
         {
-            var subProps = await _sbAdminClient.GetSubscriptionRuntimePropertiesAsync("nd-dashboard-events", "counter-updater", cancellationToken);
+            var subProps = await sbAdminClient.GetSubscriptionRuntimePropertiesAsync("nd-dashboard-events", "counter-updater", cancellationToken);
             counts["nd-dashboard-events/counter-updater"] = (int)subProps.Value.DeadLetterMessageCount;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to get DLQ count for subscription counter-updater");
+            logger.LogWarning(ex, "Failed to get DLQ count for subscription counter-updater");
             counts["nd-dashboard-events/counter-updater"] = 0;
         }
 
         return counts;
     }
 }
+

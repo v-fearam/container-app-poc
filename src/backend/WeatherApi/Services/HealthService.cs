@@ -7,26 +7,18 @@ namespace WeatherApi.Services;
 /// <summary>
 /// Health service implementation for component monitoring
 /// </summary>
-public class HealthService : IHealthService
+public class HealthService(
+    DashboardDbContext dbContext,
+    ILogger<HealthService> logger) : IHealthService
 {
-    private readonly DashboardDbContext _dbContext;
-    private readonly ILogger<HealthService> _logger;
-
-    public HealthService(
-        DashboardDbContext dbContext,
-        ILogger<HealthService> logger)
-    {
-        _dbContext = dbContext;
-        _logger = logger;
-    }
 
     public async Task<IEnumerable<ComponentHealthDto>> GetComponentHealthAsync(
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Getting component health status");
+        logger.LogInformation("Getting component health status");
 
         // EF Core: AsNoTracking for read-only query with projection
-        var components = await _dbContext.ComponentHealth
+        var components = await dbContext.ComponentHealth
             .AsNoTracking()
             .OrderBy(c => c.ComponentName)
             .ThenByDescending(c => c.LastHeartbeat)
@@ -42,3 +34,4 @@ public class HealthService : IHealthService
         return components;
     }
 }
+

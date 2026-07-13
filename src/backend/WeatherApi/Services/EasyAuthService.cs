@@ -7,15 +7,9 @@ namespace WeatherApi.Services;
 /// <summary>
 /// Service that extracts and parses the Azure Easy Auth X-MS-CLIENT-PRINCIPAL header.
 /// </summary>
-public class EasyAuthService : IEasyAuthService
+public class EasyAuthService(IHttpContextAccessor httpContextAccessor) : IEasyAuthService
 {
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
-    public EasyAuthService(IHttpContextAccessor httpContextAccessor)
-    {
-        _httpContextAccessor = httpContextAccessor;
-    }
 
     /// <summary>
     /// Reads and deserializes the X-MS-CLIENT-PRINCIPAL header from the current request.
@@ -23,7 +17,7 @@ public class EasyAuthService : IEasyAuthService
     /// <returns>The parsed <see cref="ClientPrincipal"/>, or null if the header is missing or invalid.</returns>
     public ClientPrincipal? GetClientPrincipal()
     {
-        var context = _httpContextAccessor.HttpContext;
+        var context = httpContextAccessor.HttpContext;
         if (context == null)
             return null;
 
@@ -85,3 +79,4 @@ public class EasyAuthService : IEasyAuthService
             ?? principal?.UserDetails;
     }
 }
+
