@@ -392,7 +392,42 @@ Si estás empezando desde cero, **primero completá esas secciones**. Esta secci
 - **Backend APIs actualizados** — `/api/dashboard/kpi`, `/api/dlq/*`, `/api/health/components`
 - **Frontend actualizado** — DashboardPage, DlqManagerPage, HealthPage (auto-refresh)
 
-### Paso 1: Deploy infra del Dashboard (SQL + Topic + Subscription)
+### 🚀 Opción 1: Deployment Automatizado (Recomendado)
+
+Usá el script automatizado que orquesta todo el proceso:
+
+```bash
+RG="rg-far-container-app-easyauth"
+cd /mnt/c/repos/container-app-poc
+
+# Ejecutar script automatizado
+bash scripts/deploy-dashboard.sh
+```
+
+**El script ejecuta:**
+1. ✅ Deploy de infra base (ACR, App Insights, Container Apps Env)
+2. ✅ Build de todas las imágenes (backend, frontend, workers)
+3. ✅ Deploy de SQL Database + Service Bus Topic
+4. ⚠️ **PAUSA** → Te pide crear el schema SQL en Azure Portal Query Editor
+5. ⚠️ **PAUSA** → Te pide ejecutar permisos SQL para Managed Identities
+6. ✅ Deploy de todos los Container Apps (con nuevas revisiones)
+7. ✅ Deploy del DashboardWorker
+8. ✅ Muestra URLs del backend y frontend
+
+**Ventajas:**
+- Repeatable — podés borrar todo y volver a deployar en minutos
+- Seguro — cada deployment crea nuevas revisiones (fuerza pull de imágenes frescas)
+- Guiado — te indica exactamente qué hacer en cada paso manual
+
+**Desventajas:**
+- Requiere 2 pasos manuales (schema SQL + permisos)
+- No se pueden automatizar por restricciones de Azure SQL
+
+### 🛠️ Opción 2: Deployment Manual (Paso a Paso)
+
+Si preferís control total sobre cada paso o entender cada componente, seguí este método manual.
+
+#### Paso 1: Deploy infra del Dashboard (SQL + Topic + Subscription)
 
 ```bash
 # Prereqs: ACR, Container App Environment, Service Bus ya deployados con Worker
@@ -416,7 +451,7 @@ az deployment group create \
 
 **Salida esperada:** SQL Server + Database `dashboard-poc`, Topic `nd-dashboard-events`, Subscription `counter-updater`.
 
-### Paso 2: Crear schema SQL
+#### Paso 2: Crear schema SQL
 
 Usar **Azure Portal Query Editor** (no requiere instalar sqlcmd):
 
@@ -427,7 +462,7 @@ Usar **Azure Portal Query Editor** (no requiere instalar sqlcmd):
 
 ✅ Deberías ver las tablas creadas: `WeatherCounters`, `HealthSnapshots`
 
-### Paso 3: Mapear Managed Identities como usuarios SQL (MANUAL)
+#### Paso 3: Mapear Managed Identities como usuarios SQL (MANUAL)
 
 **⚠️ Paso manual obligatorio**: conectar como Entra ID admin y ejecutar:
 
@@ -471,7 +506,7 @@ GO
 > - `id-weather-worker-dev` → DashboardWorker lee mensajes del Service Bus y escribe en SQL
 > - `uami-ca-weather-be-dev` → Backend API lee de SQL para mostrar el dashboard
 
-### Paso 4: Rebuild imágenes (Backend + WeatherWorker + nuevo DashboardWorker)
+#### Paso 4: Rebuild imágenes (Backend + WeatherWorker + nuevo DashboardWorker)
 
 **⚠️ Importante:** Si venís de hacer el deploy inicial, las imágenes del backend y WeatherWorker ya existen en el ACR pero están desactualizadas (no tienen el código del Dashboard POC). Necesitás **rebuild** de las 3 imágenes:
 
@@ -504,15 +539,14 @@ az acr build --registry $ACR_NAME \
   src/frontend
 ```
 
-### Paso 5: Redeploy Backend + Frontend + WeatherWorker, y deploy DashboardWorker
+#### Paso 5: Redeploy Backend + Frontend + WeatherWorker, y deploy DashboardWorker
 
-**⚠️ Importante:** Antes de deployar el DashboardWorker, necesitás re-deployar el main.bicep para que los nuevos outputs (`containerAppEnvironmentId`, `workerIdentityId`) estén disponibles:
+**⚠️ Importante:** Este deployment crea **nuevas revisiones** con sufijos únicos basados en timestamp. Container Apps automáticamente descarga las imágenes frescas del ACR:
 
 ```bash
-# Re-deploy main.bicep (actualiza outputs, no cambia recursos existentes)
+# Re-deploy main.bicep con deployContainerApps=true
 # IMPORTANTE: Usar el MISMO sqlServerName que ya existe (no generar uno nuevo con $RANDOM)
-SQL_SERVER_NAME=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
+SQL_SERVER_NAME=$(az sql server list -g $RG --query "[0].name" -o tsv)
 
 az deployment group create \
   --resource-group $RG \
@@ -521,27 +555,29 @@ az deployment group create \
     sqlServerName="$SQL_SERVER_NAME" \
     sqlAdminObjectId="$USER_OID" \
     sqlAdminLogin="$USER_UPN" \
-    sqlLocation="centralus"
+    sqlLocation="centralus" \
+    deployContainerApps=true
 ```
 
-Ahora que las 4 imágenes están actualizadas en el ACR, redeploy los Container Apps existentes y crea el nuevo DashboardWorker:
+**Qué hace este comando:**
+- ✅ Crea **nuevas revisiones** para backend y frontend con sufijos únicos (ej: `t6zlg35jowp76w`)
+- ✅ Fuerza Container Apps a descargar las imágenes frescas del ACR (no usa cache)
+- ✅ Configura SQL, Service Bus y Managed Identity en el backend
+- ✅ No toca recursos existentes (SQL, Service Bus, ACR)
+
+**Salida esperada:** Nuevas revisiones `ca-weather-be-dev--tXXXX` y `ca-weather-fe-dev--tXXXX` activas.
+
+Ahora deployá el DashboardWorker Container App:
 
 ```bash
-# Redeploy Backend (pull nueva imagen con controllers Dashboard/DlqManager/Health)
-az containerapp update -n ca-weather-be-dev -g $RG
-
-# Redeploy Frontend (pull nueva imagen con páginas Dashboard/DlqManager/Health)
-az containerapp update -n ca-weather-fe-dev -g $RG
-
-# Redeploy WeatherWorker (pull nueva imagen con publicación de eventos)
-az containerapp update -n ca-weather-worker-dev -g $RG
-
 # Obtener SQL connection string
-SQL_SERVER=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+SQL_SERVER=$(az sql server list -g $RG --query "[0].fullyQualifiedDomainName" -o tsv)
 SQL_DB=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
 SQL_CONN="Server=${SQL_SERVER};Database=${SQL_DB};Authentication=Active Directory Default"
+
+ACR_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.acrName.value' -o tsv)
 
 # Deploy DashboardWorker Container App (NUEVO - primera vez)
 az deployment group create \
@@ -559,7 +595,7 @@ az deployment group create \
     appInsightsConnectionString="$(az deployment group show -g $RG --name main --query 'properties.outputs.appInsightsConnectionString.value' -o tsv)"
 ```
 
-### Paso 6: Test — Encolar mensajes y verificar eventos
+#### Paso 6: Test — Encolar mensajes y verificar eventos
 
 ```bash
 SB_NS=$(az deployment group show -g $RG --name main \
