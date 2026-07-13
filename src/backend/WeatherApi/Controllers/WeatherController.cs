@@ -17,10 +17,10 @@ public class WeatherController : ControllerBase
         "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
     ];
 
-    private readonly EasyAuthService _easyAuthService;
+    private readonly IEasyAuthService _easyAuthService;
     private readonly ILogger<WeatherController> _logger;
 
-    public WeatherController(EasyAuthService easyAuthService, ILogger<WeatherController> logger)
+    public WeatherController(IEasyAuthService easyAuthService, ILogger<WeatherController> logger)
     {
         _easyAuthService = easyAuthService;
         _logger = logger;

@@ -11,10 +11,10 @@ namespace WeatherApi.Controllers;
 [ApiController]
 public class AuthController : ControllerBase
 {
-    private readonly EasyAuthService _easyAuthService;
+    private readonly IEasyAuthService _easyAuthService;
     private readonly ILogger<AuthController> _logger;
 
-    public AuthController(EasyAuthService easyAuthService, ILogger<AuthController> logger)
+    public AuthController(IEasyAuthService easyAuthService, ILogger<AuthController> logger)
     {
         _easyAuthService = easyAuthService;
         _logger = logger;

@@ -15,10 +15,10 @@ public class RequireAuthAttribute : TypeFilterAttribute
 
     private class RequireAuthFilter : IActionFilter
     {
-        private readonly EasyAuthService _easyAuthService;
+        private readonly IEasyAuthService _easyAuthService;
         private readonly ILogger<RequireAuthFilter> _logger;
 
-        public RequireAuthFilter(EasyAuthService easyAuthService, ILogger<RequireAuthFilter> logger)
+        public RequireAuthFilter(IEasyAuthService easyAuthService, ILogger<RequireAuthFilter> logger)
         {
             _easyAuthService = easyAuthService;
             _logger = logger;

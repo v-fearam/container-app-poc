@@ -8,12 +8,12 @@ namespace WeatherApi.Extensions;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers EasyAuthService and IHttpContextAccessor for Easy Auth header parsing.
+    /// Registers IEasyAuthService and IHttpContextAccessor for Easy Auth header parsing.
     /// </summary>
     public static IServiceCollection AddEasyAuth(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
-        services.AddScoped<EasyAuthService>();
+        services.AddScoped<IEasyAuthService, EasyAuthService>();
         return services;
     }
 

@@ -19,10 +19,10 @@ public class RequireRoleAttribute : TypeFilterAttribute
     private class RequireRoleFilter : IActionFilter
     {
         private readonly string _role;
-        private readonly EasyAuthService _easyAuthService;
+        private readonly IEasyAuthService _easyAuthService;
         private readonly ILogger<RequireRoleFilter> _logger;
 
-        public RequireRoleFilter(string role, EasyAuthService easyAuthService, ILogger<RequireRoleFilter> logger)
+        public RequireRoleFilter(string role, IEasyAuthService easyAuthService, ILogger<RequireRoleFilter> logger)
         {
             _role = role;
             _easyAuthService = easyAuthService;

@@ -7,7 +7,7 @@ namespace WeatherApi.Services;
 /// <summary>
 /// Service that extracts and parses the Azure Easy Auth X-MS-CLIENT-PRINCIPAL header.
 /// </summary>
-public class EasyAuthService
+public class EasyAuthService : IEasyAuthService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
