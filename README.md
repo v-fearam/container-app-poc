@@ -408,6 +408,9 @@ az deployment group create \
     sqlServerName="sql-weather-dash-$RANDOM" \
     sqlAdminObjectId="$USER_OID" \
     sqlAdminLogin="$USER_UPN"
+
+# Si East US 2 no permite crear SQL Servers, usa otra región:
+# --parameters sqlLocation="eastus" \
 ```
 
 **Salida esperada:** SQL Server + Database `dashboard-db`, Topic `nd-dashboard-events`, Subscription `counter-updater`.

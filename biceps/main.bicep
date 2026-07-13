@@ -60,6 +60,9 @@ param workerIdentityName string = 'id-${workloadName}-worker-${environmentShortN
 @description('Deploy Dashboard infrastructure (SQL Database)')
 param deployDashboard bool = false
 
+@description('SQL Server location (defaults to resource group location if not specified)')
+param sqlLocation string = location
+
 @description('SQL Server name (required if deployDashboard=true)')
 param sqlServerName string = ''
 
@@ -200,7 +203,7 @@ module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && depl
 module sqlDatabase 'modules/sql-database.bicep' = if (deployDashboard) {
   name: 'sql-database-deployment'
   params: {
-    location: location
+    location: sqlLocation
     serverName: sqlServerName
     databaseName: 'dashboard-poc'
     entraAdminObjectId: sqlAdminObjectId
