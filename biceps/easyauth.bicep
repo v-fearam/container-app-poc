@@ -124,6 +124,9 @@ resource frontendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01'
 
 // ============================================================================
 // Backend Auth Configuration
+// Uses azureActiveDirectory (NOT customOpenIdConnectProviders) because:
+// - azureActiveDirectory validates Bearer tokens in API calls → injects X-MS-CLIENT-PRINCIPAL
+// - customOpenIdConnectProviders only handles login redirect flow, NOT token validation
 // ============================================================================
 resource backendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
   parent: backendApp
@@ -136,20 +139,16 @@ resource backendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' 
       unauthenticatedClientAction: 'AllowAnonymous'
     }
     identityProviders: {
-      customOpenIdConnectProviders: {
-        '${providerName}': {
-          registration: {
-            clientId: backendClientId
-            clientCredential: {
-              clientSecretSettingName: 'microsoft-provider-authentication-secret'
-            }
-            openIdConnectConfiguration: {
-              wellKnownOpenIdConfiguration: oidcWellKnownUrl
-            }
-          }
-          login: {
-            scopes: ['openid', 'profile', 'email']
-          }
+      azureActiveDirectory: {
+        enabled: true
+        isAutoProvisioned: false
+        registration: {
+          clientId: backendClientId
+          clientSecretSettingName: 'microsoft-provider-authentication-secret'
+          openIdIssuer: '${split(oidcWellKnownUrl, '/.well-known')[0]}'
+        }
+        validation: {
+          allowedAudiences: [backendClientId]
         }
       }
     }
