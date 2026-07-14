@@ -48,8 +48,8 @@ export function DlqManagerPage() {
     try {
       await post('/api/dlq/requeue', {
         queueName,
-        messageIds: [messageId],
-        editedBody,
+        messageId,
+        editedBodyJson: editedBody,
       });
       setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
       setEditingBody(null);
@@ -69,7 +69,7 @@ export function DlqManagerPage() {
     try {
       await post('/api/dlq/discard', {
         queueName,
-        messageIds: [messageId],
+        messageId,
       });
       setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
       setError(null);
