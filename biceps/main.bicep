@@ -72,6 +72,10 @@ param sqlAdminObjectId string = ''
 @description('Entra ID admin login (UPN) for SQL Server (required if deployDashboard=true)')
 param sqlAdminLogin string = ''
 
+@description('Easy Auth client secret for backend (preserved across Container App redeployments)')
+@secure()
+param backendAuthSecret string = ''
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -130,6 +134,8 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     memory: '1.0Gi'
     sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default' : ''
     serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceFqdn : ''
+    serviceBusNamespaceId: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceId : ''
+    authClientSecret: backendAuthSecret
   }
 }
 

@@ -18,8 +18,9 @@ public class DlqManagerController(
 
     /// <summary>
     /// Peek DLQ messages for a queue or subscription
+    /// Supports topic/subscription format: nd-dashboard-events/counter-updater
     /// </summary>
-    [HttpGet("{queueName}")]
+    [HttpGet("{**queueName}")]
     [ProducesResponseType(typeof(IEnumerable<DlqMessageDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> PeekDlqMessages(
         string queueName,

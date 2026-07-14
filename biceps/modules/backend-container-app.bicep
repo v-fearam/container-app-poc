@@ -32,6 +32,13 @@ param sqlConnectionString string = ''
 @description('Optional Service Bus namespace FQDN for Dashboard features')
 param serviceBusNamespaceFqdn string = ''
 
+@description('Optional Easy Auth client secret (preserved across redeployments)')
+@secure()
+param authClientSecret string = ''
+
+@description('Optional Service Bus namespace resource ID for role assignment')
+param serviceBusNamespaceId string = ''
+
 @description('Target port for the container')
 param targetPort int = 8080
 
@@ -67,6 +74,21 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: userAssignedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
+}
+
+// Service Bus Data Owner role for DLQ management (peek, requeue, discard) and admin queries
+resource serviceBusOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(serviceBusNamespaceId)) {
+  name: guid(userAssignedIdentity.id, serviceBusNamespaceId, 'ServiceBusDataOwner')
+  scope: serviceBusNamespace
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '090c5cfd-751d-490a-894a-3ce6f1109419') // Azure Service Bus Data Owner
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = if (!empty(serviceBusNamespaceId)) {
+  name: last(split(serviceBusNamespaceId, '/'))
 }
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -113,6 +135,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           {
             name: 'sql-connection-string'
             value: sqlConnectionString
+          }
+        ] : [],
+        !empty(authClientSecret) ? [
+          {
+            name: 'microsoft-provider-authentication-secret'
+            value: authClientSecret
           }
         ] : []
       )
