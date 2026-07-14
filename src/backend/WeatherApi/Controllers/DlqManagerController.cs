@@ -25,12 +25,22 @@ public class DlqManagerController(
     public async Task<IActionResult> PeekDlqMessages(
         string queueName,
         [FromQuery] int maxCount = 100,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", queueName, maxCount);
+        logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount} from={From} to={To}",
+            queueName, maxCount, fromDate, toDate);
 
         var dlqService = GetDlqServiceOrThrow();
         var messages = await dlqService.PeekDlqMessagesAsync(queueName, maxCount, cancellationToken);
+
+        // Filter by date range if provided
+        if (fromDate.HasValue)
+            messages = messages.Where(m => m.EnqueuedTimeUtc >= fromDate.Value.Date);
+        if (toDate.HasValue)
+            messages = messages.Where(m => m.EnqueuedTimeUtc < toDate.Value.Date.AddDays(1));
+
         return Ok(messages);
     }
 

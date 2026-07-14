@@ -14,6 +14,8 @@ interface DlqMessage {
 
 const PAGE_SIZE = 20;
 
+const todayStr = () => new Date().toISOString().split('T')[0];
+
 export function DlqManagerPage() {
   const params = useParams();
   const queueName = params['*'];
@@ -30,20 +32,28 @@ export function DlqManagerPage() {
   const [editBody, setEditBody] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState(todayStr());
 
   const fetchMessages = useCallback(async () => {
     if (!queueName) return;
     try {
       setLoading(true);
-      const result = await get<DlqMessage[]>(`/api/dlq/${queueName}`);
+      const params = new URLSearchParams();
+      if (filterDate) {
+        params.set('fromDate', filterDate);
+        params.set('toDate', filterDate);
+      }
+      const qs = params.toString();
+      const result = await get<DlqMessage[]>(`/api/dlq/${queueName}${qs ? `?${qs}` : ''}`);
       setMessages(result);
+      setPage(0);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setLoading(false);
     }
-  }, [queueName, get]);
+  }, [queueName, filterDate, get]);
 
   useEffect(() => {
     fetchMessages();
@@ -144,13 +154,39 @@ export function DlqManagerPage() {
               <span className="ml-4 font-semibold">{messages.length} mensaje{messages.length !== 1 ? 's' : ''}</span>
             </p>
           </div>
-          <button
-            onClick={fetchMessages}
-            disabled={loading}
-            className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Cargando...' : '↻ Refrescar'}
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label htmlFor="filterDate" className="text-sm text-slate-600 font-medium">Fecha:</label>
+              <input
+                id="filterDate"
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {filterDate !== todayStr() && (
+                <button
+                  onClick={() => setFilterDate(todayStr())}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Hoy
+                </button>
+              )}
+              <button
+                onClick={() => setFilterDate('')}
+                className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+              >
+                Todas
+              </button>
+            </div>
+            <button
+              onClick={fetchMessages}
+              disabled={loading}
+              className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Cargando...' : '↻ Refrescar'}
+            </button>
+          </div>
         </div>
       </div>
 
