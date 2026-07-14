@@ -13,19 +13,25 @@ interface QueueCounter {
   dlqPath?: string;
 }
 
+const todayStr = () => new Date().toISOString().split('T')[0];
+
 export function DashboardPage() {
   const { get } = useApi();
   const [data, setData] = useState<QueueCounter[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [filterDate, setFilterDate] = useState(todayStr());
 
   useEffect(() => {
     let isMounted = true;
 
     const fetchData = async () => {
       try {
-        const result = await get<QueueCounter[]>('/api/dashboard/kpi');
+        const params = new URLSearchParams();
+        if (filterDate) params.set('fecha', filterDate);
+        const qs = params.toString();
+        const result = await get<QueueCounter[]>(`/api/dashboard/kpi${qs ? `?${qs}` : ''}`);
         if (isMounted) {
           setData(result);
           setLastRefresh(new Date());
@@ -50,7 +56,7 @@ export function DashboardPage() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [get]);
+  }, [get, filterDate]);
 
   if (loading) {
     return (
@@ -143,18 +149,38 @@ export function DashboardPage() {
                 Monitoreo de mensajería en tiempo real
               </p>
             </div>
-            <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-lg shadow-sm border border-slate-200">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-lg shadow-sm border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                  </span>
+                  <span className="text-sm font-medium text-slate-700">En vivo</span>
+                </div>
+                <span className="text-slate-300">·</span>
+                <span className="text-sm text-slate-600">
+                  Actualiza cada 5s
                 </span>
-                <span className="text-sm font-medium text-slate-700">En vivo</span>
               </div>
-              <span className="text-slate-300">·</span>
-              <span className="text-sm text-slate-600">
-                Actualiza cada 5s
-              </span>
+              <div className="flex items-center gap-2">
+                <label htmlFor="dashDate" className="text-sm text-slate-600 font-medium">Fecha:</label>
+                <input
+                  id="dashDate"
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {filterDate !== todayStr() && (
+                  <button
+                    onClick={() => setFilterDate(todayStr())}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="text-sm text-slate-500">

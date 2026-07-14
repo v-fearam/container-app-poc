@@ -752,9 +752,9 @@ requests
 | where cloud_RoleName == "WeatherApi"
 | summarize 
     Total = count(),
-    Exitosos = countif(success),
-    Fallidos = countif(not(success)),
-    TasaError = round(100.0 * countif(not(success)) / count(), 2),
+    Exitosos = countif(success == true),
+    Fallidos = countif(success == false),
+    TasaError = round(100.0 * countif(success == false) / count(), 2),
     DuracionP95 = percentile(duration, 95)
   by name
 | order by Total desc
@@ -919,9 +919,9 @@ requests
 | where url endswith "/health/ready" or url endswith "/health/live"
 | summarize 
     Total = count(),
-    Healthy = countif(success),
-    Unhealthy = countif(not(success)),
-    Disponibilidad = round(100.0 * countif(success) / count(), 2)
+    Healthy = countif(success == true),
+    Unhealthy = countif(success == false),
+    Disponibilidad = round(100.0 * countif(success == true) / count(), 2)
   by cloud_RoleName, name
 | order by Disponibilidad asc
 ```
