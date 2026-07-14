@@ -7,7 +7,7 @@ namespace WeatherApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 public class DashboardController(
-    IDashboardService dashboardService,
+    IServiceProvider serviceProvider,
     ILogger<DashboardController> logger) : ControllerBase
 {
 
@@ -22,6 +22,10 @@ public class DashboardController(
         [FromQuery] string? vertical = null,
         CancellationToken cancellationToken = default)
     {
+        var dashboardService = serviceProvider.GetService<IDashboardService>();
+        if (dashboardService is null)
+            return StatusCode(503, new { error = "ServiceUnavailable", message = "Dashboard service not configured (SQL_CONNECTION_STRING or ServiceBus:Namespace missing)" });
+
         var targetDate = fecha ?? DateTime.UtcNow.Date;
         var targetVertical = vertical ?? "Vertical1";
 

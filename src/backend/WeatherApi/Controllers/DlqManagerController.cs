@@ -7,9 +7,14 @@ namespace WeatherApi.Controllers;
 [ApiController]
 [Route("api/dlq")]
 public class DlqManagerController(
-    IDlqService dlqService,
+    IServiceProvider serviceProvider,
     ILogger<DlqManagerController> logger) : ControllerBase
 {
+    private IDlqService GetDlqServiceOrThrow()
+    {
+        return serviceProvider.GetService<IDlqService>()
+            ?? throw new InvalidOperationException("DLQ service not configured (ServiceBus:Namespace missing)");
+    }
 
     /// <summary>
     /// Peek DLQ messages for a queue or subscription
@@ -23,6 +28,7 @@ public class DlqManagerController(
     {
         logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", queueName, maxCount);
 
+        var dlqService = GetDlqServiceOrThrow();
         var messages = await dlqService.PeekDlqMessagesAsync(queueName, maxCount, cancellationToken);
         return Ok(messages);
     }
@@ -38,6 +44,7 @@ public class DlqManagerController(
     {
         logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", request.MessageId, request.QueueName);
 
+        var dlqService = GetDlqServiceOrThrow();
         var requeuedCount = await dlqService.RequeueMessagesAsync(
             request.QueueName,
             new[] { request },
@@ -62,6 +69,7 @@ public class DlqManagerController(
     {
         logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", request.MessageId, request.QueueName);
 
+        var dlqService = GetDlqServiceOrThrow();
         var discardedCount = await dlqService.DiscardMessagesAsync(
             request.QueueName,
             new[] { request },

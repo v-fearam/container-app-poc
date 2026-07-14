@@ -5,10 +5,11 @@ using WeatherApi.Models;
 namespace WeatherApi.Services;
 
 /// <summary>
-/// Health service implementation for component monitoring
+/// Health service implementation for component monitoring.
+/// DashboardDbContext is optional — if SQL is not configured, returns empty list.
 /// </summary>
 public class HealthService(
-    DashboardDbContext dbContext,
+    IServiceProvider serviceProvider,
     ILogger<HealthService> logger) : IHealthService
 {
 
@@ -16,6 +17,13 @@ public class HealthService(
         CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Getting component health status");
+
+        var dbContext = serviceProvider.GetService<DashboardDbContext>();
+        if (dbContext is null)
+        {
+            logger.LogWarning("DashboardDbContext not available (SQL_CONNECTION_STRING not configured)");
+            return [];
+        }
 
         // EF Core: AsNoTracking for read-only query with projection
         var components = await dbContext.ComponentHealth

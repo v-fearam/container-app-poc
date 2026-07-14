@@ -89,6 +89,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: targetPort
         transport: 'http'
         allowInsecure: false
+        corsPolicy: {
+          allowedOrigins: ['https://*']
+          allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+          allowedHeaders: ['*']
+          allowCredentials: true
+        }
       }
       registries: [
         {
