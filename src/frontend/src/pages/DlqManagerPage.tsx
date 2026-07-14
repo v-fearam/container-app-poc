@@ -13,7 +13,8 @@ interface DlqMessage {
 }
 
 export function DlqManagerPage() {
-  const { queueName } = useParams<{ queueName: string }>();
+  const params = useParams();
+  const queueName = params['*']; // catch-all route captures path with slashes
   const navigate = useNavigate();
   const { get, post } = useApi();
   
@@ -28,7 +29,7 @@ export function DlqManagerPage() {
 
     const fetchMessages = async () => {
       try {
-        const result = await get<DlqMessage[]>(`/api/dlq/${encodeURIComponent(queueName)}`);
+        const result = await get<DlqMessage[]>(`/api/dlq/${queueName}`);
         setMessages(result);
         setError(null);
       } catch (err) {

@@ -13,7 +13,7 @@ function App() {
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="dashboard/dlq/:queueName" element={<DlqManagerPage />} />
+        <Route path="dashboard/dlq/*" element={<DlqManagerPage />} />
         <Route path="health" element={<HealthPage />} />
         <Route
           path="admin"

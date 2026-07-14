@@ -10,6 +10,7 @@ interface QueueCounter {
   enqueuedCount: number;
   processedCount: number;
   deadLetterCount: number;
+  dlqPath?: string;
 }
 
 export function DashboardPage() {
@@ -99,6 +100,7 @@ export function DashboardPage() {
       vertical: string;
       queueName: string;
       dlqCount: number;
+      dlqPath: string;
       processes: { processType: string; enqueuedCount: number; processedCount: number; date: string }[];
     }> = {};
 
@@ -109,6 +111,7 @@ export function DashboardPage() {
           vertical: item.vertical,
           queueName: item.queueName,
           dlqCount: item.deadLetterCount,
+          dlqPath: item.dlqPath || item.queueName,
           processes: [],
         };
       }
@@ -230,9 +233,9 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              <Link to={`/dashboard/dlq/${encodeURIComponent('nd-dashboard-events/counter-updater')}`} className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:from-red-600 hover:to-red-700 transition-all duration-200">
+              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-red-100 text-sm font-medium uppercase tracking-wide">DLQ (Cola)</div>
+                  <div className="text-red-100 text-sm font-medium uppercase tracking-wide">DLQ (Total)</div>
                   <svg className="w-8 h-8 text-red-200/50" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
@@ -240,8 +243,8 @@ export function DashboardPage() {
                 <div className="text-4xl font-bold">
                   {totalDlq.toLocaleString()}
                 </div>
-                <p className="text-red-200 text-xs mt-2">Click para gestionar →</p>
-              </Link>
+                <p className="text-red-200 text-xs mt-2">Ver detalle por cola abajo ↓</p>
+              </div>
             </div>
 
             {/* Queue Groups */}
@@ -265,7 +268,7 @@ export function DashboardPage() {
                         <p className="text-3xl font-bold text-green-600">{queue.processes.reduce((s, p) => s + p.processedCount, 0).toLocaleString()}</p>
                       </div>
                       {queue.dlqCount > 0 && (
-                        <Link to={`/dashboard/dlq/${encodeURIComponent('nd-dashboard-events/counter-updater')}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity">
+                        <Link to={`/dashboard/dlq/${queue.dlqPath}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity">
                           <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ</p>
                           <p className="text-3xl font-bold text-red-600">{queue.dlqCount.toLocaleString()}</p>
                         </Link>

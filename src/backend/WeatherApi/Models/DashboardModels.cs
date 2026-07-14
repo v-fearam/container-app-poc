@@ -12,6 +12,10 @@ public record DashboardKpiResponse
     public int EnqueuedCount { get; init; }
     public int ProcessedCount { get; init; }
     public int DeadLetterCount { get; init; }
+    /// <summary>
+    /// The Service Bus path to use for DLQ operations (queue name or topic/subscription)
+    /// </summary>
+    public string? DlqPath { get; init; }
 }
 
 /// <summary>

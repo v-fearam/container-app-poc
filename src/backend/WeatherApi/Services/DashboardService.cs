@@ -39,21 +39,24 @@ public class DashboardService(
             Date = q.Date,
             EnqueuedCount = q.EnqueuedCount,
             ProcessedCount = q.ProcessedCount,
-            DeadLetterCount = dlqCounts.GetValueOrDefault(q.QueueName, 0)
+            DeadLetterCount = dlqCounts.TryGetValue(q.QueueName, out var dlq) ? dlq.Count : 0,
+            DlqPath = dlqCounts.TryGetValue(q.QueueName, out var dlqPath) ? dlqPath.Path : null
         }).ToList();
 
         return kpiResults;
     }
 
-    private async Task<Dictionary<string, int>> GetDlqCountsAsync(CancellationToken cancellationToken)
+    private async Task<Dictionary<string, (int Count, string Path)>> GetDlqCountsAsync(CancellationToken cancellationToken)
     {
-        var counts = new Dictionary<string, int>();
+        var counts = new Dictionary<string, (int Count, string Path)>();
 
         // Get DLQ count for weather-jobs queue (if it exists as a standalone queue)
         try
         {
             var queueProps = await sbAdminClient.GetQueueRuntimePropertiesAsync("weather-jobs", cancellationToken);
-            counts["weather-jobs"] = (int)queueProps.Value.DeadLetterMessageCount;
+            var dlqCount = (int)queueProps.Value.DeadLetterMessageCount;
+            if (dlqCount > 0)
+                counts["weather-jobs"] = (dlqCount, "weather-jobs");
         }
         catch (Exception ex)
         {
@@ -66,12 +69,13 @@ public class DashboardService(
             var subProps = await sbAdminClient.GetSubscriptionRuntimePropertiesAsync("nd-dashboard-events", "counter-updater", cancellationToken);
             var subDlqCount = (int)subProps.Value.DeadLetterMessageCount;
             
-            // Map subscription DLQ to the queue name used in SQL counters
-            // If weather-jobs wasn't found as a queue, use the subscription count
-            if (!counts.ContainsKey("weather-jobs"))
-                counts["weather-jobs"] = subDlqCount;
-            else
-                counts["weather-jobs"] += subDlqCount;
+            if (subDlqCount > 0)
+            {
+                if (counts.ContainsKey("weather-jobs"))
+                    counts["weather-jobs"] = (counts["weather-jobs"].Count + subDlqCount, "nd-dashboard-events/counter-updater");
+                else
+                    counts["weather-jobs"] = (subDlqCount, "nd-dashboard-events/counter-updater");
+            }
         }
         catch (Exception ex)
         {
