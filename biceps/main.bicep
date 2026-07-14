@@ -130,7 +130,6 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     memory: '1.0Gi'
     sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default' : ''
     serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceFqdn : ''
-    managedIdentityClientId: '' // Backend uses its own User Assigned Managed Identity (created in backend-container-app.bicep)
   }
 }
 
@@ -211,6 +210,7 @@ module sqlDatabase 'modules/sql-database.bicep' = if (deployDashboard) {
     databaseName: 'dashboard-poc'
     entraAdminObjectId: sqlAdminObjectId
     entraAdminLogin: sqlAdminLogin
+    sqlAdminPassword: 'P@ssw0rd-${uniqueString(resourceGroup().id, sqlServerName)}'
     tags: {
       workload: workloadName
       environment: environmentShortName
