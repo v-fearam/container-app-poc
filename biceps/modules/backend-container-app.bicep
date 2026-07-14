@@ -32,9 +32,6 @@ param sqlConnectionString string = ''
 @description('Optional Service Bus namespace FQDN for Dashboard features')
 param serviceBusNamespaceFqdn string = ''
 
-@description('Optional Managed Identity Client ID for Service Bus and SQL auth')
-param managedIdentityClientId string = ''
-
 @description('Target port for the container')
 param targetPort int = 8080
 
