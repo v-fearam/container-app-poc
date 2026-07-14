@@ -105,7 +105,7 @@ resource frontendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01'
             }
           }
           login: {
-            scopes: ['openid', 'profile', 'email', 'api://${backendClientId}/.default']
+            scopes: ['openid', 'profile', 'email', 'offline_access', 'api://${backendClientId}/.default']
           }
         }
       }

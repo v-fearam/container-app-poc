@@ -76,6 +76,14 @@ param sqlAdminLogin string = ''
 @secure()
 param backendAuthSecret string = ''
 
+@description('Easy Auth client secret for frontend (preserved across Container App redeployments)')
+@secure()
+param frontendAuthSecret string = ''
+
+@description('Token Store SAS URL for frontend (preserved across Container App redeployments)')
+@secure()
+param frontendTokenStoreSas string = ''
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -155,6 +163,8 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
     maxReplicas: 5
     cpu: '0.25'
     memory: '0.5Gi'
+    authClientSecret: frontendAuthSecret
+    tokenStoreSasUrl: frontendTokenStoreSas
   }
 }
 

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { runtimeConfig } from '../runtimeConfig';
 
@@ -16,8 +16,48 @@ export class ApiError extends Error {
 
 const baseUrl = (runtimeConfig.apiUrl || import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
+/**
+ * Attempts to refresh the Easy Auth session token via /.auth/refresh.
+ * Returns true if refresh succeeded, false otherwise.
+ */
+async function refreshEasyAuthToken(): Promise<boolean> {
+  try {
+    const res = await fetch('/.auth/refresh');
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function useApi() {
-  const { accessToken } = useAuth();
+  const { accessToken, refreshAuthInfo } = useAuth();
+  const isRefreshing = useRef(false);
+
+  const fetchWithRetry = useCallback(
+    async (url: string, options: RequestInit): Promise<Response> => {
+      const res = await fetch(url, options);
+
+      // If 401 and we have a token, try refreshing once
+      if (res.status === 401 && accessToken && !isRefreshing.current) {
+        isRefreshing.current = true;
+        const refreshed = await refreshEasyAuthToken();
+        isRefreshing.current = false;
+
+        if (refreshed) {
+          await refreshAuthInfo();
+          window.location.reload();
+          return res;
+        } else {
+          // Refresh failed — redirect to login
+          window.location.href = '/.auth/login/entraid';
+          return res;
+        }
+      }
+
+      return res;
+    },
+    [accessToken, refreshAuthInfo],
+  );
 
   const get = useCallback(
     async <T>(path: string): Promise<T> => {
@@ -30,7 +70,7 @@ export function useApi() {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
-      const res = await fetch(`${baseUrl}${path}`, {
+      const res = await fetchWithRetry(`${baseUrl}${path}`, {
         headers,
         credentials: 'include',
       });
@@ -41,7 +81,7 @@ export function useApi() {
 
       return res.json() as Promise<T>;
     },
-    [accessToken],
+    [accessToken, fetchWithRetry],
   );
 
   const post = useCallback(
@@ -57,7 +97,7 @@ export function useApi() {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
-      const res = await fetch(`${baseUrl}${path}`, {
+      const res = await fetchWithRetry(`${baseUrl}${path}`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -70,7 +110,7 @@ export function useApi() {
 
       return res.json() as Promise<T>;
     },
-    [accessToken],
+    [accessToken, fetchWithRetry],
   );
 
   return { get, post, baseUrl };

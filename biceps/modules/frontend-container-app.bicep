@@ -40,6 +40,14 @@ param memory string = '0.5Gi'
 @description('Timestamp for unique revision suffix')
 param timestamp string = utcNow()
 
+@description('Optional Easy Auth client secret (preserved across redeployments)')
+@secure()
+param authClientSecret string = ''
+
+@description('Optional Token Store SAS URL (preserved across redeployments)')
+@secure()
+param tokenStoreSasUrl string = ''
+
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = {
   name: acrName
 }
@@ -86,12 +94,26 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           identity: userAssignedIdentity.id
         }
       ]
-      secrets: [
-        {
-          name: 'appinsights-connection-string'
-          value: appInsightsConnectionString
-        }
-      ]
+      secrets: union(
+        [
+          {
+            name: 'appinsights-connection-string'
+            value: appInsightsConnectionString
+          }
+        ],
+        !empty(authClientSecret) ? [
+          {
+            name: 'microsoft-provider-authentication-secret'
+            value: authClientSecret
+          }
+        ] : [],
+        !empty(tokenStoreSasUrl) ? [
+          {
+            name: 'token-store-sas'
+            value: tokenStoreSasUrl
+          }
+        ] : []
+      )
     }
     template: {
       revisionSuffix: 't${uniqueString(timestamp)}'

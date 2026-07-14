@@ -670,9 +670,14 @@ az acr build --registry $ACR_NAME --image weather-api:latest --file src/backend/
 
 az acr build --registry $ACR_NAME --image weather-frontend:latest --file src/frontend/Dockerfile src/frontend
 
-# Redeploy (force new revision)
-az containerapp update -n ca-weather-be-dev -g $RG
-az containerapp update -n ca-weather-fe-dev -g $RG
+# Redeploy (force new revision with unique suffix)
+az containerapp update -n ca-weather-be-dev -g $RG \
+  --image ${ACR_NAME}.azurecr.io/weather-api:latest \
+  --revision-suffix "be-$(date +%s)"
+
+az containerapp update -n ca-weather-fe-dev -g $RG \
+  --image ${ACR_NAME}.azurecr.io/weather-frontend:latest \
+  --revision-suffix "fe-$(date +%s)"
 ```
 
 ---
