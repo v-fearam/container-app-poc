@@ -29,6 +29,7 @@ export function DlqManagerPage() {
   const [editMode, setEditMode] = useState(false);
   const [editBody, setEditBody] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
     if (!queueName) return;
@@ -95,7 +96,6 @@ export function DlqManagerPage() {
 
   const handleDiscard = async (messageId: string) => {
     if (!queueName) return;
-    if (!confirm('¿Estás seguro de descartar este mensaje? No se puede recuperar.')) return;
     setActionLoading(true);
     try {
       await post('/api/dlq/discard', {
@@ -104,6 +104,7 @@ export function DlqManagerPage() {
       });
       setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
       closeModal();
+      setConfirmDiscard(null);
       setSuccessMsg('Mensaje descartado');
       setTimeout(() => setSuccessMsg(null), 3000);
       setError(null);
@@ -351,7 +352,7 @@ export function DlqManagerPage() {
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleDiscard(selected.messageId)}
+                  onClick={() => setConfirmDiscard(selected.messageId)}
                   disabled={actionLoading}
                   className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -383,6 +384,44 @@ export function DlqManagerPage() {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Discard Dialog */}
+      {confirmDiscard && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmDiscard(null)}></div>
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Descartar mensaje</h3>
+                <p className="text-sm text-slate-600">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-700 mb-6">
+              ¿Estás seguro de que querés descartar este mensaje de la DLQ? El mensaje se eliminará permanentemente.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDiscard(null)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDiscard(confirmDiscard)}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading ? 'Descartando...' : 'Sí, descartar'}
+              </button>
             </div>
           </div>
         </div>
