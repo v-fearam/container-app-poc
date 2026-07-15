@@ -906,7 +906,25 @@ union requests, dependencies
 | order by P95 desc
 ```
 
-**11. Health Checks — disponibilidad de componentes**
+**11. KEDA Scaling — correlación entre queue depth y réplicas activas**
+
+```kql
+// Requiere: Diagnostic Settings en Service Bus → Log Analytics (AllMetrics)
+let queueDepth = AzureMetrics
+| where ResourceProvider == "MICROSOFT.SERVICEBUS"
+| where MetricName == "ActiveMessages"
+| summarize ActiveMessages = max(Maximum) by bin(TimeGenerated, 1m);
+let workerInstances = traces
+| where timestamp > ago(1h)
+| where cloud_RoleName contains "ca-weather-worker" or cloud_RoleName contains "ca-dashboard-worker"
+| summarize Instancias = dcount(cloud_RoleInstance) by bin(timestamp, 1m), cloud_RoleName;
+workerInstances
+| join kind=leftouter (queueDepth) on $left.timestamp == $right.TimeGenerated
+| project timestamp, Worker = cloud_RoleName, Instancias, ActiveMessages
+| render timechart
+```
+
+**12. Health Checks — disponibilidad de componentes**
 
 ```kql
 requests 
