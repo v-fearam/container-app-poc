@@ -839,7 +839,7 @@ Cuando el backend llama `/api/dlq/requeue`, trace hasta el reprocessing:
 // Buscar una request de requeue
 let reqOp = requests
 | where timestamp > ago(1h)
-| where name == "POST /api/dlq/requeue"
+| where name contains "POST" and name contains "requeue"
 | take 1
 | project operation_Id;
 // Ver toda la transacción distribuida
