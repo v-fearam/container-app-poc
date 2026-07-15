@@ -796,11 +796,11 @@ exceptions
 Esta query muestra la correlación end-to-end de un mensaje desde que se encola hasta que actualiza SQL:
 
 ```kql
-// Encontrar operation_Id de una operación reciente del WeatherWorker
-let sampleOperation = dependencies
-| where timestamp > ago(1h)
+// Encontrar operation_Id de un mensaje realmente procesado por el WeatherWorker
+// (requests = mensajes procesados, dependencies = llamadas salientes incluyendo idle polls)
+let sampleOperation = requests
+| where timestamp > ago(24h)
 | where cloud_RoleName contains "ca-weather-worker"
-| where type contains "ServiceBus" or type contains "Service Bus"
 | take 1
 | project operation_Id;
 // Trazar toda la cadena de eventos para ese operation_Id
