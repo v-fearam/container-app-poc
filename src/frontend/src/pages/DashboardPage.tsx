@@ -284,7 +284,7 @@ export function DashboardPage() {
                 <div className="text-4xl font-bold">
                   {totalDlq.toLocaleString()}
                 </div>
-                <p className="text-red-200 text-xs mt-2">Ver detalle por cola abajo ↓</p>
+                <p className="text-red-200 text-xs mt-2">Total en cola · sin filtro de fecha ↓</p>
               </div>
             </div>
 
@@ -309,9 +309,10 @@ export function DashboardPage() {
                         <p className="text-3xl font-bold text-green-600">{queue.processes.reduce((s, p) => s + p.processedCount, 0).toLocaleString()}</p>
                       </div>
                       {queue.dlqCount > 0 && (
-                        <Link to={`/dashboard/dlq/${queue.dlqPath}?fecha=${filterDate}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity">
-                          <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ</p>
+                        <Link to={`/dashboard/dlq/${queue.dlqPath}?fecha=${filterDate}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity" title="Total en cola DLQ (no depende de la fecha)">
+                          <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ 🔴</p>
                           <p className="text-3xl font-bold text-red-600">{queue.dlqCount.toLocaleString()}</p>
+                          <p className="text-xs text-slate-400 mt-1">total en cola</p>
                         </Link>
                       )}
                     </div>
