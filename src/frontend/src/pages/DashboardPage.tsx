@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { Link } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Inbox, CheckCircle, Trash2, AlertCircle, BarChart3, CalendarDays } from 'lucide-react';
 
 interface QueueCounter {
   vertical: string;
@@ -47,43 +53,35 @@ export function DashboardPage() {
       }
     };
 
-    // Initial fetch
     fetchData();
-
-    // Auto-refresh every 5 seconds
     const interval = setInterval(fetchData, 5000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+    return () => { isMounted = false; clearInterval(interval); };
   }, [get, filterDate]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Header Skeleton */}
           <div className="mb-8">
-            <div className="h-10 bg-white/60 rounded-lg w-96 mb-3 animate-pulse"></div>
-            <div className="h-5 bg-white/40 rounded w-64 animate-pulse"></div>
+            <div className="h-10 bg-white/60 rounded-lg w-96 mb-3 animate-pulse" />
+            <div className="h-5 bg-white/40 rounded w-64 animate-pulse" />
           </div>
-
-          {/* Stats Grid Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-pulse">
-                <div className="h-4 bg-slate-200 rounded w-24 mb-4"></div>
-                <div className="h-8 bg-slate-200 rounded w-32"></div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-6">
+                  <div className="h-4 bg-slate-200 rounded w-24 mb-4" />
+                  <div className="h-8 bg-slate-200 rounded w-32" />
+                </CardContent>
+              </Card>
             ))}
           </div>
-
-          {/* Chart Skeleton */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-pulse">
-            <div className="h-6 bg-slate-200 rounded w-48 mb-6"></div>
-            <div className="h-64 bg-slate-100 rounded"></div>
-          </div>
+          <Card className="animate-pulse">
+            <CardContent className="p-6">
+              <div className="h-6 bg-slate-200 rounded w-48 mb-6" />
+              <div className="h-64 bg-slate-100 rounded" />
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -92,16 +90,21 @@ export function DashboardPage() {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-red-900 mb-2">Error al cargar datos</h2>
-          <p className="text-red-700">{error}</p>
-        </div>
+        <Card className="border-destructive bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-900 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              Error al cargar datos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-700">{error}</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  // Group by vertical + queue + processType
-  // Group by vertical + queue (DLQ is per queue, not per processType)
   const queueGroups = data ? (() => {
     const byQueue: Record<string, {
       vertical: string;
@@ -145,163 +148,142 @@ export function DashboardPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">
-                Dashboard POC
-              </h1>
-              <p className="text-slate-600">
-                Monitoreo de mensajería en tiempo real
-              </p>
+              <h1 className="text-4xl font-bold text-slate-900 mb-2">Dashboard POC</h1>
+              <p className="text-muted-foreground">Monitoreo de mensajería en tiempo real</p>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-lg shadow-sm border border-slate-200">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                  </span>
-                  <span className="text-sm font-medium text-slate-700">En vivo</span>
+              <Card className="px-4 py-2.5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+                    </span>
+                    <span className="text-sm font-medium">En vivo</span>
+                  </div>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-sm text-muted-foreground">Actualiza cada 5s</span>
                 </div>
-                <span className="text-slate-300">·</span>
-                <span className="text-sm text-slate-600">
-                  Actualiza cada 5s
-                </span>
-              </div>
+              </Card>
               <div className="flex items-center gap-2">
-                <label htmlFor="dashDate" className="text-sm text-slate-600 font-medium">Fecha:</label>
-                <input
-                  id="dashDate"
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                <Input
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-auto"
                 />
                 {filterDate !== todayStr() && (
-                  <button
-                    onClick={() => setFilterDate(todayStr())}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setFilterDate(todayStr())}>
                     Hoy
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
           </div>
-          <div className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Última actualización: <span className="font-mono font-medium text-slate-700">{lastRefresh.toLocaleTimeString()}</span>
-          </div>
+          </p>
         </div>
 
-        {/* Empty State with Icon */}
+        {/* Empty State */}
         {queueGroups.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-16 text-center">
+          <Card className="p-16 text-center">
             <div className="max-w-md mx-auto">
-              {/* Icon */}
               <div className="mb-6 flex justify-center">
                 <div className="rounded-full bg-slate-100 p-6">
-                  <svg className="w-16 h-16 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
+                  <BarChart3 className="w-16 h-16 text-slate-400" />
                 </div>
               </div>
-              
-              <h3 className="text-xl font-semibold text-slate-900 mb-3">
-                No hay datos disponibles
-              </h3>
-              <p className="text-slate-600 mb-6">
+              <CardTitle className="text-xl mb-3">No hay datos disponibles</CardTitle>
+              <CardDescription className="mb-6">
                 El dashboard se poblará automáticamente cuando los workers procesen mensajes del Service Bus
-              </p>
-              
-              {/* Info Cards */}
+              </CardDescription>
               <div className="grid grid-cols-2 gap-4 text-left">
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                  <div className="text-sm font-medium text-blue-900 mb-1">✓ Backend API</div>
-                  <div className="text-xs text-blue-700">Conectado y funcionando</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                  <div className="text-sm font-medium text-green-900 mb-1">✓ Auto-refresh</div>
-                  <div className="text-xs text-green-700">Actualizando cada 5s</div>
-                </div>
+                <Card className="bg-blue-50 border-blue-100 p-4">
+                  <p className="text-sm font-medium text-blue-900 mb-1">✓ Backend API</p>
+                  <p className="text-xs text-blue-700">Conectado y funcionando</p>
+                </Card>
+                <Card className="bg-green-50 border-green-100 p-4">
+                  <p className="text-sm font-medium text-green-900 mb-1">✓ Auto-refresh</p>
+                  <p className="text-xs text-green-700">Actualizando cada 5s</p>
+                </Card>
               </div>
-
-              {/* Instructions */}
-              <div className="mt-8 text-left bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="text-sm font-medium text-slate-900 mb-2">💡 Para generar datos:</div>
-                <ol className="text-sm text-slate-600 space-y-1.5 list-decimal list-inside">
+              <Card className="mt-8 text-left bg-slate-50 p-4">
+                <p className="text-sm font-medium text-slate-900 mb-2">💡 Para generar datos:</p>
+                <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
                   <li>Ejecuta el Service Bus Enqueuer para enviar mensajes</li>
                   <li>Los workers procesarán los mensajes automáticamente</li>
                   <li>Los contadores aparecerán aquí en tiempo real</li>
                 </ol>
-              </div>
+              </Card>
             </div>
-          </div>
+          </Card>
         ) : (
           <div className="space-y-6">
-            {/* Summary Stats */}
+            {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-blue-100 text-sm font-medium uppercase tracking-wide">Total Encolados</div>
-                  <svg className="w-8 h-8 text-blue-200/50" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                  </svg>
-                </div>
-                <div className="text-4xl font-bold">
-                  {totalEnqueued.toLocaleString()}
-                </div>
-              </div>
+              <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-lg">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-blue-100 text-sm font-medium uppercase tracking-wide">Total Encolados</CardTitle>
+                    <Inbox className="h-8 w-8 text-blue-200/50" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-4xl font-bold">{totalEnqueued.toLocaleString()}</p>
+                </CardContent>
+              </Card>
 
-              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-green-100 text-sm font-medium uppercase tracking-wide">Total Procesados</div>
-                  <svg className="w-8 h-8 text-green-200/50" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="text-4xl font-bold">
-                  {totalProcessed.toLocaleString()}
-                </div>
-              </div>
+              <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white border-0 shadow-lg">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-green-100 text-sm font-medium uppercase tracking-wide">Total Procesados</CardTitle>
+                    <CheckCircle className="h-8 w-8 text-green-200/50" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-4xl font-bold">{totalProcessed.toLocaleString()}</p>
+                </CardContent>
+              </Card>
 
-              <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl shadow-lg p-6 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-amber-100 text-sm font-medium uppercase tracking-wide">Descartados</div>
-                  <svg className="w-8 h-8 text-amber-200/50" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L6.382 6H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V8a1 1 0 100-2h-2.382l-1.724-3.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="text-4xl font-bold">
-                  {totalDiscarded.toLocaleString()}
-                </div>
-              </div>
+              <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white border-0 shadow-lg">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-amber-100 text-sm font-medium uppercase tracking-wide">Descartados</CardTitle>
+                    <Trash2 className="h-8 w-8 text-amber-200/50" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-4xl font-bold">{totalDiscarded.toLocaleString()}</p>
+                </CardContent>
+              </Card>
 
-              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-red-100 text-sm font-medium uppercase tracking-wide">DLQ (Total)</div>
-                  <svg className="w-8 h-8 text-red-200/50" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="text-4xl font-bold">
-                  {totalDlq.toLocaleString()}
-                </div>
-                <p className="text-red-200 text-xs mt-2">Total en cola · sin filtro de fecha ↓</p>
-              </div>
+              <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0 shadow-lg">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-red-100 text-sm font-medium uppercase tracking-wide">DLQ (Total)</CardTitle>
+                    <AlertCircle className="h-8 w-8 text-red-200/50" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-4xl font-bold">{totalDlq.toLocaleString()}</p>
+                  <p className="text-red-200 text-xs mt-2">Total en cola · sin filtro de fecha</p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Queue Groups */}
             {queueGroups.map((queue) => (
-              <div key={`${queue.vertical}-${queue.queueName}`} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
-                {/* Queue Header */}
-                <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-200">
+              <Card key={`${queue.vertical}-${queue.queueName}`} className="overflow-hidden hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-900 mb-1">
-                        {queue.vertical} <span className="text-slate-400">·</span> {queue.queueName}
-                      </h2>
-                    </div>
+                    <CardTitle className="text-xl">
+                      {queue.vertical} <span className="text-slate-400">·</span> {queue.queueName}
+                    </CardTitle>
                     <div className="flex items-center gap-8">
                       <div className="text-right">
-                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Encolados</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Encolados</p>
                         <p className="text-3xl font-bold text-slate-900">{queue.processes.reduce((s, p) => s + p.enqueuedCount, 0).toLocaleString()}</p>
                       </div>
                       <div className="text-right">
@@ -312,75 +294,73 @@ export function DashboardPage() {
                         <Link to={`/dashboard/dlq/${queue.dlqPath}?fecha=${filterDate}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity" title="Total en cola DLQ (no depende de la fecha)">
                           <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ 🔴</p>
                           <p className="text-3xl font-bold text-red-600">{queue.dlqCount.toLocaleString()}</p>
-                          <p className="text-xs text-slate-400 mt-1">total en cola</p>
+                          <p className="text-xs text-muted-foreground mt-1">total en cola</p>
                         </Link>
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* Process Types Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Tipo Proceso</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Fecha</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Encolados</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Procesados</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Descartados</th>
-                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Pendientes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50">
+                        <TableHead className="px-6 py-3 uppercase tracking-wider text-xs">Tipo Proceso</TableHead>
+                        <TableHead className="px-6 py-3 uppercase tracking-wider text-xs">Fecha</TableHead>
+                        <TableHead className="px-6 py-3 text-right uppercase tracking-wider text-xs">Encolados</TableHead>
+                        <TableHead className="px-6 py-3 text-right uppercase tracking-wider text-xs">Procesados</TableHead>
+                        <TableHead className="px-6 py-3 text-right uppercase tracking-wider text-xs">Descartados</TableHead>
+                        <TableHead className="px-6 py-3 text-right uppercase tracking-wider text-xs">Pendientes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {queue.processes.map((proc, idx) => {
                         const pending = proc.enqueuedCount - proc.processedCount - proc.discardedCount;
                         const processingRate = proc.enqueuedCount > 0 ? (proc.processedCount / proc.enqueuedCount * 100) : 0;
-                        
+
                         return (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors duration-150">
-                            <td className="px-6 py-4">
-                              <span className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                          <TableRow key={idx}>
+                            <TableCell className="px-6 py-4">
+                              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-0 rounded-full px-3 py-1">
                                 {proc.processType}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="font-mono text-sm font-medium text-slate-900">{proc.date.split('T')[0]}</span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <span className="text-sm font-medium text-slate-900">{proc.enqueuedCount.toLocaleString()}</span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-6 py-4">
+                              <span className="font-mono text-sm font-medium">{proc.date.split('T')[0]}</span>
+                            </TableCell>
+                            <TableCell className="px-6 py-4 text-right font-medium">
+                              {proc.enqueuedCount.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="px-6 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <span className="text-sm font-medium text-green-600">{proc.processedCount.toLocaleString()}</span>
-                                <span className="text-xs text-slate-500">({processingRate.toFixed(1)}%)</span>
+                                <span className="font-medium text-green-600">{proc.processedCount.toLocaleString()}</span>
+                                <span className="text-xs text-muted-foreground">({processingRate.toFixed(1)}%)</span>
                               </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
+                            </TableCell>
+                            <TableCell className="px-6 py-4 text-right">
                               {proc.discardedCount > 0 ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                                <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">
                                   {proc.discardedCount}
-                                </span>
+                                </Badge>
                               ) : (
-                                <span className="text-sm text-slate-400">0</span>
+                                <span className="text-muted-foreground">0</span>
                               )}
-                            </td>
-                            <td className="px-6 py-4 text-right">
+                            </TableCell>
+                            <TableCell className="px-6 py-4 text-right">
                               {pending > 0 ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">
                                   {pending}
-                                </span>
+                                </Badge>
                               ) : (
-                                <span className="text-sm text-green-500">✓</span>
+                                <span className="text-green-500">✓</span>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
