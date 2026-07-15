@@ -106,6 +106,16 @@ resource kvSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   }
 }
 
+// Reader role on resource group for ARM API queries (list container apps, replicas)
+resource rgReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(userAssignedIdentity.id, resourceGroup().id, 'Reader')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
@@ -209,7 +219,17 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 name: 'AZURE_CLIENT_ID'
                 value: userAssignedIdentity.properties.clientId
               }
-            ] : []
+            ] : [],
+            [
+              {
+                name: 'AZURE_SUBSCRIPTION_ID'
+                value: subscription().subscriptionId
+              }
+              {
+                name: 'AZURE_RESOURCE_GROUP'
+                value: resourceGroup().name
+              }
+            ]
           )
         }
       ]

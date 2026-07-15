@@ -1,7 +1,10 @@
+using Azure.Core;
 using Azure.Identity;
+using Azure.Messaging.ServiceBus.Administration;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Caching.Memory;
 using WeatherApi.Data;
 using WeatherApi.Extensions;
 using WeatherApi.Middleware;
@@ -63,6 +66,22 @@ if (!string.IsNullOrEmpty(sqlConnectionString) && !string.IsNullOrEmpty(serviceB
 }
 
 builder.Services.AddScoped<IHealthService, HealthService>();
+
+// Memory Cache (for infrastructure health service)
+builder.Services.AddMemoryCache();
+
+// Infrastructure Health Service (ARM API + Service Bus metrics)
+builder.Services.AddHttpClient("arm");
+builder.Services.AddSingleton<TokenCredential>(new DefaultAzureCredential());
+builder.Services.AddSingleton<IInfrastructureHealthService>(sp =>
+    new InfrastructureHealthService(
+        sp.GetRequiredService<IHttpClientFactory>(),
+        sp.GetRequiredService<TokenCredential>(),
+        sp.GetRequiredService<IMemoryCache>(),
+        sp.GetRequiredService<IConfiguration>(),
+        sp.GetService<ServiceBusAdministrationClient>(),
+        sp.GetRequiredService<ILogger<InfrastructureHealthService>>()
+    ));
 
 // Health Checks
 var healthChecksBuilder = builder.Services.AddHealthChecks()

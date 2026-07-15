@@ -2,18 +2,43 @@ import { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Heart, Activity } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertCircle, Activity, Server, MessageSquare, RefreshCw } from 'lucide-react';
 
-interface ComponentHealth {
-  componentName: string;
+interface ContainerAppStatus {
+  name: string;
   status: string;
-  lastHeartbeat: string;
-  metadata?: string;
+  activeReplicas: number;
+  maxReplicas: number;
+  latestRevision?: string;
+}
+
+interface QueueStatus {
+  name: string;
+  activeMessages: number;
+  deadLetterMessages: number;
+  scheduledMessages: number;
+}
+
+interface SubscriptionStatus {
+  topicName: string;
+  subscriptionName: string;
+  activeMessages: number;
+  deadLetterMessages: number;
+}
+
+interface InfrastructureHealth {
+  containerApps: ContainerAppStatus[];
+  serviceBus: {
+    queues: QueueStatus[];
+    subscriptions: SubscriptionStatus[];
+  };
+  cachedAt: string;
 }
 
 export function HealthPage() {
   const { get } = useApi();
-  const [components, setComponents] = useState<ComponentHealth[]>([]);
+  const [infra, setInfra] = useState<InfrastructureHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -23,9 +48,9 @@ export function HealthPage() {
 
     const fetchData = async () => {
       try {
-        const result = await get<ComponentHealth[]>('/api/health/components');
+        const result = await get<InfrastructureHealth>('/api/health/infrastructure');
         if (isMounted) {
-          setComponents(result);
+          setInfra(result);
           setLastRefresh(new Date());
           setError(null);
           setLoading(false);
@@ -43,25 +68,16 @@ export function HealthPage() {
     return () => { isMounted = false; clearInterval(interval); };
   }, [get]);
 
-  const getStatusBadge = (status: string) => {
+  const getAppStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'healthy':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">{status}</Badge>;
-      case 'degraded':
-        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">{status}</Badge>;
-      case 'unhealthy':
-        return <Badge variant="destructive">{status}</Badge>;
+      case 'running':
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Running</Badge>;
+      case 'scaled to zero':
+        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Scaled to 0</Badge>;
+      case 'provisioning':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Provisioning</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
-  const getStatusDot = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'healthy': return 'bg-green-500';
-      case 'degraded': return 'bg-amber-500';
-      case 'unhealthy': return 'bg-red-500 animate-pulse';
-      default: return 'bg-slate-400';
     }
   };
 
@@ -70,9 +86,8 @@ export function HealthPage() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="animate-pulse">
           <div className="h-8 bg-slate-200 rounded w-64 mb-8" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => <div key={i} className="h-40 bg-slate-200 rounded-lg" />)}
-          </div>
+          <div className="h-64 bg-slate-200 rounded-lg mb-6" />
+          <div className="h-48 bg-slate-200 rounded-lg" />
         </div>
       </div>
     );
@@ -84,7 +99,7 @@ export function HealthPage() {
         <Card className="border-destructive bg-red-50">
           <CardHeader>
             <CardTitle className="text-red-900 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" /> Error al cargar estado de componentes
+              <AlertCircle className="h-5 w-5" /> Error al cargar infraestructura
             </CardTitle>
           </CardHeader>
           <CardContent><p className="text-red-700">{error}</p></CardContent>
@@ -93,9 +108,8 @@ export function HealthPage() {
     );
   }
 
-  const healthyCount = components.filter(c => c.status.toLowerCase() === 'healthy').length;
-  const degradedCount = components.filter(c => c.status.toLowerCase() === 'degraded').length;
-  const unhealthyCount = components.filter(c => c.status.toLowerCase() === 'unhealthy').length;
+  const runningApps = infra?.containerApps.filter(a => a.status.toLowerCase() === 'running').length ?? 0;
+  const totalApps = infra?.containerApps.length ?? 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -103,85 +117,124 @@ export function HealthPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            <Activity className="h-8 w-8 text-blue-600" /> Estado de Componentes
+            <Activity className="h-8 w-8 text-blue-600" /> Estado de Infraestructura
           </h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Actualización automática cada 30s · Última: <span className="font-mono">{lastRefresh.toLocaleTimeString()}</span>
+          <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
+            <RefreshCw className="h-3 w-3" /> Actualización cada 30s · Última: <span className="font-mono">{lastRefresh.toLocaleTimeString()}</span>
           </p>
         </div>
-      </div>
-
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground mb-1">Total Componentes</p>
-            <p className="text-3xl font-bold">{components.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-green-200">
-          <CardContent className="p-6">
-            <p className="text-sm text-green-700 mb-1">Saludables</p>
-            <p className="text-3xl font-bold text-green-600">{healthyCount}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-amber-200">
-          <CardContent className="p-6">
-            <p className="text-sm text-amber-700 mb-1">Degradados</p>
-            <p className="text-3xl font-bold text-amber-600">{degradedCount}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-red-200">
-          <CardContent className="p-6">
-            <p className="text-sm text-red-700 mb-1">No Saludables</p>
-            <p className="text-3xl font-bold text-red-600">{unhealthyCount}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Components */}
-      {components.length === 0 ? (
-        <Card className="p-12 text-center bg-slate-50">
-          <Heart className="mx-auto h-12 w-12 text-slate-400" />
-          <p className="text-slate-600 mt-4">No hay componentes registrados aún</p>
-          <p className="text-sm text-muted-foreground mt-2">Los componentes aparecerán aquí cuando reporten su estado</p>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {components.map((component) => {
-            const minutesAgo = Math.floor((new Date().getTime() - new Date(component.lastHeartbeat).getTime()) / 60000);
-            const isStale = minutesAgo > 5;
-
-            return (
-              <Card key={component.componentName} className={isStale ? 'border-amber-300' : ''}>
-                <CardHeader className={`border-b ${isStale ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{component.componentName}</CardTitle>
-                    <span className={`inline-block w-2 h-2 rounded-full ${getStatusDot(component.status)}`} />
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Estado:</p>
-                    {getStatusBadge(component.status)}
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Último heartbeat:</p>
-                    <p className="text-sm font-mono">{new Date(component.lastHeartbeat).toLocaleString()}</p>
-                    {isStale && <p className="text-sm text-amber-600 mt-1">⚠️ Hace {minutesAgo} minutos</p>}
-                  </div>
-                  {component.metadata && (
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Metadata:</p>
-                      <pre className="bg-muted border rounded p-2 overflow-x-auto text-xs font-mono">{component.metadata}</pre>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">Container Apps activas</p>
+          <p className="text-2xl font-bold text-slate-900">{runningApps}/{totalApps}</p>
         </div>
-      )}
+      </div>
+
+      {/* Container Apps Section */}
+      <Card className="mb-8">
+        <CardHeader className="bg-slate-50 border-b">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Server className="h-5 w-5 text-blue-600" /> Container Apps
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {infra?.containerApps.length === 0 ? (
+            <p className="p-6 text-center text-muted-foreground">No se encontraron Container Apps</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Réplicas</TableHead>
+                  <TableHead>Última Revisión</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {infra?.containerApps.map((app) => (
+                  <TableRow key={app.name}>
+                    <TableCell className="font-mono text-sm font-medium">{app.name}</TableCell>
+                    <TableCell>{getAppStatusBadge(app.status)}</TableCell>
+                    <TableCell className="text-center">
+                      <span className={`font-mono font-bold ${app.activeReplicas === 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {app.activeReplicas}
+                      </span>
+                      <span className="text-muted-foreground">/{app.maxReplicas}</span>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {app.latestRevision ?? '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Service Bus Section */}
+      <Card>
+        <CardHeader className="bg-slate-50 border-b">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <MessageSquare className="h-5 w-5 text-purple-600" /> Service Bus
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(infra?.serviceBus.queues.length === 0 && infra?.serviceBus.subscriptions.length === 0) ? (
+            <p className="p-6 text-center text-muted-foreground">No se encontraron colas ni subscriptions</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Recurso</TableHead>
+                  <TableHead className="text-center">Mensajes Activos</TableHead>
+                  <TableHead className="text-center">DLQ</TableHead>
+                  <TableHead className="text-center">Programados</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {infra?.serviceBus.queues.map((q) => (
+                  <TableRow key={q.name}>
+                    <TableCell>
+                      <span className="font-mono text-sm">Queue: <span className="font-medium">{q.name}</span></span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`font-mono font-bold ${q.activeMessages > 0 ? 'text-blue-600' : 'text-slate-500'}`}>
+                        {q.activeMessages}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`font-mono font-bold ${q.deadLetterMessages > 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                        {q.deadLetterMessages}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-slate-500">
+                      {q.scheduledMessages}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {infra?.serviceBus.subscriptions.map((s) => (
+                  <TableRow key={`${s.topicName}/${s.subscriptionName}`}>
+                    <TableCell>
+                      <span className="font-mono text-sm">Sub: <span className="font-medium">{s.topicName}/{s.subscriptionName}</span></span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`font-mono font-bold ${s.activeMessages > 0 ? 'text-blue-600' : 'text-slate-500'}`}>
+                        {s.activeMessages}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`font-mono font-bold ${s.deadLetterMessages > 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                        {s.deadLetterMessages}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-slate-500">—</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
