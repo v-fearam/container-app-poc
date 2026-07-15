@@ -1,8 +1,9 @@
 // ============================================================================
 // Key Vault Module — Centralized secrets for Container Apps
 // ============================================================================
-// Creates a Key Vault and grants "Key Vault Secrets User" role to managed
-// identities so Container Apps can reference secrets via keyVaultUrl.
+// Creates a Key Vault, seeds secrets with known values (e.g., connection strings),
+// and grants "Key Vault Secrets User" role to managed identities.
+// Auth secrets (client secrets, SAS tokens) must be set manually once.
 // ============================================================================
 
 targetScope = 'resourceGroup'
@@ -27,6 +28,16 @@ param softDeleteRetentionInDays int = 7
 
 @description('Tags to apply to Key Vault')
 param tags object = {}
+
+// --- Secrets to seed automatically (values known at deploy time) ---
+
+@description('Application Insights connection string (seeded automatically)')
+@secure()
+param appInsightsConnectionString string = ''
+
+@description('SQL connection string (seeded automatically)')
+@secure()
+param sqlConnectionString string = ''
 
 // Key Vault resource
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -65,6 +76,28 @@ resource kvSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' 
     }
   }
 ]
+
+// Grant deployer "Key Vault Secrets Officer" so Bicep can create secrets
+// The deployer principal is obtained from the deployment context
+// This is handled by RBAC — deployer must have Secrets Officer before running this
+
+// --- Auto-seeded secrets (created/updated on every deploy) ---
+
+resource secretAppInsights 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(appInsightsConnectionString)) {
+  parent: keyVault
+  name: 'appinsights-connection-string'
+  properties: {
+    value: appInsightsConnectionString
+  }
+}
+
+resource secretSqlConnection 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(sqlConnectionString)) {
+  parent: keyVault
+  name: 'sql-connection-string'
+  properties: {
+    value: sqlConnectionString
+  }
+}
 
 output keyVaultName string = keyVault.name
 output keyVaultUri string = keyVault.properties.vaultUri

@@ -118,12 +118,16 @@ module environment 'modules/container-app-environment.bicep' = {
 }
 
 // Key Vault for centralized secrets
+// NOTE: Deployed after App Insights and SQL so we can seed their connection strings.
+// Container Apps depend on KV being ready (they reference secrets via keyVaultUrl).
 module keyVault 'modules/key-vault.bicep' = if (deployKeyVault) {
   name: 'key-vault-deployment'
   params: {
     location: location
     keyVaultName: keyVaultName
     secretUserPrincipalIds: []
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default' : ''
     tags: {
       workload: workloadName
       environment: environmentShortName
