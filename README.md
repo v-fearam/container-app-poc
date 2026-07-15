@@ -906,25 +906,7 @@ union requests, dependencies
 | order by P95 desc
 ```
 
-**11. KEDA Scaling — correlación entre queue depth y réplicas activas**
-
-```kql
-// Combinar métricas de Service Bus con traces de workers
-let queueMetrics = customMetrics
-| where timestamp > ago(1h)
-| where name == "ActiveMessages"  // Métrica de Service Bus (si está configurada)
-| project timestamp, ActiveMessages = value;
-let workerInstances = traces
-| where timestamp > ago(1h)
-| where cloud_RoleName contains "ca-weather-worker" or cloud_RoleName contains "ca-dashboard-worker"
-| summarize Instancias = dcount(cloud_RoleInstance) by bin(timestamp, 1m), cloud_RoleName;
-workerInstances
-| join kind=leftouter (queueMetrics) on timestamp
-| project timestamp, Worker = cloud_RoleName, Instancias, ActiveMessages
-| render timechart
-```
-
-**12. Health Checks — disponibilidad de componentes**
+**11. Health Checks — disponibilidad de componentes**
 
 ```kql
 requests 
