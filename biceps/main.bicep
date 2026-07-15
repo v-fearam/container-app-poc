@@ -188,6 +188,7 @@ module serviceBus 'modules/service-bus.bicep' = if (deployWorker || deployDashbo
   params: {
     location: location
     namespaceName: serviceBusNamespaceName
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
   }
 }
 

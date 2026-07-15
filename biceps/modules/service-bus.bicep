@@ -9,6 +9,9 @@ param namespaceName string
 @description('Queue name for worker jobs')
 param queueName string = 'weather-jobs'
 
+@description('Log Analytics workspace ID for diagnostic settings (optional)')
+param logAnalyticsWorkspaceId string = ''
+
 @description('Max delivery attempts before DLQ')
 param maxDeliveryCount int = 3
 
@@ -76,3 +79,28 @@ output namespaceFqdn string = '${serviceBusNamespace.name}.servicebus.windows.ne
 output queueName string = queue.name
 output topicName string = dashboardTopic.name
 output subscriptionName string = counterUpdaterSubscription.name
+
+// Diagnostic Settings — AllMetrics + operational logs → Log Analytics
+resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
+  name: 'sb-diagnostics'
+  scope: serviceBusNamespace
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+    logs: [
+      {
+        category: 'OperationalLogs'
+        enabled: true
+      }
+      {
+        category: 'RuntimeAuditLogs'
+        enabled: true
+      }
+    ]
+  }
+}
