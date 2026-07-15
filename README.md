@@ -766,7 +766,7 @@ requests
 // WeatherWorker y DashboardWorker
 traces 
 | where timestamp > ago(24h)
-| where cloud_RoleName contains "weather-worker" or cloud_RoleName contains "dashboard-worker"
+| where cloud_RoleName contains "ca-weather-worker" or cloud_RoleName contains "ca-dashboard-worker"
 | where message contains "procesado" or message contains "completado" or message contains "processed"
 | summarize 
     MensajesProcesados = count()
@@ -779,7 +779,7 @@ traces
 ```kql
 exceptions 
 | where timestamp > ago(24h)
-| where cloud_RoleName contains "weather-worker" or cloud_RoleName contains "dashboard-worker"
+| where cloud_RoleName contains "ca-weather-worker" or cloud_RoleName contains "ca-dashboard-worker"
 | project 
     timestamp,
     Worker = cloud_RoleName,
@@ -799,8 +799,8 @@ Esta query muestra la correlación end-to-end de un mensaje desde que se encola 
 // Encontrar operation_Id de una operación reciente del WeatherWorker
 let sampleOperation = dependencies
 | where timestamp > ago(1h)
-| where cloud_RoleName contains "weather-worker"
-| where type == "Azure Service Bus"
+| where cloud_RoleName contains "ca-weather-worker"
+| where type contains "ServiceBus" or type contains "Service Bus"
 | take 1
 | project operation_Id;
 // Trazar toda la cadena de eventos para ese operation_Id
@@ -846,7 +846,7 @@ union requests, dependencies, traces
 ```kql
 traces 
 | where timestamp > ago(24h)
-| where cloud_RoleName contains "dashboard-worker"
+| where cloud_RoleName contains "ca-dashboard-worker"
 | where message contains "UPSERT" or message contains "UPDATE" or message contains "INSERT"
 | extend 
     Vertical = tostring(customDimensions.Vertical),
@@ -903,7 +903,7 @@ let queueMetrics = customMetrics
 | project timestamp, ActiveMessages = value;
 let workerInstances = traces
 | where timestamp > ago(1h)
-| where cloud_RoleName contains "weather-worker" or cloud_RoleName contains "dashboard-worker"
+| where cloud_RoleName contains "ca-weather-worker" or cloud_RoleName contains "ca-dashboard-worker"
 | summarize Instancias = dcount(cloud_RoleInstance) by bin(timestamp, 1m), cloud_RoleName;
 workerInstances
 | join kind=leftouter (queueMetrics) on timestamp
