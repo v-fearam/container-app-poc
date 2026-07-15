@@ -10,6 +10,7 @@ interface QueueCounter {
   enqueuedCount: number;
   processedCount: number;
   deadLetterCount: number;
+  discardedCount: number;
   dlqPath?: string;
 }
 
@@ -107,7 +108,7 @@ export function DashboardPage() {
       queueName: string;
       dlqCount: number;
       dlqPath: string;
-      processes: { processType: string; enqueuedCount: number; processedCount: number; date: string }[];
+      processes: { processType: string; enqueuedCount: number; processedCount: number; discardedCount: number; date: string }[];
     }> = {};
 
     for (const item of data) {
@@ -125,6 +126,7 @@ export function DashboardPage() {
         processType: item.processType,
         enqueuedCount: item.enqueuedCount,
         processedCount: item.processedCount,
+        discardedCount: item.discardedCount,
         date: item.date,
       });
     }
@@ -134,6 +136,7 @@ export function DashboardPage() {
   const totalEnqueued = queueGroups.reduce((sum, q) => sum + q.processes.reduce((s, p) => s + p.enqueuedCount, 0), 0);
   const totalProcessed = queueGroups.reduce((sum, q) => sum + q.processes.reduce((s, p) => s + p.processedCount, 0), 0);
   const totalDlq = queueGroups.reduce((sum, q) => sum + q.dlqCount, 0);
+  const totalDiscarded = queueGroups.reduce((sum, q) => sum + q.processes.reduce((s, p) => s + p.discardedCount, 0), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -234,7 +237,7 @@ export function DashboardPage() {
         ) : (
           <div className="space-y-6">
             {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-blue-100 text-sm font-medium uppercase tracking-wide">Total Encolados</div>
@@ -256,6 +259,18 @@ export function DashboardPage() {
                 </div>
                 <div className="text-4xl font-bold">
                   {totalProcessed.toLocaleString()}
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl shadow-lg p-6 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-amber-100 text-sm font-medium uppercase tracking-wide">Descartados</div>
+                  <svg className="w-8 h-8 text-amber-200/50" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L6.382 6H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V8a1 1 0 100-2h-2.382l-1.724-3.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="text-4xl font-bold">
+                  {totalDiscarded.toLocaleString()}
                 </div>
               </div>
 
@@ -312,12 +327,13 @@ export function DashboardPage() {
                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Fecha</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Encolados</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Procesados</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Descartados</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Pendientes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {queue.processes.map((proc, idx) => {
-                        const pending = proc.enqueuedCount - proc.processedCount;
+                        const pending = proc.enqueuedCount - proc.processedCount - proc.discardedCount;
                         const processingRate = proc.enqueuedCount > 0 ? (proc.processedCount / proc.enqueuedCount * 100) : 0;
                         
                         return (
@@ -338,6 +354,15 @@ export function DashboardPage() {
                                 <span className="text-sm font-medium text-green-600">{proc.processedCount.toLocaleString()}</span>
                                 <span className="text-xs text-slate-500">({processingRate.toFixed(1)}%)</span>
                               </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {proc.discardedCount > 0 ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                                  {proc.discardedCount}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-slate-400">0</span>
+                              )}
                             </td>
                             <td className="px-6 py-4 text-right">
                               {pending > 0 ? (

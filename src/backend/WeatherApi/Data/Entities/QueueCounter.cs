@@ -12,6 +12,7 @@ public class QueueCounter
     public DateTime Date { get; set; }
     public int EnqueuedCount { get; set; }
     public int ProcessedCount { get; set; }
+    public int DiscardedCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

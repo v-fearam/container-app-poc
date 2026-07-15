@@ -39,6 +39,7 @@ public class DashboardService(
             Date = q.Date,
             EnqueuedCount = q.EnqueuedCount,
             ProcessedCount = q.ProcessedCount,
+            DiscardedCount = q.DiscardedCount,
             DeadLetterCount = dlqCounts.TryGetValue(q.QueueName, out var dlq) ? dlq.Count : 0,
             DlqPath = dlqCounts.TryGetValue(q.QueueName, out var dlqPath) ? dlqPath.Path : null
         }).ToList();

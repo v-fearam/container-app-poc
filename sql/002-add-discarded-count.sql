@@ -1,0 +1,14 @@
+-- Migration: Add DiscardedCount column to QueueCounters
+-- Tracks messages manually discarded from DLQ via the Dashboard UI
+
+ALTER TABLE dbo.QueueCounters 
+    ADD DiscardedCount INT NOT NULL DEFAULT 0;
+
+-- Update index to include new column
+DROP INDEX IX_QueueCounters_Vertical_Date ON dbo.QueueCounters;
+
+CREATE NONCLUSTERED INDEX IX_QueueCounters_Vertical_Date 
+    ON dbo.QueueCounters(Vertical, Date) 
+    INCLUDE (QueueName, ProcessType, EnqueuedCount, ProcessedCount, DiscardedCount);
+
+GO

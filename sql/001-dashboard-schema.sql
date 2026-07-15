@@ -10,6 +10,7 @@ CREATE TABLE dbo.QueueCounters (
     Date DATE NOT NULL,
     EnqueuedCount INT NOT NULL DEFAULT 0,
     ProcessedCount INT NOT NULL DEFAULT 0,
+    DiscardedCount INT NOT NULL DEFAULT 0,
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     
@@ -21,7 +22,7 @@ CREATE TABLE dbo.QueueCounters (
 -- Índice para queries del Dashboard (por vertical + fecha)
 CREATE NONCLUSTERED INDEX IX_QueueCounters_Vertical_Date 
     ON dbo.QueueCounters(Vertical, Date) 
-    INCLUDE (QueueName, ProcessType, EnqueuedCount, ProcessedCount);
+    INCLUDE (QueueName, ProcessType, EnqueuedCount, ProcessedCount, DiscardedCount);
 
 -- Tabla de health de componentes (heartbeat de workers)
 CREATE TABLE dbo.ComponentHealth (
