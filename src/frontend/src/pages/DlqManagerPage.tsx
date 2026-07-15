@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, X, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 
 interface DlqMessage {
   messageId: string;
@@ -129,9 +136,11 @@ export function DlqManagerPage() {
   if (!queueName) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <p className="text-red-900">Nombre de cola no especificado</p>
-        </div>
+        <Card className="border-destructive bg-red-50">
+          <CardContent className="p-6">
+            <p className="text-red-900">Nombre de cola no especificado</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -140,210 +149,193 @@ export function DlqManagerPage() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-6">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => navigate('/dashboard')}
-          className="text-sm text-blue-600 hover:text-blue-800 font-medium mb-4 inline-flex items-center transition-colors"
+          className="mb-4 text-blue-600 hover:text-blue-800"
         >
-          ← Volver al Dashboard
-        </button>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Volver al Dashboard
+        </Button>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Gestión de DLQ</h1>
-            <p className="text-sm text-slate-600 mt-1">
-              Cola: <span className="font-mono font-semibold">{queueName}</span>
+            <p className="text-sm text-muted-foreground mt-1">
+              Cola: <span className="font-mono font-semibold text-foreground">{queueName}</span>
               <span className="ml-4 text-slate-400">·</span>
-              <span className="ml-4 font-semibold">{messages.length} mensaje{messages.length !== 1 ? 's' : ''}</span>
+              <span className="ml-4 font-semibold text-foreground">{messages.length} mensaje{messages.length !== 1 ? 's' : ''}</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <label htmlFor="filterDate" className="text-sm text-slate-600 font-medium">Fecha:</label>
-              <input
-                id="filterDate"
+              <Input
                 type="date"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-auto"
               />
               {filterDate !== todayStr() && (
-                <button
-                  onClick={() => setFilterDate(todayStr())}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setFilterDate(todayStr())}>
                   Hoy
-                </button>
+                </Button>
               )}
-              <button
-                onClick={() => setFilterDate('')}
-                className="text-xs text-slate-500 hover:text-slate-700 font-medium"
-              >
+              <Button variant="ghost" size="sm" onClick={() => setFilterDate('')}>
                 Todas
-              </button>
+              </Button>
             </div>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={fetchMessages}
               disabled={loading}
-              className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Cargando...' : '↻ Refrescar'}
-            </button>
+              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              Refrescar
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Success toast */}
       {successMsg && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-green-800 text-sm font-medium">
-          ✓ {successMsg}
-        </div>
+        <Card className="bg-green-50 border-green-200 mb-4">
+          <CardContent className="p-3 flex items-center gap-2 text-green-800 text-sm font-medium">
+            <CheckCircle2 className="h-4 w-4" />
+            {successMsg}
+          </CardContent>
+        </Card>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <p className="text-red-900 font-medium">Error</p>
-          <p className="text-red-700 text-sm mt-1">{error}</p>
-        </div>
+        <Card className="border-destructive bg-red-50 mb-4">
+          <CardContent className="p-4">
+            <p className="text-red-900 font-medium">Error</p>
+            <p className="text-red-700 text-sm mt-1">{error}</p>
+          </CardContent>
+        </Card>
       )}
 
       {loading ? (
         <div className="animate-pulse space-y-2">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-12 bg-slate-200 rounded"></div>
+            <div key={i} className="h-12 bg-slate-200 rounded" />
           ))}
         </div>
       ) : messages.length === 0 ? (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-12 text-center">
-          <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+        <Card className="p-12 text-center bg-slate-50">
+          <CheckCircle2 className="mx-auto h-12 w-12 text-slate-400" />
           <p className="text-slate-600 mt-4">No hay mensajes en la DLQ</p>
-          <p className="text-sm text-slate-500 mt-2">Los mensajes fallidos aparecerán aquí</p>
-        </div>
+          <p className="text-sm text-muted-foreground mt-2">Los mensajes fallidos aparecerán aquí</p>
+        </Card>
       ) : (
         <>
           {/* Table */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">ID</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Fecha</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Intentos</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Razón</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Card className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50">
+                  <TableHead className="px-4 py-3 uppercase tracking-wide text-xs">ID</TableHead>
+                  <TableHead className="px-4 py-3 uppercase tracking-wide text-xs">Fecha</TableHead>
+                  <TableHead className="px-4 py-3 text-center uppercase tracking-wide text-xs">Intentos</TableHead>
+                  <TableHead className="px-4 py-3 uppercase tracking-wide text-xs">Razón</TableHead>
+                  <TableHead className="px-4 py-3 text-center uppercase tracking-wide text-xs">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {paged.map((msg, idx) => (
-                  <tr
+                  <TableRow
                     key={msg.messageId}
-                    className={`border-b border-slate-100 hover:bg-blue-50 cursor-pointer transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                    className={`cursor-pointer hover:bg-blue-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                     onClick={() => openDetail(msg)}
                   >
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700" title={msg.messageId}>
+                    <TableCell className="px-4 py-3 font-mono text-xs text-slate-700" title={msg.messageId}>
                       {msg.messageId.length > 20 ? msg.messageId.substring(0, 20) + '…' : msg.messageId}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
                       {new Date(msg.enqueuedTimeUtc).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-center">
-                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${msg.deliveryCount >= 3 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-center">
+                      <Badge variant={msg.deliveryCount >= 3 ? 'destructive' : 'secondary'} className="rounded-full w-7 h-7 justify-center">
                         {msg.deliveryCount}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-0">
                         {msg.deadLetterReason || 'Unknown'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-center">
+                      <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800">
                         Ver →
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 Página {page + 1} de {totalPages} · Mostrando {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, messages.length)} de {messages.length}
               </p>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   ← Anterior
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
-                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Siguiente →
-                </button>
+                </Button>
               </div>
             </div>
           )}
         </>
       )}
 
-      {/* Modal */}
-      {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={closeModal}>
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+      {/* Detail Dialog */}
+      <Dialog open={!!selected} onOpenChange={(open) => { if (!open) closeModal(); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Detalle del mensaje</DialogTitle>
+            <DialogDescription className="font-mono text-xs truncate">
+              ID: {selected?.messageId}
+            </DialogDescription>
+          </DialogHeader>
 
-          {/* Modal content */}
-          <div
-            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal header */}
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-bold text-slate-900">Detalle del mensaje</h2>
-                <p className="text-xs font-mono text-slate-500 mt-1 truncate" title={selected.messageId}>
-                  ID: {selected.messageId}
-                </p>
-              </div>
-              <button
-                onClick={closeModal}
-                className="ml-4 text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal body */}
-            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+          {selected && (
+            <div className="overflow-y-auto flex-1 space-y-4">
               {/* Metadata */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-slate-500 font-medium uppercase">Encolado</p>
-                  <p className="text-sm text-slate-900 mt-0.5">{new Date(selected.enqueuedTimeUtc).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase">Encolado</p>
+                  <p className="text-sm mt-0.5">{new Date(selected.enqueuedTimeUtc).toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 font-medium uppercase">Intentos de entrega</p>
-                  <p className="text-sm text-slate-900 mt-0.5">{selected.deliveryCount}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase">Intentos de entrega</p>
+                  <p className="text-sm mt-0.5">{selected.deliveryCount}</p>
                 </div>
               </div>
 
               {/* Dead letter reason */}
               <div>
-                <p className="text-xs text-slate-500 font-medium uppercase">Razón</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase">Razón</p>
                 <div className="mt-1">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border-0">
                     {selected.deadLetterReason || 'Unknown'}
-                  </span>
+                  </Badge>
                   {selected.deadLetterErrorDescription && (
                     <p className="text-sm text-red-700 mt-1">{selected.deadLetterErrorDescription}</p>
                   )}
@@ -353,116 +345,88 @@ export function DlqManagerPage() {
               {/* Body */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-slate-500 font-medium uppercase">
+                  <p className="text-xs text-muted-foreground font-medium uppercase">
                     {editMode ? 'Editar contenido' : 'Contenido del mensaje'}
                   </p>
                   {!editMode && (
-                    <button
-                      onClick={() => setEditMode(true)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      ✎ Editar
-                    </button>
+                    <Button variant="ghost" size="sm" onClick={() => setEditMode(true)} className="text-blue-600">
+                      <Pencil className="h-3 w-3 mr-1" /> Editar
+                    </Button>
                   )}
                 </div>
                 {editMode ? (
                   <textarea
-                    className="w-full h-48 px-3 py-2 border border-blue-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-blue-50/30"
+                    className="w-full h-48 px-3 py-2 border border-blue-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-blue-50/30"
                     value={editBody}
                     onChange={(e) => setEditBody(e.target.value)}
                   />
                 ) : (
-                  <pre className="bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto text-sm font-mono text-slate-900 whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
+                  <pre className="bg-muted border rounded-lg p-4 overflow-x-auto text-sm font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
                     {formatBody(selected.bodyJson)}
                   </pre>
                 )}
               </div>
             </div>
+          )}
 
-            {/* Modal footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-slate-600 text-sm font-medium hover:text-slate-800 transition-colors"
-              >
-                Cerrar
-              </button>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setConfirmDiscard(selected.messageId)}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {actionLoading ? 'Procesando...' : 'Descartar'}
-                </button>
-                {editMode ? (
-                  <>
-                    <button
-                      onClick={() => setEditMode(false)}
-                      className="px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-300 transition-colors"
-                    >
-                      Cancelar edición
-                    </button>
-                    <button
-                      onClick={() => handleRequeue(selected.messageId, editBody)}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {actionLoading ? 'Procesando...' : 'Reencolar editado'}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => handleRequeue(selected.messageId)}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {actionLoading ? 'Procesando...' : 'Reencolar sin cambios'}
-                  </button>
-                )}
-              </div>
+          <DialogFooter className="flex-row justify-between sm:justify-between">
+            <Button variant="destructive" onClick={() => selected && setConfirmDiscard(selected.messageId)} disabled={actionLoading}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Descartar
+            </Button>
+            <div className="flex gap-2">
+              {editMode ? (
+                <>
+                  <Button variant="secondary" onClick={() => setEditMode(false)}>
+                    <X className="h-4 w-4 mr-1" /> Cancelar
+                  </Button>
+                  <Button onClick={() => selected && handleRequeue(selected.messageId, editBody)} disabled={actionLoading}>
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    {actionLoading ? 'Procesando...' : 'Reencolar editado'}
+                  </Button>
+                </>
+              ) : (
+                <Button className="bg-green-600 hover:bg-green-700" onClick={() => selected && handleRequeue(selected.messageId)} disabled={actionLoading}>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  {actionLoading ? 'Procesando...' : 'Reencolar'}
+                </Button>
+              )}
             </div>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm Discard Dialog */}
-      {confirmDiscard && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmDiscard(null)}></div>
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
+      <Dialog open={!!confirmDiscard} onOpenChange={(open) => { if (!open) setConfirmDiscard(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
+                <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Descartar mensaje</h3>
-                <p className="text-sm text-slate-600">Esta acción no se puede deshacer.</p>
+                <DialogTitle>Descartar mensaje</DialogTitle>
+                <DialogDescription>Esta acción no se puede deshacer.</DialogDescription>
               </div>
             </div>
-            <p className="text-sm text-slate-700 mb-6">
-              ¿Estás seguro de que querés descartar este mensaje de la DLQ? El mensaje se eliminará permanentemente.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmDiscard(null)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleDiscard(confirmDiscard)}
-                disabled={actionLoading}
-                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                {actionLoading ? 'Descartando...' : 'Sí, descartar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            ¿Estás seguro de que querés descartar este mensaje de la DLQ? El mensaje se eliminará permanentemente.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDiscard(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmDiscard && handleDiscard(confirmDiscard)}
+              disabled={actionLoading}
+            >
+              {actionLoading ? 'Descartando...' : 'Sí, descartar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
