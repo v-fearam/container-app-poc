@@ -40,6 +40,7 @@ graph TB
         SQL[SQL Database<br/>Basic 5 DTUs]
         AI[Application Insights<br/>OpenTelemetry]
         ENTRA[Entra ID<br/>App Registrations<br/>Custom OIDC]
+        KV[Key Vault<br/>Centralized Secrets]
     end
 
     subgraph "Service Bus Resources"
@@ -54,7 +55,7 @@ graph TB
     end
 
     subgraph "Managed Identity"
-        MI[User Assigned MI<br/>Roles:<br/>- SB Data Owner<br/>- AcrPull<br/>- SQL db_reader/writer]
+        MI[User Assigned MI<br/>Roles:<br/>- SB Data Owner<br/>- AcrPull<br/>- KV Secrets User<br/>- SQL db_reader/writer]
     end
 
     %% User interactions
@@ -94,6 +95,12 @@ graph TB
     MI -->|Authenticate| DW
     MI -->|Authenticate| BE
     
+    %% Key Vault secrets
+    KV -->|Secrets via refs| FE
+    KV -->|Secrets via refs| BE
+    KV -->|Secrets via refs| WW
+    KV -->|Secrets via refs| DW
+    
     %% Telemetry
     FE -->|Page views| AI
     WW -->|Traces| AI
@@ -106,7 +113,7 @@ graph TB
     classDef database fill:#E81123,stroke:#fff,stroke-width:2px,color:#fff
     classDef frontend fill:#00BCF2,stroke:#fff,stroke-width:2px,color:#fff
     
-    class ACR,AI,ENTRA,SB azure
+    class ACR,AI,ENTRA,SB,KV azure
     class Q,T,S servicebus
     class WW,DW worker
     class SQL,QC,CH database
@@ -123,12 +130,13 @@ graph TB
 
 | Capa | Tecnología |
 |------|-----------|
-| Frontend | React 18 + TypeScript + Vite + Tailwind CSS + Nginx |
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Nginx |
 | Backend | .NET 10 API (Controllers + Easy Auth service + Dashboard APIs) |
 | Workers | .NET 10 Worker Service + Service Bus + KEDA (scale 0→10) |
 | Database | Azure SQL Database (Basic 5 DTUs) |
 | Auth | Easy Auth (Custom OIDC) + App Roles (User/Admin) |
-| Infra | Azure Container Apps + ACR + Service Bus + SQL + App Insights |
+| Secrets | Azure Key Vault (references desde Container Apps) |
+| Infra | Azure Container Apps + ACR + Service Bus + SQL + App Insights + Key Vault |
 | IaC | Bicep (main.bicep + easyauth.bicep + módulos) |
 
 ## Estructura
@@ -257,15 +265,17 @@ Resumen rápido:
 
 ```bash
 # 1. Crear App Registrations en Entra ID (ver tutorial)
-# 2. Setear secrets en los Container Apps
-az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<FE_CLIENT_SECRET>" \
-  token-store-sas="<SAS_URL_FROM_DEPLOYMENT>"
 
-az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<BE_CLIENT_SECRET>"
+# 2. Guardar secrets en Key Vault (una sola vez — persisten entre deploys)
+KV=$(az deployment group show -g $RG -n main --query properties.outputs.keyVaultName.value -o tsv)
 
-# 3. Deploy auth config
+az keyvault secret set --vault-name $KV -n auth-client-secret-frontend --value "<FE_CLIENT_SECRET>"
+az keyvault secret set --vault-name $KV -n auth-client-secret-backend --value "<BE_CLIENT_SECRET>"
+az keyvault secret set --vault-name $KV -n token-store-sas --value "<SAS_URL>"
+az keyvault secret set --vault-name $KV -n appinsights-connection-string --value "<AI_CONN_STRING>"
+az keyvault secret set --vault-name $KV -n sql-connection-string --value "<SQL_CONN_STRING>"
+
+# 3. Deploy auth config (secrets already in KV, no need to set manually)
 az deployment group create -g $RG \
   --template-file biceps/easyauth.bicep \
   --parameters \
@@ -273,6 +283,9 @@ az deployment group create -g $RG \
     backendClientId="<BE_CLIENT_ID>" \
     oidcWellKnownUrl="<OIDC_DISCOVERY_URL>"
 ```
+
+> **Nota:** Con Key Vault references, los secretos no se pierden en redeploys de Bicep.
+> Rotación: actualizar el secret en Key Vault + crear nueva revisión del Container App.
 
 ---
 

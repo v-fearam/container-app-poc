@@ -30,12 +30,14 @@ param topicName string = 'nd-dashboard-events'
 @description('Service Bus subscription name')
 param subscriptionName string = 'counter-updater'
 
-@description('SQL Database connection string')
-@secure()
-param sqlConnectionString string
+@description('SQL Database connection string (used only if keyVaultUri is empty)')
+param sqlConnectionString string = ''
 
-@description('App Insights connection string')
+@description('App Insights connection string (used only if keyVaultUri is empty)')
 param appInsightsConnectionString string = ''
+
+@description('Key Vault URI for secrets (if provided, secrets are fetched from KV)')
+param keyVaultUri string = ''
 
 @description('KEDA: messages per replica')
 param kedaMessageCount string = '15'
@@ -77,6 +79,18 @@ resource dashboardWorkerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
           identity: managedIdentityId
         }
       ]
+      secrets: !empty(keyVaultUri) ? [
+        {
+          name: 'sql-connection-string'
+          keyVaultUrl: '${keyVaultUri}secrets/sql-connection-string'
+          identity: managedIdentityId
+        }
+        {
+          name: 'appinsights-connection-string'
+          keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
+          identity: managedIdentityId
+        }
+      ] : []
     }
     template: {
       containers: [
@@ -91,9 +105,21 @@ resource dashboardWorkerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ServiceBus__Namespace', value: serviceBusNamespaceFqdn }
             { name: 'ServiceBus__TopicName', value: topicName }
             { name: 'ServiceBus__SubscriptionName', value: subscriptionName }
-            { name: 'Sql__ConnectionString', value: sqlConnectionString }
             { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
-            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+            !empty(keyVaultUri) ? {
+              name: 'Sql__ConnectionString'
+              secretRef: 'sql-connection-string'
+            } : {
+              name: 'Sql__ConnectionString'
+              value: sqlConnectionString
+            }
+            !empty(keyVaultUri) ? {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              secretRef: 'appinsights-connection-string'
+            } : {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
+            }
           ]
         }
       ]

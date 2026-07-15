@@ -15,9 +15,11 @@ param containerImage string
 @description('The Container Registry name')
 param acrName string
 
-@description('Application Insights Connection String')
-@secure()
-param appInsightsConnectionString string
+@description('Key Vault URI (e.g., https://kv-weather-dev.vault.azure.net/)')
+param keyVaultUri string
+
+@description('Key Vault name for role assignment')
+param keyVaultName string = ''
 
 @description('Comma-separated explicit CORS origins allowed by backend API')
 param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
@@ -25,16 +27,14 @@ param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
 @description('Comma-separated host suffixes allowed for CORS origins')
 param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 
-@description('Optional SQL connection string for Dashboard features')
-@secure()
-param sqlConnectionString string = ''
+@description('Whether SQL connection string secret exists in Key Vault')
+param enableSql bool = false
 
 @description('Optional Service Bus namespace FQDN for Dashboard features')
 param serviceBusNamespaceFqdn string = ''
 
-@description('Optional Easy Auth client secret (preserved across redeployments)')
-@secure()
-param authClientSecret string = ''
+@description('Whether Easy Auth client secret exists in Key Vault')
+param enableAuth bool = false
 
 @description('Optional Service Bus namespace resource ID for role assignment')
 param serviceBusNamespaceId string = ''
@@ -91,6 +91,21 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
   name: last(split(serviceBusNamespaceId, '/'))
 }
 
+// Key Vault Secrets User role for reading secrets via keyVaultUrl references
+resource kvExisting 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(keyVaultName)) {
+  name: keyVaultName
+}
+
+resource kvSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(keyVaultName)) {
+  name: guid(userAssignedIdentity.id, kvExisting.id, 'KeyVaultSecretsUser')
+  scope: kvExisting
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
@@ -128,19 +143,22 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         [
           {
             name: 'appinsights-connection-string'
-            value: appInsightsConnectionString
+            keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
+            identity: userAssignedIdentity.id
           }
         ],
-        !empty(sqlConnectionString) ? [
+        enableSql ? [
           {
             name: 'sql-connection-string'
-            value: sqlConnectionString
+            keyVaultUrl: '${keyVaultUri}secrets/sql-connection-string'
+            identity: userAssignedIdentity.id
           }
         ] : [],
-        !empty(authClientSecret) ? [
+        enableAuth ? [
           {
             name: 'microsoft-provider-authentication-secret'
-            value: authClientSecret
+            keyVaultUrl: '${keyVaultUri}secrets/auth-client-secret-backend'
+            identity: userAssignedIdentity.id
           }
         ] : []
       )
@@ -174,7 +192,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: corsAllowedOriginSuffixes
               }
             ],
-            !empty(sqlConnectionString) ? [
+            enableSql ? [
               {
                 name: 'SQL_CONNECTION_STRING'
                 secretRef: 'sql-connection-string'
@@ -186,7 +204,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: serviceBusNamespaceFqdn
               }
             ] : [],
-            !empty(serviceBusNamespaceFqdn) || !empty(sqlConnectionString) ? [
+            !empty(serviceBusNamespaceFqdn) || enableSql ? [
               {
                 name: 'AZURE_CLIENT_ID'
                 value: userAssignedIdentity.properties.clientId

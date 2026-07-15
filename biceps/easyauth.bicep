@@ -1,22 +1,15 @@
 // ============================================================================
 // Easy Auth Configuration — Standalone Deployment
 // ============================================================================
-// Deploy AFTER main.bicep has created the Container Apps.
-// This creates the Token Store storage and configures Easy Auth (Custom OIDC)
-// on both frontend and backend Container Apps.
+// Deploy AFTER main.bicep has created the Container Apps and Key Vault.
+// This configures Easy Auth (Custom OIDC) on both frontend and backend.
 //
-// IMPORTANT: Secrets must be set via CLI BEFORE deploying this file:
+// PREREQUISITES:
+//   Secrets must exist in Key Vault (set once, persist across all deploys):
+//     - auth-client-secret-frontend
+//     - auth-client-secret-backend
+//     - token-store-sas
 //
-//   # 1. Set secrets on frontend (client secret + token store SAS)
-//   az containerapp secret set -n ca-weather-fe-dev -g <RG> --secrets \
-//     microsoft-provider-authentication-secret=<FRONTEND_SECRET> \
-//     token-store-sas=<SAS_URL>
-//
-//   # 2. Set secrets on backend (client secret)
-//   az containerapp secret set -n ca-weather-be-dev -g <RG> --secrets \
-//     microsoft-provider-authentication-secret=<BACKEND_SECRET>
-//
-//   # 3. Deploy auth config
 //   az deployment group create --resource-group <RG> \
 //     --template-file biceps/easyauth.bicep \
 //     --parameters \

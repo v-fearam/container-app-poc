@@ -30,6 +30,9 @@ param serviceBusQueueName string = 'weather-jobs'
 @description('App Insights connection string')
 param appInsightsConnectionString string = ''
 
+@description('Key Vault URI for secrets (if provided, appInsightsConnectionString from KV is used)')
+param keyVaultUri string = ''
+
 @description('KEDA: messages per replica')
 param kedaMessageCount string = '5'
 
@@ -70,6 +73,13 @@ resource workerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
           identity: managedIdentityId
         }
       ]
+      secrets: !empty(keyVaultUri) ? [
+        {
+          name: 'appinsights-connection-string'
+          keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
+          identity: managedIdentityId
+        }
+      ] : []
     }
     template: {
       containers: [
@@ -84,7 +94,13 @@ resource workerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ServiceBus__Namespace', value: serviceBusNamespaceFqdn }
             { name: 'ServiceBus__QueueName', value: serviceBusQueueName }
             { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
-            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+            !empty(keyVaultUri) ? {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              secretRef: 'appinsights-connection-string'
+            } : {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
+            }
           ]
         }
       ]

@@ -15,9 +15,11 @@ param containerImage string
 @description('The Container Registry name')
 param acrName string
 
-@description('Application Insights Connection String')
-@secure()
-param appInsightsConnectionString string
+@description('Key Vault URI (e.g., https://kv-weather-dev.vault.azure.net/)')
+param keyVaultUri string
+
+@description('Key Vault name for role assignment')
+param keyVaultName string = ''
 
 @description('Backend API URL')
 param backendApiUrl string
@@ -40,13 +42,11 @@ param memory string = '0.5Gi'
 @description('Timestamp for unique revision suffix')
 param timestamp string = utcNow()
 
-@description('Optional Easy Auth client secret (preserved across redeployments)')
-@secure()
-param authClientSecret string = ''
+@description('Whether Easy Auth client secret exists in Key Vault')
+param enableAuth bool = false
 
-@description('Optional Token Store SAS URL (preserved across redeployments)')
-@secure()
-param tokenStoreSasUrl string = ''
+@description('Whether Token Store SAS URL exists in Key Vault')
+param enableTokenStore bool = false
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2026-01-01-preview' existing = {
   name: acrName
@@ -62,6 +62,21 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: containerRegistry
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Key Vault Secrets User role for reading secrets via keyVaultUrl references
+resource kvExisting 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(keyVaultName)) {
+  name: keyVaultName
+}
+
+resource kvSecretsUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(keyVaultName)) {
+  name: guid(userAssignedIdentity.id, kvExisting.id, 'KeyVaultSecretsUser')
+  scope: kvExisting
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
     principalId: userAssignedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -98,19 +113,22 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         [
           {
             name: 'appinsights-connection-string'
-            value: appInsightsConnectionString
+            keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
+            identity: userAssignedIdentity.id
           }
         ],
-        !empty(authClientSecret) ? [
+        enableAuth ? [
           {
             name: 'microsoft-provider-authentication-secret'
-            value: authClientSecret
+            keyVaultUrl: '${keyVaultUri}secrets/auth-client-secret-frontend'
+            identity: userAssignedIdentity.id
           }
         ] : [],
-        !empty(tokenStoreSasUrl) ? [
+        enableTokenStore ? [
           {
             name: 'token-store-sas'
-            value: tokenStoreSasUrl
+            keyVaultUrl: '${keyVaultUri}secrets/token-store-sas'
+            identity: userAssignedIdentity.id
           }
         ] : []
       )

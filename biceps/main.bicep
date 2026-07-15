@@ -72,17 +72,11 @@ param sqlAdminObjectId string = ''
 @description('Entra ID admin login (UPN) for SQL Server (required if deployDashboard=true)')
 param sqlAdminLogin string = ''
 
-@description('Easy Auth client secret for backend (preserved across Container App redeployments)')
-@secure()
-param backendAuthSecret string = ''
+@description('Deploy Key Vault for centralized secrets')
+param deployKeyVault bool = true
 
-@description('Easy Auth client secret for frontend (preserved across Container App redeployments)')
-@secure()
-param frontendAuthSecret string = ''
-
-@description('Token Store SAS URL for frontend (preserved across Container App redeployments)')
-@secure()
-param frontendTokenStoreSas string = ''
+@description('Key Vault name')
+param keyVaultName string = 'kv-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
 
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
@@ -123,6 +117,20 @@ module environment 'modules/container-app-environment.bicep' = {
   }
 }
 
+// Key Vault for centralized secrets
+module keyVault 'modules/key-vault.bicep' = if (deployKeyVault) {
+  name: 'key-vault-deployment'
+  params: {
+    location: location
+    keyVaultName: keyVaultName
+    secretUserPrincipalIds: []
+    tags: {
+      workload: workloadName
+      environment: environmentShortName
+    }
+  }
+}
+
 // Backend Container App
 module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApps) {
   name: 'backend-app-deployment'
@@ -132,7 +140,8 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     environmentId: environment.outputs.environmentId
     containerImage: '${containerRegistry.outputs.acrLoginServer}/${backendImageName}:${imageTag}'
     acrName: containerRegistryName
-    appInsightsConnectionString: appInsights.outputs.connectionString
+    keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
+    keyVaultName: deployKeyVault ? keyVault!.outputs.keyVaultName : ''
     corsAllowedOrigins: corsAllowedOrigins
     corsAllowedOriginSuffixes: corsAllowedOriginSuffixes
     targetPort: 8080
@@ -140,10 +149,10 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     maxReplicas: 3
     cpu: '0.5'
     memory: '1.0Gi'
-    sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default' : ''
+    enableSql: deployDashboard
     serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceFqdn : ''
     serviceBusNamespaceId: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceId : ''
-    authClientSecret: backendAuthSecret
+    enableAuth: true
   }
 }
 
@@ -156,15 +165,16 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
     environmentId: environment.outputs.environmentId
     containerImage: '${containerRegistry.outputs.acrLoginServer}/${frontendImageName}:${imageTag}'
     acrName: containerRegistryName
-    appInsightsConnectionString: appInsights.outputs.connectionString
+    keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
+    keyVaultName: deployKeyVault ? keyVault!.outputs.keyVaultName : ''
     backendApiUrl: deployContainerApps ? backendApp!.outputs.containerAppUrl : ''
     targetPort: 80
     minReplicas: 1
     maxReplicas: 5
     cpu: '0.25'
     memory: '0.5Gi'
-    authClientSecret: frontendAuthSecret
-    tokenStoreSasUrl: frontendTokenStoreSas
+    enableAuth: true
+    enableTokenStore: true
   }
 }
 
@@ -181,7 +191,7 @@ module serviceBus 'modules/service-bus.bicep' = if (deployWorker || deployDashbo
   }
 }
 
-// Managed Identity for Worker (Service Bus Data Receiver + Sender + AcrPull)
+// Managed Identity for Worker (Service Bus Data Receiver + Sender + AcrPull + KV Secrets User)
 module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker || deployDashboard) {
   name: 'worker-identity-deployment'
   params: {
@@ -189,6 +199,7 @@ module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker || dep
     identityName: workerIdentityName
     serviceBusNamespaceId: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceId : ''
     acrName: containerRegistryName
+    keyVaultName: deployKeyVault ? keyVault!.outputs.keyVaultName : ''
   }
 }
 
@@ -206,6 +217,7 @@ module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && depl
     serviceBusNamespaceFqdn: deployWorker ? serviceBus!.outputs.namespaceFqdn : ''
     serviceBusQueueName: 'weather-jobs'
     appInsightsConnectionString: appInsights.outputs.connectionString
+    keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
     minReplicas: 0
     maxReplicas: 10
     cpu: '0.5'
@@ -251,4 +263,6 @@ output workerIdentityId string = deployWorker ? workerIdentity!.outputs.identity
 output sqlServerFqdn string = deployDashboard ? sqlDatabase!.outputs.sqlServerFqdn : ''
 output sqlDatabaseName string = deployDashboard ? sqlDatabase!.outputs.databaseName : ''
 output sqlConnectionString string = deployDashboard ? sqlDatabase!.outputs.connectionString : ''
+output keyVaultName string = deployKeyVault ? keyVault!.outputs.keyVaultName : ''
+output keyVaultUri string = deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
 
