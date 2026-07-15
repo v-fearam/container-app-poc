@@ -75,28 +75,29 @@ Easy Auth se configura con un Bicep **separado** (`biceps/easyauth.bicep`), que 
 ### Pre-requisitos
 
 1. Container Apps ya desplegadas (ver README.md pasos 1-5)
-2. App Registrations creadas (ver sección "Pre-requisitos: App Registrations" abajo)
-3. Client secrets generados
+2. Key Vault creado (incluido en `main.bicep` con `deployKeyVault=true`)
+3. App Registrations creadas (ver sección "Pre-requisitos: App Registrations" abajo)
+4. Client secrets generados
 
-### Paso 1: Setear secrets DUMMY en Container Apps
+### Paso 1: Guardar secrets en Key Vault
 
-> ⚠️ **MÉTODO RECOMENDADO**: Usar valores dummy (`temp-secret-fe`, `temp-secret-be`, etc.) ahora
-> y actualizarlos con valores reales después de obtenerlos de Azure Portal.
-> Esto permite avanzar con el deployment sin esperar a los valores finales.
+> Los secrets en Key Vault **persisten entre redeploys de Bicep**.
+> Se configuran una sola vez y los Container Apps los leen via `keyVaultUrl` references.
 
 ```bash
 RG="rg-far-container-app-easyauth"
 
-# Frontend: client secret dummy + token-store-sas placeholder
-az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="temp-secret-fe" \
-  token-store-sas="placeholder-will-update"
+# Obtener nombre del Key Vault del deployment
+KV=$(az deployment group show -g $RG -n main --query properties.outputs.keyVaultName.value -o tsv)
 
-# Backend: client secret dummy
-az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="temp-secret-be"
+# Frontend: client secret + token-store-sas (valores dummy por ahora)
+az keyvault secret set --vault-name $KV -n auth-client-secret-frontend --value "temp-secret-fe"
+az keyvault secret set --vault-name $KV -n token-store-sas --value "placeholder-will-update"
 
-echo "✅ Secrets dummy establecidos. Se actualizarán en los Pasos 3 y 5."
+# Backend: client secret (valor dummy por ahora)
+az keyvault secret set --vault-name $KV -n auth-client-secret-backend --value "temp-secret-be"
+
+echo "✅ Secrets en Key Vault. Se actualizarán en los Pasos 3 y 5."
 ```
 
 ### Paso 2: Deploy Easy Auth + Token Store
@@ -119,9 +120,11 @@ TOKEN_STORE_SAS=$(az deployment group show -g $RG \
   --name easyauth \
   --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
 
-# Actualizar el secret del frontend con el valor real
-az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
-  token-store-sas="$TOKEN_STORE_SAS"
+# Actualizar el secret en Key Vault
+az keyvault secret set --vault-name $KV -n token-store-sas --value "$TOKEN_STORE_SAS"
+
+# Crear nueva revisión para que el Container App lea el nuevo valor
+az containerapp revision restart -n ca-weather-fe-dev -g $RG
 ```
 
 ### Paso 4: Obtener Callback URL para App Registration
@@ -141,14 +144,16 @@ Después de obtener los valores reales desde **Azure Portal → Entra ID → App
 
 ```bash
 # Frontend (reemplaza con el value real del secret del frontend)
-az containerapp secret set -n ca-weather-fe-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<REAL_FE_CLIENT_SECRET>"
+az keyvault secret set --vault-name $KV -n auth-client-secret-frontend --value "<REAL_FE_CLIENT_SECRET>"
 
 # Backend (reemplaza con el value real del secret del backend)
-az containerapp secret set -n ca-weather-be-dev -g $RG --secrets \
-  microsoft-provider-authentication-secret="<REAL_BE_CLIENT_SECRET>"
+az keyvault secret set --vault-name $KV -n auth-client-secret-backend --value "<REAL_BE_CLIENT_SECRET>"
 
-echo "✅ Client secrets actualizados con valores reales"
+# Reiniciar revisiones para que lean los nuevos valores
+az containerapp revision restart -n ca-weather-fe-dev -g $RG
+az containerapp revision restart -n ca-weather-be-dev -g $RG
+
+echo "✅ Client secrets actualizados en Key Vault"
 ```
 
 ### Qué despliega `easyauth.bicep`
@@ -328,28 +333,25 @@ TOKEN_STORE_SAS_URL="${BLOB_ENDPOINT}${CONTAINER_NAME}?${SAS_TOKEN}"
 echo "Token Store SAS URL: $TOKEN_STORE_SAS_URL"
 ```
 
-### Paso 2: Secrets en Container Apps
+### Paso 2: Secrets en Key Vault
 
 ```bash
 RESOURCE_GROUP="rg-far-container-app-easyauth"
 
+# Obtener Key Vault name
+KV=$(az deployment group show -g $RESOURCE_GROUP -n main --query properties.outputs.keyVaultName.value -o tsv)
+
 # Frontend necesita 2 secrets:
 # 1. Client secret de la App Registration del frontend
 # 2. SAS URL del Token Store
-az containerapp secret set \
-  --name ca-weather-fe-dev \
-  --resource-group $RESOURCE_GROUP \
-  --secrets \
-    microsoft-provider-authentication-secret="$FRONTEND_CLIENT_SECRET" \
-    token-store-sas="$TOKEN_STORE_SAS_URL"
+az keyvault secret set --vault-name $KV -n auth-client-secret-frontend --value "$FRONTEND_CLIENT_SECRET"
+az keyvault secret set --vault-name $KV -n token-store-sas --value "$TOKEN_STORE_SAS_URL"
 
 # Backend necesita 1 secret:
 # 1. Client secret de la App Registration del backend
-az containerapp secret set \
-  --name ca-weather-be-dev \
-  --resource-group $RESOURCE_GROUP \
-  --secrets \
-    microsoft-provider-authentication-secret="$BACKEND_CLIENT_SECRET"
+az keyvault secret set --vault-name $KV -n auth-client-secret-backend --value "$BACKEND_CLIENT_SECRET"
+
+# Los Container Apps leen los secrets via keyVaultUrl references (no necesitan `az containerapp secret set`)
 ```
 
 ### Paso 3: Easy Auth Frontend (REST API)
