@@ -230,6 +230,7 @@ public class DlqService(
         // Parse body to extract vertical and processType
         string vertical = "Unknown";
         string processType = "Unknown";
+        DateTime messageDate = DateTime.UtcNow.Date;
 
         if (!string.IsNullOrEmpty(messageBody))
         {
@@ -241,6 +242,8 @@ public class DlqService(
                     vertical = v.GetString() ?? vertical;
                 if (root.TryGetProperty("processType", out var pt))
                     processType = pt.GetString() ?? processType;
+                if (root.TryGetProperty("timestamp", out var ts) && DateTime.TryParse(ts.GetString(), out var parsedDate))
+                    messageDate = parsedDate.Date;
             }
             catch (Exception ex)
             {
@@ -253,8 +256,6 @@ public class DlqService(
         // Map topic names back to the queue name used in SQL (e.g., nd-dashboard-events → weather-jobs)
         if (originalQueue == "nd-dashboard-events") originalQueue = "weather-jobs";
 
-        var today = DateTime.UtcNow.Date;
-
         try
         {
             // Try to update existing row
@@ -263,7 +264,7 @@ public class DlqService(
                     q.Vertical == vertical &&
                     q.QueueName == originalQueue &&
                     q.ProcessType == processType &&
-                    q.Date == today,
+                    q.Date == messageDate,
                     cancellationToken);
 
             if (counter != null)
@@ -279,7 +280,7 @@ public class DlqService(
                     Vertical = vertical,
                     QueueName = originalQueue,
                     ProcessType = processType,
-                    Date = today,
+                    Date = messageDate,
                     DiscardedCount = 1,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
@@ -288,7 +289,7 @@ public class DlqService(
 
             await dbContext.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Incremented DiscardedCount for {Vertical}/{Queue}/{ProcessType}/{Date}",
-                vertical, originalQueue, processType, today);
+                vertical, originalQueue, processType, messageDate);
         }
         catch (Exception ex)
         {

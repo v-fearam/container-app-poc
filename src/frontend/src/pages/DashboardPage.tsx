@@ -309,7 +309,7 @@ export function DashboardPage() {
                         <p className="text-3xl font-bold text-green-600">{queue.processes.reduce((s, p) => s + p.processedCount, 0).toLocaleString()}</p>
                       </div>
                       {queue.dlqCount > 0 && (
-                        <Link to={`/dashboard/dlq/${queue.dlqPath}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity">
+                        <Link to={`/dashboard/dlq/${queue.dlqPath}?fecha=${filterDate}`} className="text-right cursor-pointer hover:opacity-80 transition-opacity">
                           <p className="text-xs text-red-600 font-medium uppercase tracking-wide mb-1">DLQ</p>
                           <p className="text-3xl font-bold text-red-600">{queue.dlqCount.toLocaleString()}</p>
                         </Link>

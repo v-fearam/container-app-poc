@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 
 interface DlqMessage {
   messageId: string;
@@ -20,6 +20,7 @@ export function DlqManagerPage() {
   const params = useParams();
   const queueName = params['*'];
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { get, post } = useApi();
 
   const [messages, setMessages] = useState<DlqMessage[]>([]);
@@ -32,7 +33,7 @@ export function DlqManagerPage() {
   const [editBody, setEditBody] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
-  const [filterDate, setFilterDate] = useState(todayStr());
+  const [filterDate, setFilterDate] = useState(searchParams.get('fecha') || todayStr());
 
   const fetchMessages = useCallback(async () => {
     if (!queueName) return;
