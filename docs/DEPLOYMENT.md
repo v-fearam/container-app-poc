@@ -1,0 +1,420 @@
+# Deployment Guide — Change Feed POC
+
+> **Objetivo:** Comandos completos para deployar y re-deployar la POC desde cero.  
+> **Contexto:** El viernes se borra todo. El lunes se replica con estos comandos.
+
+---
+
+## Pre-requisitos
+
+1. Azure CLI autenticado: `az login`
+2. Suscripción seleccionada: `az account set --subscription <id>`
+3. Permisos necesarios:
+   - Owner o Contributor en la suscripción
+   - Key Vault Secrets Officer (para seed automático de secrets)
+   - Cosmos DB Account Contributor
+
+---
+
+## Variables globales
+
+```bash
+# Configuración base
+export RG="rg-far-container-app-easyauth"
+export LOCATION="eastus2"
+export WORKLOAD="weather"
+export ENV="dev"
+
+# Tu Entra ID admin (reemplazar con tu UPN y Object ID)
+export SQL_ADMIN_LOGIN="far@microsoft.com"  # Tu UPN
+export SQL_ADMIN_OBJECT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Tu Object ID
+```
+
+---
+
+## Paso 1: Deploy infraestructura base (sin Container Apps)
+
+```bash
+# Crear resource group (si no existe)
+az group create --name $RG --location $LOCATION
+
+# Deploy: ACR + App Insights + Log Analytics + Container App Environment + Key Vault
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    location=$LOCATION \
+    workloadName=$WORKLOAD \
+    environmentShortName=$ENV \
+    deployContainerApps=false \
+    deployWorker=false \
+    deployDashboard=false \
+    deployCosmosDB=false \
+  --name "base-infra-$(date +%s)"
+
+# Outputs
+export ACR_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.acrName.value' -o tsv)
+export ACR_LOGIN_SERVER=$(az deployment group show -g $RG --name main --query 'properties.outputs.acrLoginServer.value' -o tsv)
+export KV_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.keyVaultName.value' -o tsv || echo "")
+export APP_INSIGHTS_CONN=$(az deployment group show -g $RG --name main --query 'properties.outputs.appInsightsConnectionString.value' -o tsv)
+
+echo "ACR: $ACR_NAME"
+echo "Key Vault: $KV_NAME"
+```
+
+---
+
+## Paso 2: Build y push imágenes Docker
+
+```bash
+# Backend
+az acr build --registry $ACR_NAME \
+  --image weather-api:latest \
+  --file src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+# Frontend
+az acr build --registry $ACR_NAME \
+  --image weather-frontend:latest \
+  --file src/frontend/Dockerfile \
+  src/frontend
+
+# WeatherWorker
+az acr build --registry $ACR_NAME \
+  --image weather-worker:latest \
+  --file src/worker/WeatherWorker/Dockerfile \
+  src/worker/WeatherWorker
+
+# DashboardWorker
+az acr build --registry $ACR_NAME \
+  --image dashboard-worker:latest \
+  --file src/worker/DashboardWorker/Dockerfile \
+  src/worker/DashboardWorker
+```
+
+---
+
+## Paso 3: Deploy Worker + Dashboard infrastructure (SQL + Service Bus)
+
+```bash
+# Deploy: SQL Server + Database + Service Bus + Worker Identity + roles
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployWorker=true \
+    deployDashboard=true \
+    deployContainerApps=false \
+    sqlAdminLogin=$SQL_ADMIN_LOGIN \
+    sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
+  --name "worker-dashboard-infra-$(date +%s)"
+
+# Outputs
+export SQL_SERVER=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+export SQL_DB=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
+export SQL_CONN_STR=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlConnectionString.value' -o tsv)
+export SB_NAMESPACE=$(az deployment group show -g $RG --name main --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
+
+echo "SQL Server: $SQL_SERVER"
+echo "Database: $SQL_DB"
+echo "Service Bus: $SB_NAMESPACE"
+```
+
+---
+
+## Paso 4: Configurar SQL Database (User + Migrations)
+
+### 4.1 Crear usuario de managed identity en SQL
+
+```bash
+# Conectar a SQL con tu admin Entra ID
+# (Usar Azure Portal Data Studio o az sql query si está disponible)
+
+# T-SQL a ejecutar (reemplazar principalId con el output de deployment):
+export WORKER_IDENTITY_PRINCIPAL=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.workerIdentityPrincipalId.value' -o tsv)
+
+echo "Ejecutar en SQL Server:"
+echo "CREATE USER [id-weather-worker-dev] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [id-weather-worker-dev];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];"
+```
+
+### 4.2 Correr EF Core migrations
+
+```bash
+# Desde WSL o Git Bash
+cd src/worker/DashboardWorker
+
+# Connection string temporal con tu admin Entra ID
+# (Usar Azure Portal SQL Query Editor o local con VPN/firewall abierto)
+
+# Opción 1: Desde local (requiere firewall rule para tu IP)
+dotnet ef database update
+
+# Opción 2: Desde Azure Portal SQL Query Editor
+# - Copiar SQL de migrations y ejecutar manualmente
+```
+
+---
+
+## Paso 5: Deploy Container Apps
+
+```bash
+# Deploy: Backend + Frontend + WeatherWorker + DashboardWorker
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployContainerApps=true \
+    deployWorker=true \
+    deployDashboard=true \
+    deployWorkerApp=true \
+    deployCosmosDB=false \
+  --name "container-apps-$(date +%s)"
+
+# Outputs
+export BACKEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.backendAppUrl.value' -o tsv)
+export FRONTEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.frontendAppUrl.value' -o tsv)
+
+echo "Backend: $BACKEND_URL"
+echo "Frontend: $FRONTEND_URL"
+```
+
+---
+
+## Paso 6: Deploy Easy Auth (Entra ID OIDC)
+
+### 6.1 Crear App Registrations en Entra ID
+
+```bash
+# 1. Frontend App Registration
+#    - Name: "Weather App Frontend - Dev"
+#    - Redirect URI: https://<frontend-fqdn>/.auth/login/aad/callback
+#    - Implicit: ID tokens
+#    - API permissions: User.Read
+#    - Generate client secret → save as $FRONTEND_CLIENT_SECRET
+
+# 2. Backend App Registration
+#    - Name: "Weather App Backend - Dev"
+#    - Expose an API: api://weather-backend-dev
+#    - Scope: Weather.Read
+#    - API permissions: add frontend app as authorized client
+#    - App Roles: Admin, User
+#    - Generate client secret → save as $BACKEND_CLIENT_SECRET
+```
+
+### 6.2 Guardar secrets en Key Vault
+
+```bash
+export FRONTEND_CLIENT_ID="<frontend-app-id>"
+export FRONTEND_CLIENT_SECRET="<frontend-client-secret>"
+export BACKEND_CLIENT_ID="<backend-app-id>"
+export BACKEND_CLIENT_SECRET="<backend-client-secret>"
+
+# Guardar en Key Vault
+az keyvault secret set --vault-name $KV_NAME \
+  --name auth-client-secret-frontend \
+  --value "$FRONTEND_CLIENT_SECRET"
+
+az keyvault secret set --vault-name $KV_NAME \
+  --name auth-client-secret-backend \
+  --value "$BACKEND_CLIENT_SECRET"
+```
+
+### 6.3 Deploy Easy Auth config
+
+```bash
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/easyauth.bicep \
+  --parameters \
+    backendAppName="ca-${WORKLOAD}-be-${ENV}" \
+    frontendAppName="ca-${WORKLOAD}-fe-${ENV}" \
+    backendClientId=$BACKEND_CLIENT_ID \
+    frontendClientId=$FRONTEND_CLIENT_ID \
+    keyVaultName=$KV_NAME \
+  --name "easyauth-$(date +%s)"
+```
+
+---
+
+## Paso 7: Deploy Cosmos DB (Change Feed POC)
+
+```bash
+# Deploy Cosmos DB: serverless account + database + 3 containers
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployCosmosDB=true \
+    deployWorker=true \
+    deployDashboard=true \
+    deployContainerApps=false \
+  --name "cosmos-db-$(date +%s)"
+
+# Outputs
+export COSMOS_ENDPOINT=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosEndpoint.value' -o tsv)
+
+export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosAccountName.value' -o tsv)
+
+export COSMOS_DB=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosDatabaseName.value' -o tsv)
+
+export WORKER_IDENTITY=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.workerIdentityName.value' -o tsv)
+
+echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
+echo "Database: $COSMOS_DB"
+echo "Containers: personas, changefeed-leases, changefeed-errors"
+echo "Worker Identity: $WORKER_IDENTITY (has Cosmos DB Data Contributor role)"
+```
+
+### Verificar role assignment
+
+```bash
+# Listar role assignments para la worker identity en Cosmos
+az cosmosdb sql role assignment list \
+  --account-name $COSMOS_ACCOUNT \
+  --resource-group $RG
+```
+
+---
+
+## Paso 8: SQL Migrations para Change Feed
+
+```bash
+# Agregar tablas PersonasSync y ChangeFeedCounters
+# (Ejecutar EF migrations desde DashboardWorker o scripts SQL)
+
+# Ver docs/change-feed-poc.md §3.2 y §3.3 para schema
+```
+
+---
+
+## Verificación end-to-end
+
+### Backend Health
+
+```bash
+curl $BACKEND_URL/health
+# Esperar: {"status":"healthy","timestamp":"..."}
+```
+
+### Service Bus
+
+```bash
+# Enviar mensaje de prueba (desde WSL)
+cd src/tools/ServiceBusEnqueuer
+dotnet run
+```
+
+### Dashboard
+
+```bash
+# Abrir en navegador (autenticarse con Entra ID)
+open $FRONTEND_URL
+```
+
+### Cosmos DB
+
+```bash
+# Listar containers
+az cosmosdb sql container list \
+  --account-name $COSMOS_ACCOUNT \
+  --database-name $COSMOS_DB \
+  --resource-group $RG \
+  --query "[].id"
+```
+
+---
+
+## Troubleshooting
+
+### Container App no arranca
+
+```bash
+# Ver logs en tiempo real
+az containerapp logs show \
+  --name ca-weather-be-dev \
+  --resource-group $RG \
+  --follow
+```
+
+### SQL connection failures
+
+```bash
+# Verificar que la managed identity tiene roles
+az sql db show \
+  --server <server-name> \
+  --name dashboard-poc \
+  --resource-group $RG
+
+# Verificar firewall rules
+az sql server firewall-rule list \
+  --server <server-name> \
+  --resource-group $RG
+```
+
+### Cosmos role assignment missing
+
+```bash
+# Re-deployar solo el módulo Cosmos con fix
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/modules/cosmos-db.bicep \
+  --parameters \
+    cosmosAccountName=$COSMOS_ACCOUNT \
+    databaseName=$COSMOS_DB \
+    dataContributorPrincipalId=$(az deployment group show -g $RG --name main \
+      --query 'properties.outputs.workerIdentityPrincipalId.value' -o tsv)
+```
+
+---
+
+## Cleanup (viernes al final del día)
+
+```bash
+# Borrar todo
+az group delete --name $RG --yes --no-wait
+
+# Verificar que se borró
+az group show --name $RG
+# Esperar: ResourceGroupNotFound
+```
+
+---
+
+## Re-deploy completo (lunes)
+
+```bash
+# 1. Copiar este archivo completo
+# 2. Ejecutar paso 1 → paso 7 en secuencia
+# 3. Tiempo estimado: 20-30 minutos
+# 4. Al final tendrás TODO deployado (base + workers + dashboard + Cosmos)
+```
+
+---
+
+## Referencia rápida de comandos
+
+```bash
+# Variables críticas (guardar en ~/.bashrc o similar)
+export RG="rg-far-container-app-easyauth"
+export ACR_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.acrName.value' -o tsv)
+
+# Re-build y re-deploy un worker (ejemplo: DashboardWorker)
+az acr build --registry $ACR_NAME \
+  --image dashboard-worker:latest \
+  --file src/worker/DashboardWorker/Dockerfile \
+  src/worker/DashboardWorker \
+  --no-logs
+
+az containerapp update \
+  --name ca-weather-dash-worker-dev \
+  --resource-group $RG \
+  --image ${ACR_NAME}.azurecr.io/dashboard-worker:latest \
+  --revision-suffix "dw-$(date +%s)"
+```
