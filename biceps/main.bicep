@@ -87,6 +87,21 @@ param cosmosAccountName string = 'cosmos-${workloadName}-${environmentShortName}
 @description('Cosmos DB database name')
 param cosmosDatabaseName string = 'change-feed-poc'
 
+@description('Deploy Change Feed Worker Container App (requires ChangeFeedWorker image in ACR and Cosmos DB)')
+param deployChangeFeedWorker bool = false
+
+@description('Change Feed Worker image name in ACR')
+param changeFeedWorkerImageName string = 'changefeed-worker'
+
+@description('Cosmos collection to monitor (POC: personas, PROD: configurable per vertical)')
+param cosmosCollection string = 'personas'
+
+@description('Change Feed Processor name (unique per vertical)')
+param processorName string = 'cfp-personas'
+
+@description('Vertical name for telemetry')
+param verticalName string = 'personas'
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -254,6 +269,34 @@ module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && depl
   }
 }
 
+// Change Feed Worker Container App (fixed replicas, no scale-to-zero)
+module changeFeedWorkerApp 'modules/changefeed-worker-container-app.bicep' = if (deployChangeFeedWorker && deployCosmosDB && deployDashboard && deployContainerApps) {
+  name: 'changefeed-worker-deployment'
+  params: {
+    location: location
+    containerAppName: 'ca-${workloadName}-cfworker-${environmentShortName}'
+    environmentId: environment.outputs.environmentId
+    containerImage: '${containerRegistry.outputs.acrLoginServer}/${changeFeedWorkerImageName}:${imageTag}'
+    acrName: containerRegistryName
+    managedIdentityId: workerIdentity!.outputs.identityId
+    managedIdentityClientId: workerIdentity!.outputs.identityClientId
+    cosmosEndpoint: cosmosDB!.outputs.endpoint
+    cosmosDatabase: cosmosDatabaseName
+    cosmosCollection: cosmosCollection
+    processorName: processorName
+    verticalName: verticalName
+    serviceBusNamespaceFqdn: serviceBus!.outputs.namespaceFqdn
+    dashboardTopicName: 'nd-dashboard-events'
+    sqlConnectionString: 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default'
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
+    minReplicas: 1  // No scale to zero — avoid lease rebalancing lag
+    maxReplicas: 1  // POC: 1 replica. PROD: set to number of physical partitions
+    cpu: '0.5'
+    memory: '1.0Gi'
+  }
+}
+
 // =============================================================================
 // Dashboard Infrastructure (SQL Database)
 // =============================================================================
@@ -295,6 +338,7 @@ output sqlConnectionString string = deployDashboard ? sqlDatabase!.outputs.conne
 output cosmosEndpoint string = deployCosmosDB ? cosmosDB!.outputs.endpoint : ''
 output cosmosAccountName string = deployCosmosDB ? cosmosDB!.outputs.accountName : ''
 output cosmosDatabaseName string = deployCosmosDB ? cosmosDB!.outputs.databaseName : ''
+output changeFeedWorkerAppName string = deployChangeFeedWorker ? changeFeedWorkerApp!.outputs.containerAppName : ''
 output keyVaultName string = deployKeyVault ? keyVault!.outputs.keyVaultName : ''
 output keyVaultUri string = deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
 
