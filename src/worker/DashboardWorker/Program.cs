@@ -20,7 +20,7 @@ var sqlConnectionString = builder.Configuration["Sql:ConnectionString"]
     ?? Environment.GetEnvironmentVariable("Sql__ConnectionString")
     ?? throw new InvalidOperationException("Sql:ConnectionString is required. Set in appsettings or env var.");
 
-builder.Services.AddDbContext<DashboardDbContext>(options =>
+builder.Services.AddDbContextFactory<DashboardDbContext>(options =>
     options.UseSqlServer(sqlConnectionString));
 
 // ─── Azure SDK Clients (Service Bus) ────────────────────────────────────────

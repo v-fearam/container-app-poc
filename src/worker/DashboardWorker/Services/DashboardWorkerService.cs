@@ -15,19 +15,19 @@ public class DashboardWorkerService : BackgroundService
     private readonly ILogger<DashboardWorkerService> _logger;
     private readonly ServiceBusClient _serviceBusClient;
     private readonly ServiceBusOptions _sbOptions;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IDbContextFactory<DashboardDbContext> _dbContextFactory;
     private ServiceBusProcessor? _processor;
 
     public DashboardWorkerService(
         ILogger<DashboardWorkerService> logger,
         ServiceBusClient serviceBusClient,
         IOptions<ServiceBusOptions> sbOptions,
-        IServiceScopeFactory scopeFactory)
+        IDbContextFactory<DashboardDbContext> dbContextFactory)
     {
         _logger = logger;
         _serviceBusClient = serviceBusClient;
         _sbOptions = sbOptions.Value;
-        _scopeFactory = scopeFactory;
+        _dbContextFactory = dbContextFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -121,8 +121,7 @@ public class DashboardWorkerService : BackgroundService
 
     private async Task UpsertCounterAsync(DashboardEvent evt, CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         var date = evt.Timestamp.Date;
         var filter = dbContext.QueueCounters
@@ -164,9 +163,8 @@ public class DashboardWorkerService : BackgroundService
             catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
             {
                 _logger.LogDebug("Unique constraint violation during INSERT. Retrying UPDATE.");
-                
-                using var retryScope = _scopeFactory.CreateScope();
-                var retryDbContext = retryScope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+                await using var retryDbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
                 var retryFilter = retryDbContext.QueueCounters
                     .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date);
 
