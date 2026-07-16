@@ -78,6 +78,15 @@ param deployKeyVault bool = true
 @description('Key Vault name')
 param keyVaultName string = 'kv-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
 
+@description('Deploy Cosmos DB for Change Feed POC')
+param deployCosmosDB bool = false
+
+@description('Cosmos DB account name')
+param cosmosAccountName string = 'cosmos-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
+
+@description('Cosmos DB database name')
+param cosmosDatabaseName string = 'change-feed-poc'
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -208,6 +217,21 @@ module workerIdentity 'modules/managed-identity.bicep' = if (deployWorker || dep
   }
 }
 
+// Cosmos DB (Serverless) for Change Feed POC
+module cosmosDB 'modules/cosmos-db.bicep' = if (deployCosmosDB) {
+  name: 'cosmos-db-deployment'
+  params: {
+    location: location
+    cosmosAccountName: cosmosAccountName
+    databaseName: cosmosDatabaseName
+    dataContributorPrincipalId: (deployWorker || deployDashboard) ? workerIdentity!.outputs.identityPrincipalId : ''
+    tags: {
+      workload: workloadName
+      environment: environmentShortName
+    }
+  }
+}
+
 // Worker Container App (scale-to-zero with KEDA)
 module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && deployWorkerApp && deployContainerApps) {
   name: 'worker-app-deployment'
@@ -268,6 +292,9 @@ output workerIdentityId string = deployWorker ? workerIdentity!.outputs.identity
 output sqlServerFqdn string = deployDashboard ? sqlDatabase!.outputs.sqlServerFqdn : ''
 output sqlDatabaseName string = deployDashboard ? sqlDatabase!.outputs.databaseName : ''
 output sqlConnectionString string = deployDashboard ? sqlDatabase!.outputs.connectionString : ''
+output cosmosEndpoint string = deployCosmosDB ? cosmosDB!.outputs.endpoint : ''
+output cosmosAccountName string = deployCosmosDB ? cosmosDB!.outputs.accountName : ''
+output cosmosDatabaseName string = deployCosmosDB ? cosmosDB!.outputs.databaseName : ''
 output keyVaultName string = deployKeyVault ? keyVault!.outputs.keyVaultName : ''
 output keyVaultUri string = deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
 
