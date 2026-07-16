@@ -28,6 +28,9 @@ export function Navbar() {
                   <Link to="/dashboard">Dashboard</Link>
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
+                  <Link to="/changefeed">Change Feed</Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
                   <Link to="/health">Health</Link>
                 </Button>
                 {user?.roles.includes('Admin') && (
