@@ -17,20 +17,36 @@ public class DashboardEventHandler(
     {
         return evt.EventType switch
         {
-            "MessageEnqueued" or "MessageProcessed" => await UpsertCounterAndComplete(evt, cancellationToken),
+            "MessageEnqueued" or "MessageProcessed" => await UpsertQueueCounterAndComplete(evt, cancellationToken),
+            "ChangeFeedProcessed" => await UpsertChangeFeedCounterAndComplete(evt, isSuccess: true, cancellationToken),
+            "ChangeFeedError" => await UpsertChangeFeedCounterAndComplete(evt, isSuccess: false, cancellationToken),
             _ => RejectUnknownEventType(evt)
         };
     }
 
-    private async Task<MessageHandleResult> UpsertCounterAndComplete(DashboardEvent evt, CancellationToken cancellationToken)
+    private async Task<MessageHandleResult> UpsertQueueCounterAndComplete(DashboardEvent evt, CancellationToken cancellationToken)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var date = evt.Timestamp.Date;
 
-        var updated = await IncrementExistingCounter(dbContext, evt, date, cancellationToken);
+        var updated = await IncrementExistingQueueCounter(dbContext, evt, date, cancellationToken);
 
         if (!updated)
-            await InsertNewCounterOrRetry(evt, dbContext, date, cancellationToken);
+            await InsertNewQueueCounterOrRetry(evt, dbContext, date, cancellationToken);
+
+        return new MessageHandleResult(MessageSettlement.Complete);
+    }
+
+    private async Task<MessageHandleResult> UpsertChangeFeedCounterAndComplete(
+        DashboardEvent evt, bool isSuccess, CancellationToken cancellationToken)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var date = evt.Timestamp.Date;
+
+        var updated = await IncrementExistingChangeFeedCounter(dbContext, evt, date, isSuccess, cancellationToken);
+
+        if (!updated)
+            await InsertNewChangeFeedCounterOrRetry(evt, dbContext, date, isSuccess, cancellationToken);
 
         return new MessageHandleResult(MessageSettlement.Complete);
     }
@@ -44,10 +60,10 @@ public class DashboardEventHandler(
             $"EventType '{evt.EventType}' is not recognized");
     }
 
-    private static async Task<bool> IncrementExistingCounter(
+    private static async Task<bool> IncrementExistingQueueCounter(
         DashboardDbContext dbContext, DashboardEvent evt, DateTime date, CancellationToken cancellationToken)
     {
-        var filter = FilterByCounterKey(dbContext, evt, date);
+        var filter = FilterByQueueCounterKey(dbContext, evt, date);
 
         var rowsAffected = evt.EventType switch
         {
@@ -65,14 +81,34 @@ public class DashboardEventHandler(
         return rowsAffected > 0;
     }
 
-    private async Task InsertNewCounterOrRetry(
+    private static async Task<bool> IncrementExistingChangeFeedCounter(
+        DashboardDbContext dbContext, DashboardEvent evt, DateTime date, bool isSuccess, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(evt.Collection))
+            return false;
+
+        var filter = dbContext.ChangeFeedCounters
+            .Where(c => c.Collection == evt.Collection && c.Date == date);
+
+        var rowsAffected = isSuccess
+            ? await filter.ExecuteUpdateAsync(c => c
+                .SetProperty(x => x.SuccessCount, x => x.SuccessCount + 1)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken)
+            : await filter.ExecuteUpdateAsync(c => c
+                .SetProperty(x => x.ErrorCount, x => x.ErrorCount + 1)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken);
+
+        return rowsAffected > 0;
+    }
+
+    private async Task InsertNewQueueCounterOrRetry(
         DashboardEvent evt, DashboardDbContext dbContext, DateTime date, CancellationToken cancellationToken)
     {
         var counter = new QueueCounter
         {
             Vertical = evt.Vertical,
-            QueueName = evt.QueueName,
-            ProcessType = evt.ProcessType,
+            QueueName = evt.QueueName!,
+            ProcessType = evt.ProcessType!,
             Date = date,
             EnqueuedCount = evt.EventType == "MessageEnqueued" ? 1 : 0,
             ProcessedCount = evt.EventType == "MessageProcessed" ? 1 : 0,
@@ -88,19 +124,51 @@ public class DashboardEventHandler(
         }
         catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
         {
-            logger.LogDebug("Concurrent INSERT detected. Falling back to increment.");
-            await RetryIncrementWithFreshContext(evt, date, cancellationToken);
+            logger.LogDebug("Concurrent INSERT detected for queue counter. Falling back to increment.");
+            await RetryIncrementQueueWithFreshContext(evt, date, cancellationToken);
         }
     }
 
-    private async Task RetryIncrementWithFreshContext(
+    private async Task InsertNewChangeFeedCounterOrRetry(
+        DashboardEvent evt, DashboardDbContext dbContext, DateTime date, bool isSuccess, CancellationToken cancellationToken)
+    {
+        var counter = new ChangeFeedCounter
+        {
+            Collection = evt.Collection!,
+            Date = date,
+            SuccessCount = isSuccess ? 1 : 0,
+            ErrorCount = isSuccess ? 0 : 1,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        dbContext.ChangeFeedCounters.Add(counter);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
+        {
+            logger.LogDebug("Concurrent INSERT detected for Change Feed counter. Falling back to increment.");
+            await RetryIncrementChangeFeedWithFreshContext(evt, date, isSuccess, cancellationToken);
+        }
+    }
+
+    private async Task RetryIncrementQueueWithFreshContext(
         DashboardEvent evt, DateTime date, CancellationToken cancellationToken)
     {
         await using var retryDbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await IncrementExistingCounter(retryDbContext, evt, date, cancellationToken);
+        await IncrementExistingQueueCounter(retryDbContext, evt, date, cancellationToken);
     }
 
-    private static IQueryable<QueueCounter> FilterByCounterKey(
+    private async Task RetryIncrementChangeFeedWithFreshContext(
+        DashboardEvent evt, DateTime date, bool isSuccess, CancellationToken cancellationToken)
+    {
+        await using var retryDbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await IncrementExistingChangeFeedCounter(retryDbContext, evt, date, isSuccess, cancellationToken);
+    }
+
+    private static IQueryable<QueueCounter> FilterByQueueCounterKey(
         DashboardDbContext dbContext, DashboardEvent evt, DateTime date)
     {
         return dbContext.QueueCounters

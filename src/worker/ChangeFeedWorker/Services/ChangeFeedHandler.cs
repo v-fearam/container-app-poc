@@ -13,6 +13,11 @@ namespace ChangeFeedWorker.Services;
 /// <summary>
 /// Handles Change Feed events: syncs Personas to SQL and publishes dashboard events.
 /// Follows the same pattern as DashboardEventHandler (self-documenting methods, idempotent writes).
+/// 
+/// ARCHITECTURE NOTE: This worker is an EVENT PRODUCER only.
+/// - Processes Cosmos documents → Syncs to SQL → Publishes events to Service Bus topic → FIN
+/// - DashboardWorker (consumer) receives events and updates aggregated counters in SQL
+/// - This separation ensures single responsibility and event-driven architecture
 /// </summary>
 public class ChangeFeedHandler(
     IDbContextFactory<DashboardDbContext> dbContextFactory,
@@ -27,30 +32,22 @@ public class ChangeFeedHandler(
     {
         logger.LogInformation("Processing {Count} personas from Change Feed", personas.Count);
 
-        var successCount = 0;
-        var errorCount = 0;
-
         foreach (var persona in personas)
         {
             try
             {
                 await UpsertPersonaToSql(persona, cancellationToken);
                 await PublishSuccessEvent(persona, cancellationToken);
-                successCount++;
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to process Persona {Id}. Writing to error container.", persona.Id);
                 await WriteToErrorContainer(persona, ex, cancellationToken);
                 await PublishErrorEvent(persona, ex, cancellationToken);
-                errorCount++;
             }
         }
 
-        logger.LogInformation("Batch complete: {Success} success, {Error} errors", successCount, errorCount);
-
-        // Update daily aggregated counter
-        await UpdateChangeFeedCounter(successCount, errorCount, cancellationToken);
+        logger.LogInformation("Batch processing complete");
     }
 
     /// <summary>
@@ -176,66 +173,5 @@ public class ChangeFeedHandler(
         };
 
         await errorContainer.CreateItemAsync(errorDoc, new PartitionKey(errorDoc.id), cancellationToken: cancellationToken);
-    }
-
-    /// <summary>
-    /// Updates daily aggregated counter (SuccessCount + ErrorCount per Collection + Date).
-    /// Follows same INSERT-then-UPDATE pattern as DashboardEventHandler.
-    /// </summary>
-    private async Task UpdateChangeFeedCounter(int successCount, int errorCount, CancellationToken cancellationToken)
-    {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var date = DateTime.UtcNow.Date;
-
-        var updated = await IncrementExistingCounter(dbContext, date, successCount, errorCount, cancellationToken);
-
-        if (!updated)
-            await InsertNewCounterOrRetry(dbContext, date, successCount, errorCount, cancellationToken);
-    }
-
-    private async Task<bool> IncrementExistingCounter(
-        DashboardDbContext dbContext, DateTime date, int successCount, int errorCount, CancellationToken cancellationToken)
-    {
-        var filter = dbContext.ChangeFeedCounters
-            .Where(c => c.Collection == _cosmosOptions.Collection && c.Date == date);
-
-        var rowsAffected = await filter.ExecuteUpdateAsync(c => c
-            .SetProperty(x => x.SuccessCount, x => x.SuccessCount + successCount)
-            .SetProperty(x => x.ErrorCount, x => x.ErrorCount + errorCount)
-            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken);
-
-        return rowsAffected > 0;
-    }
-
-    private async Task InsertNewCounterOrRetry(
-        DashboardDbContext dbContext, DateTime date, int successCount, int errorCount, CancellationToken cancellationToken)
-    {
-        var counter = new ChangeFeedCounter
-        {
-            Collection = _cosmosOptions.Collection,
-            Date = date,
-            SuccessCount = successCount,
-            ErrorCount = errorCount,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        dbContext.ChangeFeedCounters.Add(counter);
-
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
-        {
-            logger.LogDebug("Concurrent INSERT detected for counter. Retrying increment.");
-            await RetryIncrementWithFreshContext(date, successCount, errorCount, cancellationToken);
-        }
-    }
-
-    private async Task RetryIncrementWithFreshContext(
-        DateTime date, int successCount, int errorCount, CancellationToken cancellationToken)
-    {
-        await using var retryDbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await IncrementExistingCounter(retryDbContext, date, successCount, errorCount, cancellationToken);
     }
 }
