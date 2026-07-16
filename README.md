@@ -695,6 +695,67 @@ az containerapp update -n ca-weather-fe-dev -g $RG \
 
 ---
 
+## 🔄 Change Feed POC — CosmosDB → SQL Server Sync
+
+> **Documento completo:** `docs/change-feed-poc.md`
+
+POC para validar el patrón Change Feed Processor que sincroniza CosmosDB → SQL Server con telemetría completa y visibilidad en el Dashboard.
+
+### Deploy Cosmos DB
+
+```bash
+RG="rg-far-container-app-easyauth"
+
+# Deploy Cosmos DB (serverless + 3 containers)
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployCosmosDB=true \
+    deployWorker=true \
+    deployDashboard=true
+
+# Obtener outputs
+COSMOS_ENDPOINT=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosEndpoint.value' -o tsv)
+
+COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosAccountName.value' -o tsv)
+
+COSMOS_DB=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosDatabaseName.value' -o tsv)
+
+echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
+echo "Database: $COSMOS_DB"
+echo "Containers: personas, changefeed-leases, changefeed-errors"
+```
+
+### Verificar role assignment
+
+```bash
+# Verificar que la worker identity tiene el role de Cosmos DB Data Contributor
+WORKER_IDENTITY_PRINCIPAL=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.workerIdentityPrincipalId.value' -o tsv)
+
+az cosmosdb sql role assignment list \
+  --account-name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --query "[?principalId=='$WORKER_IDENTITY_PRINCIPAL']"
+```
+
+### Deploy del resto de componentes
+
+Seguir los pasos en `docs/change-feed-poc.md` §11 (Orden de implementación):
+1. ✅ Cosmos DB deployado
+2. Backend endpoints CRUD `/api/cosmos/personas`
+3. Frontend Cosmos Editor tab
+4. SQL tables (PersonasSync + ChangeFeedCounters)
+5. Change Feed Worker project + Bicep
+6. Dashboard Worker updates
+7. Frontend tabs (SQL Sync + Dashboard card)
+
+---
+
 ## 🧹 Limpiar recursos
 
 ```bash
