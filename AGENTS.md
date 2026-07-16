@@ -242,14 +242,28 @@ az bicep build --file biceps/main.bicep
 # Deploy infrastructure
 az deployment group create -g rg-far-container-app-easyauth -f biceps/main.bicep --parameters ...
 
-# Build and push backend
-az acr build --registry acrweatheru6qlzsmy --image weather-api:latest src/backend/WeatherApi/ --no-logs
+# Build and push (from WSL)
+az acr build --registry acrweatheru6qlzsmy --image weather-api:latest --file src/backend/WeatherApi/Dockerfile src/backend/WeatherApi
+az acr build --registry acrweatheru6qlzsmy --image weather-frontend:latest --file src/frontend/Dockerfile src/frontend
+az acr build --registry acrweatheru6qlzsmy --image dashboard-worker:latest --file src/worker/DashboardWorker/Dockerfile src/worker/DashboardWorker
+az acr build --registry acrweatheru6qlzsmy --image weather-worker:latest --file src/worker/WeatherWorker/Dockerfile src/worker/WeatherWorker
 
-# Build and push frontend
-az acr build --registry acrweatheru6qlzsmy --image weather-frontend:latest src/frontend/ --no-logs
+# Redeploy container app (ALWAYS use --revision-suffix to force fresh image pull)
+az containerapp update -n ca-weather-be-dev -g rg-far-container-app-easyauth \
+  --image acrweatheru6qlzsmy.azurecr.io/weather-api:latest \
+  --revision-suffix "be-$(date +%s)"
 
-# Update container app image
-az containerapp update -n ca-weather-be-dev -g rg-far-container-app-easyauth --image acrweatheru6qlzsmy.azurecr.io/weather-api:latest
+az containerapp update -n ca-weather-fe-dev -g rg-far-container-app-easyauth \
+  --image acrweatheru6qlzsmy.azurecr.io/weather-frontend:latest \
+  --revision-suffix "fe-$(date +%s)"
+
+az containerapp update -n ca-dashboard-worker-dev -g rg-far-container-app-easyauth \
+  --image acrweatheru6qlzsmy.azurecr.io/dashboard-worker:latest \
+  --revision-suffix "dw-$(date +%s)"
+
+az containerapp update -n ca-weather-worker-dev -g rg-far-container-app-easyauth \
+  --image acrweatheru6qlzsmy.azurecr.io/weather-worker:latest \
+  --revision-suffix "ww-$(date +%s)"
 
 # Set manual secret in KV
 az keyvault secret set --vault-name kv-weather-dev-u6qlzs --name secret-name --value "value"
