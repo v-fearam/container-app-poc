@@ -143,18 +143,39 @@ echo "ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];"
 ### 4.2 Correr EF Core migrations
 
 ```bash
-# Desde WSL o Git Bash
+# Opción 1: Desde local (requiere firewall rule para tu IP + connection string)
 cd src/worker/DashboardWorker
 
-# Connection string temporal con tu admin Entra ID
-# (Usar Azure Portal SQL Query Editor o local con VPN/firewall abierto)
+# Agregar tu IP al firewall de SQL Server
+MY_IP=$(curl -s ifconfig.me)
+az sql server firewall-rule create \
+  --resource-group $RG \
+  --server $(echo $SQL_SERVER | cut -d'.' -f1) \
+  --name AllowMyIP \
+  --start-ip-address $MY_IP \
+  --end-ip-address $MY_IP
 
-# Opción 1: Desde local (requiere firewall rule para tu IP)
-dotnet ef database update
+# Connection string con tu Entra ID admin
+export ConnectionStrings__DefaultConnection="Server=$SQL_SERVER;Database=$SQL_DB;Authentication=Active Directory Default;TrustServerCertificate=True"
 
-# Opción 2: Desde Azure Portal SQL Query Editor
-# - Copiar SQL de migrations y ejecutar manualmente
+# Correr migrations
+dotnet ef database update --context DashboardDbContext
+
+# Remover firewall rule (opcional, por seguridad)
+az sql server firewall-rule delete \
+  --resource-group $RG \
+  --server $(echo $SQL_SERVER | cut -d'.' -f1) \
+  --name AllowMyIP
+
+# Opción 2: Desde Azure Portal SQL Query Editor (manual)
+# - Abrir portal.azure.com → SQL Database → Query editor
+# - Autenticarse con Entra ID
+# - Copiar y ejecutar el SQL de las migrations manualmente
 ```
+
+**Migrations incluidas:**
+- Initial: QueueCounters table
+- AddChangeFeedTables: PersonasSync + ChangeFeedCounters tables
 
 ---
 
