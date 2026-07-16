@@ -198,6 +198,7 @@ Usar estos skills según la tarea:
 - Global usings
 - Nullable reference types enabled
 - `IResult` return types en endpoints
+- **Method names as documentation:** los nombres de métodos deben leerse como pseudocódigo. Preferir nombres descriptivos y largos que expliquen el *qué* sin necesidad de comentarios (e.g., `InsertNewCounterOrRetry`, `IncrementExistingCounter`, `RetryIncrementWithFreshContext`). Extraer métodos privados con nombres claros en lugar de bloques largos con comentarios inline.
 
 ### TypeScript/React
 - Functional components only

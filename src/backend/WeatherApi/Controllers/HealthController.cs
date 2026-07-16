@@ -7,8 +7,7 @@ namespace WeatherApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 public class HealthController(
-    IInfrastructureHealthService infraHealthService,
-    ILogger<HealthController> logger) : ControllerBase
+    IInfrastructureHealthService infraHealthService) : ControllerBase
 {
     /// <summary>
     /// Get infrastructure health: Container Apps status/replicas + Service Bus queue depths
