@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DashboardWorker.Data;
 
 /// <summary>
-/// DbContext for Dashboard data including queue counters and component health.
+/// DbContext for Dashboard data (queue counters).
 /// </summary>
 public class DashboardDbContext : DbContext
 {
@@ -13,11 +13,9 @@ public class DashboardDbContext : DbContext
     }
 
     public DbSet<QueueCounter> QueueCounters => Set<QueueCounter>();
-    public DbSet<ComponentHealth> ComponentHealth => Set<ComponentHealth>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Apply all configurations from assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DashboardDbContext).Assembly);
     }
 }

@@ -51,14 +51,3 @@ public record DiscardDlqMessageRequest
     public required string MessageId { get; init; }
     public required string QueueName { get; init; }
 }
-
-/// <summary>
-/// Component health status
-/// </summary>
-public record ComponentHealthDto
-{
-    public required string ComponentName { get; init; }
-    public required string Status { get; init; }
-    public DateTime LastHeartbeat { get; init; }
-    public string? Metadata { get; init; }
-}

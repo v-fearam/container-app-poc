@@ -65,8 +65,6 @@ if (!string.IsNullOrEmpty(sqlConnectionString) && !string.IsNullOrEmpty(serviceB
     builder.Services.AddScoped<IDlqService, DlqService>();
 }
 
-builder.Services.AddScoped<IHealthService, HealthService>();
-
 // Memory Cache (for infrastructure health service)
 builder.Services.AddMemoryCache();
 
