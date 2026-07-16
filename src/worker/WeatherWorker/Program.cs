@@ -57,6 +57,9 @@ builder.Services.AddSingleton(sp =>
     return client.CreateSender("nd-dashboard-events");
 });
 
+// ─── Dashboard Event Publisher (abstracts topic publishing) ─
+builder.Services.AddSingleton<IDashboardEventPublisher, DashboardEventPublisher>();
+
 // ─── Message handlers (registered as singletons for reuse across concurrent calls) ─
 builder.Services.AddSingleton<DefaultMessageHandler>();
 builder.Services.AddSingleton<DlqSimulationHandlers.UnhandledExceptionHandler>();

@@ -1,7 +1,7 @@
-using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Options;
 using WeatherWorker.Configuration;
+using WeatherWorker.Services;
 
 namespace WeatherWorker.Handlers;
 
@@ -11,7 +11,7 @@ namespace WeatherWorker.Handlers;
 public sealed class DefaultMessageHandler(
     ILogger<DefaultMessageHandler> logger,
     IOptions<WorkerOptions> options,
-    ServiceBusSender topicSender) : IMessageHandler
+    IDashboardEventPublisher dashboardPublisher) : IMessageHandler
 {
     public async Task<bool> HandleAsync(WeatherJobMessage message, ProcessMessageEventArgs args, CancellationToken cancellationToken)
     {
@@ -24,30 +24,8 @@ public sealed class DefaultMessageHandler(
         await args.CompleteMessageAsync(args.Message, cancellationToken);
         logger.LogInformation("Mensaje #{Number} completado exitosamente", message.Number);
 
-        // Publish MessageProcessed event to dashboard topic (fire-and-forget)
-        try
-        {
-            var eventPayload = JsonSerializer.Serialize(new
-            {
-                eventType = "MessageProcessed",
-                vertical = message.Vertical,
-                queueName = "weather-jobs",
-                processType = message.ProcessType,
-                timestamp = DateTime.UtcNow,
-                messageId = args.Message.MessageId
-            });
-
-            await topicSender.SendMessageAsync(new ServiceBusMessage(eventPayload)
-            {
-                ContentType = "application/json",
-                Subject = "MessageProcessed",
-                ApplicationProperties = { ["eventType"] = "MessageProcessed", ["vertical"] = message.Vertical }
-            }, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to publish MessageProcessed event for message {MessageId}", args.Message.MessageId);
-        }
+        await dashboardPublisher.PublishMessageProcessedAsync(
+            message.Vertical, "weather-jobs", message.ProcessType, args.Message.MessageId, cancellationToken);
 
         return true;
     }
