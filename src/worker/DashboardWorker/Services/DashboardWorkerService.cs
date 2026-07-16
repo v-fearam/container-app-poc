@@ -70,7 +70,12 @@ public class DashboardWorkerService(
             logger.LogInformation("Processing dashboard event. MessageId={MessageId} DeliveryCount={DeliveryCount}",
                 args.Message.MessageId, args.Message.DeliveryCount);
 
-            var dashboardEvent = JsonSerializer.Deserialize<DashboardEvent>(messageBody);
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            
+            var dashboardEvent = JsonSerializer.Deserialize<DashboardEvent>(messageBody, jsonOptions);
             if (dashboardEvent == null)
             {
                 await args.DeadLetterMessageAsync(args.Message, "DeserializationFailed",

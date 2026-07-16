@@ -56,7 +56,12 @@ public class SyncController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(personas);
+        return Ok(new
+        {
+            items = personas,
+            continuationToken = (string?)null,
+            count = personas.Count
+        });
     }
 
     /// <summary>

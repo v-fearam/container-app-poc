@@ -20,7 +20,14 @@ interface Persona {
   email: string;
   edad: number;
   ciudad: string;
+  activo: boolean;
   updatedAt?: string;
+}
+
+interface PersonasResponse {
+  items: Persona[];
+  continuationToken: string | null;
+  count: number;
 }
 
 interface PersonaSync {
@@ -33,6 +40,12 @@ interface PersonaSync {
   cosmosUpdatedAt: string;
   syncedAt: string;
   syncVersion: number;
+}
+
+interface PersonaSyncResponse {
+  items: PersonaSync[];
+  continuationToken: string | null;
+  count: number;
 }
 
 interface ChangeFeedCounter {
@@ -93,7 +106,7 @@ export function ChangeFeedPage() {
 // ============================================================================
 
 function CosmosEditorTab() {
-  const { get, post, del } = useApi();
+  const { get, post, put, del } = useApi();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,14 +119,15 @@ function CosmosEditorTab() {
     email: '',
     edad: 0,
     ciudad: '',
+    activo: true,
   });
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const fetchPersonas = async () => {
     try {
       setLoading(true);
-      const result = await get<Persona[]>('/api/cosmos/personas');
-      setPersonas(result);
+      const result = await get<PersonasResponse>('/api/cosmos/personas');
+      setPersonas(result.items);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -131,10 +145,17 @@ function CosmosEditorTab() {
     try {
       setSubmitting(true);
       setError(null);
-      await post('/api/cosmos/personas', formData);
+      
+      if (editingId) {
+        // Update existing persona
+        await put(`/api/cosmos/personas/${editingId}`, formData);
+      } else {
+        // Create new persona
+        await post('/api/cosmos/personas', formData);
+      }
       
       // Reset form
-      setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '' });
+      setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true });
       setEditingId(null);
       
       // Refresh list
@@ -164,12 +185,13 @@ function CosmosEditorTab() {
       email: persona.email,
       edad: persona.edad,
       ciudad: persona.ciudad,
+      activo: persona.activo,
     });
     setEditingId(persona.id);
   };
 
   const resetForm = () => {
-    setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '' });
+    setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true });
     setEditingId(null);
   };
 
@@ -359,8 +381,8 @@ function SqlSyncTab() {
   const fetchSyncedPersonas = async () => {
     try {
       setLoading(true);
-      const result = await get<PersonaSync[]>('/api/sync/personas');
-      setPersonas(result);
+      const result = await get<PersonaSyncResponse>('/api/sync/personas');
+      setPersonas(result.items);
       setLastRefresh(new Date());
       setError(null);
     } catch (err) {
@@ -487,7 +509,7 @@ function DashboardTab() {
 
   // Aggregate today's counters
   const today = new Date().toISOString().split('T')[0];
-  const todayCounters = counters.filter(c => c.date === today);
+  const todayCounters = counters.filter(c => c.date.split('T')[0] === today);
   const totalSuccess = todayCounters.reduce((sum, c) => sum + c.successCount, 0);
   const totalErrors = todayCounters.reduce((sum, c) => sum + c.errorCount, 0);
 
