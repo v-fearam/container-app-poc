@@ -23,6 +23,9 @@ var sqlConnectionString = builder.Configuration["Sql:ConnectionString"]
 builder.Services.AddDbContextFactory<DashboardDbContext>(options =>
     options.UseSqlServer(sqlConnectionString));
 
+// ─── Business Logic (Event Handler) ────────────────────────────────────────
+builder.Services.AddSingleton<IDashboardEventHandler, DashboardEventHandler>();
+
 // ─── Azure SDK Clients (Service Bus) ────────────────────────────────────────
 var serviceBusNamespace = builder.Configuration["ServiceBus:Namespace"]
     ?? Environment.GetEnvironmentVariable("ServiceBus__Namespace")
