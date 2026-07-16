@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace WeatherApi.Data;
 
 /// <summary>
-/// DbContext for Dashboard data (queue counters).
+/// DbContext for Dashboard data (queue counters and Change Feed sync).
 /// </summary>
 public class DashboardDbContext : DbContext
 {
@@ -13,6 +13,8 @@ public class DashboardDbContext : DbContext
     }
 
     public DbSet<QueueCounter> QueueCounters => Set<QueueCounter>();
+    public DbSet<PersonaSync> PersonasSync => Set<PersonaSync>();
+    public DbSet<ChangeFeedCounter> ChangeFeedCounters => Set<ChangeFeedCounter>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
