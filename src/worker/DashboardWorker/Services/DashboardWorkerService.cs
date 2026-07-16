@@ -84,60 +84,65 @@ public class DashboardWorkerService : BackgroundService
             _logger.LogInformation("Processing dashboard event. MessageId={MessageId} DeliveryCount={DeliveryCount}",
                 args.Message.MessageId, args.Message.DeliveryCount);
 
-            // Parse event
             var dashboardEvent = JsonSerializer.Deserialize<DashboardEvent>(messageBody);
             if (dashboardEvent == null)
             {
-                _logger.LogWarning("Failed to deserialize dashboard event. Completing message to avoid infinite retry.");
-                await args.CompleteMessageAsync(args.Message, args.CancellationToken);
+                _logger.LogWarning("Failed to deserialize dashboard event. Dead-lettering message.");
+                await args.DeadLetterMessageAsync(args.Message, "DeserializationFailed",
+                    "Could not deserialize message body to DashboardEvent", args.CancellationToken);
                 return;
             }
 
-            // UPSERT counter in SQL (concurrency-safe)
-            await UpsertCounterAsync(dashboardEvent, args.CancellationToken);
+            switch (dashboardEvent.EventType)
+            {
+                case "MessageEnqueued":
+                case "MessageProcessed":
+                    await UpsertCounterAsync(dashboardEvent, args.CancellationToken);
+                    await args.CompleteMessageAsync(args.Message, args.CancellationToken);
+                    _logger.LogInformation("Dashboard event processed. EventType={EventType} Vertical={Vertical} Queue={Queue}",
+                        dashboardEvent.EventType, dashboardEvent.Vertical, dashboardEvent.QueueName);
+                    break;
 
-            // Complete message (remove from subscription)
-            await args.CompleteMessageAsync(args.Message, args.CancellationToken);
-
-            _logger.LogInformation("Dashboard event processed successfully. EventType={EventType} Vertical={Vertical} Queue={Queue} ProcessType={ProcessType}",
-                dashboardEvent.EventType, dashboardEvent.Vertical, dashboardEvent.QueueName, dashboardEvent.ProcessType);
+                default:
+                    _logger.LogWarning("Unknown EventType={EventType}. Dead-lettering message.", dashboardEvent.EventType);
+                    await args.DeadLetterMessageAsync(args.Message, "UnknownEventType",
+                        $"EventType '{dashboardEvent.EventType}' is not recognized", args.CancellationToken);
+                    break;
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing dashboard event. MessageId={MessageId} DeliveryCount={DeliveryCount}",
                 args.Message.MessageId, args.Message.DeliveryCount);
 
-            // Abandon message (will be redelivered or go to DLQ after max delivery count)
             await args.AbandonMessageAsync(args.Message, cancellationToken: args.CancellationToken);
         }
     }
 
     private async Task UpsertCounterAsync(DashboardEvent evt, CancellationToken cancellationToken)
     {
-        // Create scope to get DbContext (scoped lifetime)
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
 
         var date = evt.Timestamp.Date;
+        var filter = dbContext.QueueCounters
+            .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date);
 
-        // EF Core: Try UPDATE first (concurrency-safe, avoids MERGE deadlocks)
-        var rowsAffected = evt.EventType == "MessageEnqueued"
-            ? await dbContext.QueueCounters
-                .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
-                .ExecuteUpdateAsync(q => q
-                    .SetProperty(x => x.EnqueuedCount, x => x.EnqueuedCount + 1)
-                    .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                    cancellationToken)
-            : await dbContext.QueueCounters
-                .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
-                .ExecuteUpdateAsync(q => q
-                    .SetProperty(x => x.ProcessedCount, x => x.ProcessedCount + 1)
-                    .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                    cancellationToken);
+        var rowsAffected = evt.EventType switch
+        {
+            "MessageEnqueued" => await filter.ExecuteUpdateAsync(q => q
+                .SetProperty(x => x.EnqueuedCount, x => x.EnqueuedCount + 1)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken),
+
+            "MessageProcessed" => await filter.ExecuteUpdateAsync(q => q
+                .SetProperty(x => x.ProcessedCount, x => x.ProcessedCount + 1)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken),
+
+            _ => throw new InvalidOperationException($"Unexpected EventType: {evt.EventType}")
+        };
 
         if (rowsAffected == 0)
         {
-            // Row doesn't exist yet — INSERT
             var counter = new QueueCounter
             {
                 Vertical = evt.Vertical,
@@ -158,31 +163,25 @@ public class DashboardWorkerService : BackgroundService
             }
             catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
             {
-                // Another worker inserted between our UPDATE and INSERT — retry UPDATE
                 _logger.LogDebug("Unique constraint violation during INSERT. Retrying UPDATE.");
                 
-                // Create new scope for retry (previous context may be in bad state)
                 using var retryScope = _scopeFactory.CreateScope();
                 var retryDbContext = retryScope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-                
-                rowsAffected = evt.EventType == "MessageEnqueued"
-                    ? await retryDbContext.QueueCounters
-                        .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
-                        .ExecuteUpdateAsync(q => q
-                            .SetProperty(x => x.EnqueuedCount, x => x.EnqueuedCount + 1)
-                            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                            cancellationToken)
-                    : await retryDbContext.QueueCounters
-                        .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date)
-                        .ExecuteUpdateAsync(q => q
-                            .SetProperty(x => x.ProcessedCount, x => x.ProcessedCount + 1)
-                            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow),
-                            cancellationToken);
-                
-                if (rowsAffected == 0)
+                var retryFilter = retryDbContext.QueueCounters
+                    .Where(q => q.Vertical == evt.Vertical && q.QueueName == evt.QueueName && q.ProcessType == evt.ProcessType && q.Date == date);
+
+                _ = evt.EventType switch
                 {
-                    _logger.LogWarning("Retry UPDATE also failed. Counter may be inconsistent.");
-                }
+                    "MessageEnqueued" => await retryFilter.ExecuteUpdateAsync(q => q
+                        .SetProperty(x => x.EnqueuedCount, x => x.EnqueuedCount + 1)
+                        .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken),
+
+                    "MessageProcessed" => await retryFilter.ExecuteUpdateAsync(q => q
+                        .SetProperty(x => x.ProcessedCount, x => x.ProcessedCount + 1)
+                        .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken),
+
+                    _ => 0
+                };
             }
         }
     }
