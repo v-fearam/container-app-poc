@@ -11,7 +11,7 @@ public sealed class MessageDispatcher(
     DefaultMessageHandler defaultHandler,
     DlqSimulationHandlers.UnhandledExceptionHandler exceptionHandler,
     DlqSimulationHandlers.ValidationFailureHandler validationHandler,
-    DlqSimulationHandlers.LockTimeoutHandler lockTimeoutHandler)
+    DlqSimulationHandlers.LockTimeoutHandler lockTimeoutHandler) : IMessageDispatcher
 {
     // Message numbers that trigger DLQ simulations
     private const int ExceptionTrigger = 10;

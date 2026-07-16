@@ -15,14 +15,14 @@ public sealed class ServiceBusWorker : BackgroundService, IAsyncDisposable
     private readonly ILogger<ServiceBusWorker> _logger;
     private readonly ServiceBusClient _client;
     private readonly ServiceBusOptions _options;
-    private readonly MessageDispatcher _dispatcher;
+    private readonly IMessageDispatcher _dispatcher;
     private ServiceBusProcessor? _processor;
 
     public ServiceBusWorker(
         ILogger<ServiceBusWorker> logger,
         ServiceBusClient client,
         IOptions<ServiceBusOptions> options,
-        MessageDispatcher dispatcher)
+        IMessageDispatcher dispatcher)
     {
         _logger = logger;
         _client = client;

@@ -62,7 +62,7 @@ builder.Services.AddSingleton<DefaultMessageHandler>();
 builder.Services.AddSingleton<DlqSimulationHandlers.UnhandledExceptionHandler>();
 builder.Services.AddSingleton<DlqSimulationHandlers.ValidationFailureHandler>();
 builder.Services.AddSingleton<DlqSimulationHandlers.LockTimeoutHandler>();
-builder.Services.AddSingleton<MessageDispatcher>();
+builder.Services.AddSingleton<IMessageDispatcher, MessageDispatcher>();
 
 // ─── Hosted service ─────────────────────────────────────────────────────────
 builder.Services.AddHostedService<ServiceBusWorker>();
