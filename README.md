@@ -198,7 +198,8 @@ container-app-poc/
     ├── WORKER-KEDA-DESIGN.md           # Diseño Worker + KEDA + Service Bus
     ├── dashboard-poc.md                # Dashboard POC: diseño, arquitectura, implementación
     ├── change-feed-poc.md              # Change Feed POC: arquitectura, eventos, sync Cosmos→SQL
-    └── DEPLOYMENT.md                   # Deployment completo punta a punta (incluye Change Feed POC)
+    ├── DEPLOYMENT-CHANGE-FEED-POC.md   # ⭐ Deployment E2E validado (Change Feed + Easy Auth) — LEER PRIMERO
+    └── DEPLOYMENT.md                   # Deployment base (legacy, revisar antes de usar)
 ```
 
 ---

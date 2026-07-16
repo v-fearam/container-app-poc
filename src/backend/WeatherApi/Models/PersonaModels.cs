@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace WeatherApi.Models;
 
 /// <summary>
@@ -6,12 +8,28 @@ namespace WeatherApi.Models;
 /// </summary>
 public class PersonaDto
 {
+    [JsonPropertyName("id")]
     public string Id { get; set; } = Guid.NewGuid().ToString();
+    
+    [JsonPropertyName("nombre")]
     public string Nombre { get; set; } = string.Empty;
+    
+    [JsonPropertyName("apellido")]
     public string Apellido { get; set; } = string.Empty;
+    
+    [JsonPropertyName("email")]
     public string? Email { get; set; }
+    
+    [JsonPropertyName("edad")]
     public int? Edad { get; set; }
+    
+    [JsonPropertyName("ciudad")]
     public string? Ciudad { get; set; }
+    
+    [JsonPropertyName("activo")]
+    public bool Activo { get; set; } = true;
+    
+    [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -25,6 +43,7 @@ public class CreatePersonaRequest
     public string? Email { get; set; }
     public int? Edad { get; set; }
     public string? Ciudad { get; set; }
+    public bool Activo { get; set; } = true;
 }
 
 /// <summary>

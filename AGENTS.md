@@ -278,6 +278,7 @@ curl https://ca-weather-be-dev.wonderfulglacier-bd1b5cf9.eastus2.azurecontainera
 
 ## Gotchas & Lessons Learned
 
+### General
 1. **SAS URLs con `&`:** `az keyvault secret set --value` falla. Usar `--file`.
 2. **RBAC propagation:** ~60 segundos después de asignar rol antes de que KV refs funcionen.
 3. **ACR build en Windows:** Agregar `--no-logs` para evitar `UnicodeEncodeError` con checkmarks.
@@ -286,3 +287,14 @@ curl https://ca-weather-be-dev.wonderfulglacier-bd1b5cf9.eastus2.azurecontainera
 6. **Container Apps secrets:** Son declarativos — si un secret no está en el array de Bicep, se borra en redeploy. Por eso usamos KV references.
 7. **SQL MI auth:** `Authentication=Active Directory Default` + `CREATE USER` manual en la DB.
 8. **Workers scaled to zero:** ARM replicas API devuelve 0 replicas (no error).
+
+### Cosmos DB + Change Feed (16/07/2026)
+9. **SQL Server location mismatch:** El SQL Server existente está en `centralus`. Usar `sqlLocation=centralus` en deploys con `deployDashboard=true`, NO usar `location` (eastus2). Fallar en esto causa: `"resource already exists in location centralus... cannot be created in location eastus2"`.
+10. **Backend sin SQL_CONNECTION_STRING:** Backend necesita `deployDashboard=true` en el deploy para que agregue `SQL_CONNECTION_STRING` env var + secret ref + DashboardDbContext DI. Sin esto: `"Unable to resolve service for type 'DashboardDbContext'"`.
+11. **Cosmos JSON serialization:** Cosmos espera lowercase (`id`, `nombre`) pero C# usa PascalCase. **Solución obligatoria:**
+    - Agregar `[JsonPropertyName("id")]` a los DTOs
+    - Configurar `CosmosSerializationOptions` con `PropertyNamingPolicy = CamelCase` en Program.cs
+    - Sin esto: `"required properties 'id;' are missing"` error.
+12. **Container App image caching:** Después de `az acr build`, el Container App NO repulla la imagen si el tag es el mismo (`:latest`). **Solución:** usar `--revision-suffix` único en cada `az containerapp update`.
+13. **RBAC role assignment warnings:** `"RoleAssignmentExists"` warnings durante deploy son **normales** — no son errores. El deployment continúa exitosamente.
+14. **ChangeFeedWorker no usa KEDA:** Change Feed Processor distribuye trabajo via leases automáticamente. No necesita KEDA scaler. Usar `minReplicas=1, maxReplicas=1` fijo (o maxReplicas = particiones físicas en producción).

@@ -127,6 +127,7 @@ public class CosmosPersonasController : ControllerBase
             Email = request.Email,
             Edad = request.Edad,
             Ciudad = request.Ciudad,
+            Activo = request.Activo,
             UpdatedAt = DateTime.UtcNow
         };
 
