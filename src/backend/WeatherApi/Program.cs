@@ -58,6 +58,23 @@ if (!string.IsNullOrEmpty(serviceBusNamespace))
     });
 }
 
+// Cosmos DB Client (optional, for Change Feed POC)
+var cosmosEndpoint = builder.Configuration["Cosmos:Endpoint"];
+
+if (!string.IsNullOrEmpty(cosmosEndpoint))
+{
+    builder.Services.AddSingleton(sp =>
+    {
+        var credential = new DefaultAzureCredential();
+        var options = new Microsoft.Azure.Cosmos.CosmosClientOptions
+        {
+            ApplicationName = "WeatherApi",
+            ConnectionMode = Microsoft.Azure.Cosmos.ConnectionMode.Direct
+        };
+        return new Microsoft.Azure.Cosmos.CosmosClient(cosmosEndpoint, credential, options);
+    });
+}
+
 // Business Services (Service Layer) - conditional based on dependencies
 if (!string.IsNullOrEmpty(sqlConnectionString) && !string.IsNullOrEmpty(serviceBusNamespace))
 {
