@@ -64,7 +64,35 @@ echo "Key Vault: $KV_NAME"
 
 ---
 
-## Paso 2: Build y push imágenes Docker
+## Paso 2: Configurar Easy Auth secrets en Key Vault
+
+```bash
+# App Registrations (REUTILIZAR las existentes del ambiente actual)
+# Portal → Entra ID → App registrations → buscar "Weather App"
+
+export FRONTEND_CLIENT_ID="<frontend-app-id>"
+export FRONTEND_CLIENT_SECRET="<regenerar-o-usar-existente>"
+export BACKEND_CLIENT_ID="<backend-app-id>"  
+export BACKEND_CLIENT_SECRET="<regenerar-o-usar-existente>"
+export TENANT_ID="<tu-tenant-id>"
+
+# Guardar secrets en Key Vault
+az keyvault secret set --vault-name $KV_NAME \
+  --name auth-client-secret-frontend \
+  --value "$FRONTEND_CLIENT_SECRET"
+
+az keyvault secret set --vault-name $KV_NAME \
+  --name auth-client-secret-backend \
+  --value "$BACKEND_CLIENT_SECRET"
+
+echo "✅ Easy Auth secrets guardados en Key Vault"
+```
+
+**NOTA:** Si las App Registrations no existen, ver Anexo A para crearlas desde cero.
+
+---
+
+## Paso 3: Build y push imágenes Docker
 
 ```bash
 # Backend
@@ -90,41 +118,51 @@ az acr build --registry $ACR_NAME \
   --image dashboard-worker:latest \
   --file src/worker/DashboardWorker/Dockerfile \
   src/worker/DashboardWorker
+
+# ChangeFeedWorker
+az acr build --registry $ACR_NAME \
+  --image changefeed-worker:latest \
+  --file src/worker/ChangeFeedWorker/Dockerfile \
+  src/worker/ChangeFeedWorker
 ```
 
 ---
 
-## Paso 3: Deploy Worker + Dashboard infrastructure (SQL + Service Bus)
+## Paso 4: Deploy Worker + Dashboard + Cosmos infrastructure
 
 ```bash
-# Deploy: SQL Server + Database + Service Bus + Worker Identity + roles
+# Deploy: SQL Server + Database + Service Bus + Cosmos DB + Worker Identity + roles
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/main.bicep \
   --parameters \
     deployWorker=true \
     deployDashboard=true \
+    deployCosmosDB=true \
     deployContainerApps=false \
     sqlAdminLogin=$SQL_ADMIN_LOGIN \
     sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
-  --name "worker-dashboard-infra-$(date +%s)"
+  --name "main"
 
 # Outputs
 export SQL_SERVER=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
 export SQL_DB=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
 export SQL_CONN_STR=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlConnectionString.value' -o tsv)
 export SB_NAMESPACE=$(az deployment group show -g $RG --name main --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
+export COSMOS_ENDPOINT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosEndpoint.value' -o tsv)
+export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
 
 echo "SQL Server: $SQL_SERVER"
 echo "Database: $SQL_DB"
 echo "Service Bus: $SB_NAMESPACE"
+echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
 ```
 
 ---
 
-## Paso 4: Configurar SQL Database (User + Migrations)
+## Paso 5: Configurar SQL Database (User + Migrations)
 
-### 4.1 Crear usuario de managed identity en SQL
+### 5.1 Crear usuario de managed identity en SQL
 
 ```bash
 # Conectar a SQL con tu admin Entra ID
@@ -140,7 +178,7 @@ echo "ALTER ROLE db_datareader ADD MEMBER [id-weather-worker-dev];"
 echo "ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];"
 ```
 
-### 4.2 Correr EF Core migrations
+### 5.2 Correr EF Core migrations
 
 ```bash
 # Opción 1: Desde local (requiere firewall rule para tu IP + connection string)
@@ -179,84 +217,79 @@ az sql server firewall-rule delete \
 
 ---
 
-## Paso 5: Deploy Cosmos DB + Change Feed POC (NUEVO - opcional)
-
-### 5.1 Deploy Cosmos DB infrastructure
+## Paso 6: Deploy Container Apps (Backend + Frontend + Workers)
 
 ```bash
-# Deploy: Cosmos DB Account + Database + Containers
-az deployment group create \
-  --resource-group $RG \
-  --template-file biceps/main.bicep \
-  --parameters \
-    deployCosmosDB=true \
-  --name "cosmos-$(date +%s)"
-
-# Outputs
-export COSMOS_ENDPOINT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosEndpoint.value' -o tsv)
-export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
-export COSMOS_DB=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosDatabaseName.value' -o tsv)
-
-echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
-echo "Cosmos Account: $COSMOS_ACCOUNT"
-echo "Cosmos Database: $COSMOS_DB"
-```
-
-**Containers creados:**
-- `personas` — Monitored collection (partition key: /id)
-- `changefeed-leases` — Change Feed Processor lease storage
-- `changefeed-errors` — Dead-letter container for failed documents
-
-### 5.2 Build y push ChangeFeedWorker image
-
-```bash
-# Build imagen
-az acr build \
-  --registry $ACR_NAME \
-  --image changefeed-worker:latest \
-  --file src/worker/ChangeFeedWorker/Dockerfile \
-  ./src/worker/ChangeFeedWorker
-```
-
-### 5.3 Build y push DashboardWorker image (si no existe)
-
-```bash
-# Build imagen
-az acr build \
-  --registry $ACR_NAME \
-  --image dashboard-worker:latest \
-  --file src/worker/DashboardWorker/Dockerfile \
-  ./src/worker/DashboardWorker
-```
-
-### 5.4 Deploy Change Feed Workers
-
-```bash
-# Deploy: DashboardWorker + ChangeFeedWorker Container Apps
+# Deploy: Backend + Frontend + WeatherWorker + DashboardWorker + ChangeFeedWorker
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/main.bicep \
   --parameters \
     deployContainerApps=true \
+    deployWorkerApp=true \
     deployDashboardWorkerApp=true \
     deployChangeFeedWorker=true \
-  --name "changefeed-workers-$(date +%s)"
+  --name "apps-$(date +%s)"
 
 # Outputs
-export DASHBOARD_WORKER_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.dashboardWorkerAppName.value' -o tsv)
-export CHANGEFEED_WORKER_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.changeFeedWorkerAppName.value' -o tsv)
+export BACKEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.backendAppUrl.value' -o tsv)
+export FRONTEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.frontendAppUrl.value' -o tsv)
 
-echo "Dashboard Worker: $DASHBOARD_WORKER_NAME"
-echo "ChangeFeed Worker: $CHANGEFEED_WORKER_NAME"
+echo "Backend: https://$BACKEND_URL"
+echo "Frontend: https://$FRONTEND_URL"
 ```
 
-### 5.5 Validar Change Feed POC
+---
+
+## Paso 7: Deploy Easy Auth (Entra ID OIDC)
+
+### 7.1 Actualizar Redirect URIs (si cambió el FQDN)
+
+```bash
+# Portal → Entra ID → App registrations → Frontend App → Authentication
+# Verificar que exista: https://<frontend-fqdn>/.auth/login/aad/callback
+# Si el FQDN cambió, agregar nueva redirect URI
+```
+
+### 7.2 Deploy Easy Auth config
+
+```bash
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/easyauth.bicep \
+  --parameters \
+    backendAppName="ca-weather-be-dev" \
+    frontendAppName="ca-weather-fe-dev" \
+    frontendClientId=$FRONTEND_CLIENT_ID \
+    backendClientId=$BACKEND_CLIENT_ID \
+    tenantId=$TENANT_ID \
+    keyVaultName=$KV_NAME \
+  --name "easyauth-$(date +%s)"
+
+echo "✅ Easy Auth configurado"
+```
+
+---
+
+## Paso 8: Validar Change Feed POC End-to-End
+
+### 8.1 Test Frontend con autenticación
+
+```bash
+# Abrir en browser
+open https://$FRONTEND_URL
+
+# Debería redirigir a login de Microsoft
+# Después de login: ver dashboard, DLQ manager, health page
+```
+
+### 8.2 Test Change Feed POC
 
 ```bash
 # 1. Crear documento de prueba en Cosmos
 az cosmosdb sql container item create \
   --account-name $COSMOS_ACCOUNT \
-  --database-name $COSMOS_DB \
+  --database-name change-feed-poc \
   --container-name personas \
   --resource-group $RG \
   --partition-key-value "test-001" \
@@ -272,49 +305,45 @@ az cosmosdb sql container item create \
 
 # 2. Ver logs de ChangeFeedWorker (debe procesar el documento)
 az containerapp logs show \
+# 2. Ver logs de ChangeFeedWorker (esperar ~30 segundos)
+export CHANGEFEED_WORKER_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.changeFeedWorkerAppName.value' -o tsv)
+
+az containerapp logs show \
   --name $CHANGEFEED_WORKER_NAME \
   --resource-group $RG \
-  --follow
+  --tail 50
 
-# 3. Verificar sincronización a SQL
-# Endpoint: GET /api/sync/personas
-curl "https://$BACKEND_URL/api/sync/personas"
+# Buscar: "Processing 1 personas from Change Feed"
+# Buscar: "Inserted new Persona test-001 to SQL"
 
-# 4. Ver counters del dashboard
-# Endpoint: GET /api/dashboard/changefeed
-curl "https://$BACKEND_URL/api/dashboard/changefeed"
+# 3. Test backend endpoints (CON autenticación - usar browser o Postman con token)
+# GET https://$BACKEND_URL/api/cosmos/personas
+# GET https://$BACKEND_URL/api/sync/personas
+# GET https://$BACKEND_URL/api/dashboard/changefeed
 ```
 
 ---
 
-## Paso 6: Deploy Container Apps (Backend + Frontend)
+## ✅ Deployment E2E Completo
 
-```bash
-# Deploy: Backend + Frontend + WeatherWorker
-az deployment group create \
-  --resource-group $RG \
-  --template-file biceps/main.bicep \
-  --parameters \
-    deployContainerApps=true \
-    deployWorker=true \
-    deployWorkerApp=true \
-  --name "container-apps-$(date +%s)"
+Si llegaste aquí, tenés deployed:
+- ✅ Backend + Frontend + 3 Workers
+- ✅ SQL Database con managed identity + migrations
+- ✅ Cosmos DB con Change Feed POC
+- ✅ Easy Auth con Entra ID
+- ✅ Service Bus + Key Vault
+- ✅ Telemetry con App Insights
 
-# Outputs
-export BACKEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.backendAppUrl.value' -o tsv)
-export FRONTEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.frontendAppUrl.value' -o tsv)
-
-echo "Backend: $BACKEND_URL"
-echo "Frontend: $FRONTEND_URL"
-```
+**Próximos pasos:**
+- Crear personas en Cosmos (frontend cuando esté listo)
+- Ver sincronización automática a SQL
+- Ver contadores en dashboard
+- Testear DLQ manager
+- Ver health endpoints
 
 ---
 
-## Paso 7: Deploy Easy Auth (Entra ID OIDC)
-
-### 6.1 Crear App Registrations en Entra ID
-
-```bash
+## Anexo A: Crear App Registrations desde cero (si no existen)
 # 1. Frontend App Registration
 #    - Name: "Weather App Frontend - Dev"
 #    - Redirect URI: https://<frontend-fqdn>/.auth/login/aad/callback
