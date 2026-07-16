@@ -119,6 +119,8 @@ container-app-poc/
 - `WeatherWorker`: consume `weather-queue`
 - `DashboardWorker`: consume `dashboard-events` topic subscription
 - Ambos: graceful shutdown, dead-letter handling
+- **Patrón BackgroundService + Handler:** el BackgroundService maneja solo infra (processor lifecycle, settlement). La lógica de negocio va en un handler inyectado via interfaz (`IDashboardEventHandler`, `IMessageDispatcher`)
+- **Azure SDK mocking:** `ServiceBusSender`, `ServiceBusClient`, `ServiceBusReceiver` tienen métodos `virtual` — se mockean directo con Moq sin necesidad de wrappers. Ver [Sample15_MockingClientTypes](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/servicebus/Azure.Messaging.ServiceBus/samples/Sample15_MockingClientTypes.md)
 
 ### Frontend
 - SPA con React Router (client-side routing)
