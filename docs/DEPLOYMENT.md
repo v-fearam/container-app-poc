@@ -179,19 +179,125 @@ az sql server firewall-rule delete \
 
 ---
 
-## Paso 5: Deploy Container Apps
+## Paso 5: Deploy Cosmos DB + Change Feed POC (NUEVO - opcional)
+
+### 5.1 Deploy Cosmos DB infrastructure
 
 ```bash
-# Deploy: Backend + Frontend + WeatherWorker + DashboardWorker
+# Deploy: Cosmos DB Account + Database + Containers
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployCosmosDB=true \
+  --name "cosmos-$(date +%s)"
+
+# Outputs
+export COSMOS_ENDPOINT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosEndpoint.value' -o tsv)
+export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
+export COSMOS_DB=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosDatabaseName.value' -o tsv)
+
+echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
+echo "Cosmos Account: $COSMOS_ACCOUNT"
+echo "Cosmos Database: $COSMOS_DB"
+```
+
+**Containers creados:**
+- `personas` — Monitored collection (partition key: /id)
+- `changefeed-leases` — Change Feed Processor lease storage
+- `changefeed-errors` — Dead-letter container for failed documents
+
+### 5.2 Build y push ChangeFeedWorker image
+
+```bash
+# Build imagen
+az acr build \
+  --registry $ACR_NAME \
+  --image changefeed-worker:latest \
+  --file src/worker/ChangeFeedWorker/Dockerfile \
+  ./src/worker/ChangeFeedWorker
+```
+
+### 5.3 Build y push DashboardWorker image (si no existe)
+
+```bash
+# Build imagen
+az acr build \
+  --registry $ACR_NAME \
+  --image dashboard-worker:latest \
+  --file src/worker/DashboardWorker/Dockerfile \
+  ./src/worker/DashboardWorker
+```
+
+### 5.4 Deploy Change Feed Workers
+
+```bash
+# Deploy: DashboardWorker + ChangeFeedWorker Container Apps
+az deployment group create \
+  --resource-group $RG \
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployContainerApps=true \
+    deployDashboardWorkerApp=true \
+    deployChangeFeedWorker=true \
+  --name "changefeed-workers-$(date +%s)"
+
+# Outputs
+export DASHBOARD_WORKER_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.dashboardWorkerAppName.value' -o tsv)
+export CHANGEFEED_WORKER_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.changeFeedWorkerAppName.value' -o tsv)
+
+echo "Dashboard Worker: $DASHBOARD_WORKER_NAME"
+echo "ChangeFeed Worker: $CHANGEFEED_WORKER_NAME"
+```
+
+### 5.5 Validar Change Feed POC
+
+```bash
+# 1. Crear documento de prueba en Cosmos
+az cosmosdb sql container item create \
+  --account-name $COSMOS_ACCOUNT \
+  --database-name $COSMOS_DB \
+  --container-name personas \
+  --resource-group $RG \
+  --partition-key-value "test-001" \
+  --body '{
+    "id": "test-001",
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "email": "juan@example.com",
+    "edad": 30,
+    "ciudad": "Buenos Aires",
+    "updatedAt": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+  }'
+
+# 2. Ver logs de ChangeFeedWorker (debe procesar el documento)
+az containerapp logs show \
+  --name $CHANGEFEED_WORKER_NAME \
+  --resource-group $RG \
+  --follow
+
+# 3. Verificar sincronización a SQL
+# Endpoint: GET /api/sync/personas
+curl "https://$BACKEND_URL/api/sync/personas"
+
+# 4. Ver counters del dashboard
+# Endpoint: GET /api/dashboard/changefeed
+curl "https://$BACKEND_URL/api/dashboard/changefeed"
+```
+
+---
+
+## Paso 6: Deploy Container Apps (Backend + Frontend)
+
+```bash
+# Deploy: Backend + Frontend + WeatherWorker
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/main.bicep \
   --parameters \
     deployContainerApps=true \
     deployWorker=true \
-    deployDashboard=true \
     deployWorkerApp=true \
-    deployCosmosDB=false \
   --name "container-apps-$(date +%s)"
 
 # Outputs
@@ -204,7 +310,7 @@ echo "Frontend: $FRONTEND_URL"
 
 ---
 
-## Paso 6: Deploy Easy Auth (Entra ID OIDC)
+## Paso 7: Deploy Easy Auth (Entra ID OIDC)
 
 ### 6.1 Crear App Registrations en Entra ID
 

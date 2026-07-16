@@ -51,6 +51,12 @@ param workerImageName string = 'weather-worker'
 @description('The name of the Worker Container App')
 param workerAppName string = 'ca-${workloadName}-worker-${environmentShortName}'
 
+@description('Deploy Dashboard Worker Container App (requires DashboardWorker image in ACR)')
+param deployDashboardWorkerApp bool = false
+
+@description('Dashboard Worker image name in ACR')
+param dashboardWorkerImageName string = 'dashboard-worker'
+
 @description('Service Bus namespace name')
 param serviceBusNamespaceName string = 'sb-${workloadName}-${environmentShortName}-${take(uniqueString(resourceGroup().id), 6)}'
 
@@ -269,6 +275,30 @@ module workerApp 'modules/worker-container-app.bicep' = if (deployWorker && depl
   }
 }
 
+// Dashboard Worker Container App (KEDA scale-to-zero on topic subscription)
+module dashboardWorkerApp 'modules/dashboard-worker-container-app.bicep' = if (deployDashboardWorkerApp && deployDashboard && deployContainerApps) {
+  name: 'dashboard-worker-deployment'
+  params: {
+    location: location
+    containerAppName: 'ca-${workloadName}-dashworker-${environmentShortName}'
+    environmentId: environment.outputs.environmentId
+    containerImage: '${containerRegistry.outputs.acrLoginServer}/${dashboardWorkerImageName}:${imageTag}'
+    acrName: containerRegistryName
+    managedIdentityId: workerIdentity!.outputs.identityId
+    managedIdentityClientId: workerIdentity!.outputs.identityClientId
+    serviceBusNamespaceFqdn: serviceBus!.outputs.namespaceFqdn
+    topicName: 'nd-dashboard-events'
+    subscriptionName: 'counter-updater'
+    sqlConnectionString: 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default'
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
+    minReplicas: 0  // Scale to zero when no messages
+    maxReplicas: 10
+    cpu: '0.5'
+    memory: '1.0Gi'
+  }
+}
+
 // Change Feed Worker Container App (fixed replicas, no scale-to-zero)
 module changeFeedWorkerApp 'modules/changefeed-worker-container-app.bicep' = if (deployChangeFeedWorker && deployCosmosDB && deployDashboard && deployContainerApps) {
   name: 'changefeed-worker-deployment'
@@ -338,6 +368,7 @@ output sqlConnectionString string = deployDashboard ? sqlDatabase!.outputs.conne
 output cosmosEndpoint string = deployCosmosDB ? cosmosDB!.outputs.endpoint : ''
 output cosmosAccountName string = deployCosmosDB ? cosmosDB!.outputs.accountName : ''
 output cosmosDatabaseName string = deployCosmosDB ? cosmosDB!.outputs.databaseName : ''
+output dashboardWorkerAppName string = deployDashboardWorkerApp ? dashboardWorkerApp!.outputs.containerAppName : ''
 output changeFeedWorkerAppName string = deployChangeFeedWorker ? changeFeedWorkerApp!.outputs.containerAppName : ''
 output keyVaultName string = deployKeyVault ? keyVault!.outputs.keyVaultName : ''
 output keyVaultUri string = deployKeyVault ? keyVault!.outputs.keyVaultUri : ''

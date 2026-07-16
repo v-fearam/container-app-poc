@@ -162,31 +162,43 @@ container-app-poc/
 │   │   │   ├── Services/               # ServiceBusWorker
 │   │   │   ├── Program.cs              # DI + OpenTelemetry + Topic Sender
 │   │   │   └── Dockerfile
-│   │   └── DashboardWorker/            # .NET 10 Worker Service (Service Bus topic + KEDA)
-│   │       ├── Services/               # DashboardWorkerService (topic processor + SQL UPSERT)
-│   │       ├── Models/                 # DashboardEvent
-│   │       ├── Configuration/          # ServiceBusOptions, SqlOptions
-│   │       ├── Program.cs              # DI + OpenTelemetry
+│   │   ├── DashboardWorker/            # .NET 10 Worker Service (Service Bus topic + KEDA)
+│   │   │   ├── Services/               # DashboardWorkerService (topic processor + SQL UPSERT)
+│   │   │   ├── Models/                 # DashboardEvent (queue + Change Feed events)
+│   │   │   ├── Data/                   # DashboardDbContext + Entities (QueueCounter, PersonaSync, ChangeFeedCounter)
+│   │   │   ├── Configuration/          # ServiceBusOptions, SqlOptions
+│   │   │   ├── Program.cs              # DI + OpenTelemetry
+│   │   │   └── Dockerfile
+│   │   └── ChangeFeedWorker/           # .NET 10 Worker Service (Cosmos Change Feed + fixed replicas)
+│   │       ├── Services/               # ChangeFeedWorkerService (Change Feed Processor) + ChangeFeedHandler
+│   │       ├── Models/                 # Persona (Cosmos document)
+│   │       ├── Data/                   # DashboardDbContext + Entities (PersonaSync, ChangeFeedCounter)
+│   │       ├── Configuration/          # CosmosOptions
+│   │       ├── Program.cs              # DI + OpenTelemetry + Cosmos Client + Service Bus
 │   │       └── Dockerfile
 │   └── tools/ServiceBusEnqueuer/       # Console app — encola mensajes + publica eventos
 │       └── Program.cs
 ├── biceps/
-│   ├── main.bicep                      # Orquestador principal (Worker + Dashboard opcionales)
+│   ├── main.bicep                      # Orquestador principal (Worker + Dashboard + Cosmos opcionales)
 │   ├── easyauth.bicep                  # Easy Auth config (separado)
 │   └── modules/
 │       ├── container-registry.bicep
 │       ├── container-app.bicep         # Frontend + Backend Container Apps
 │       ├── worker-container-app.bicep  # WeatherWorker + KEDA queue scaler
 │       ├── dashboard-worker-container-app.bicep  # DashboardWorker + KEDA topic scaler
+│       ├── changefeed-worker-container-app.bicep  # ChangeFeedWorker (fixed replicas, no KEDA)
 │       ├── service-bus.bicep           # Service Bus + Queue (weather-jobs) + Topic (nd-dashboard-events) + Subscription
 │       ├── sql-database.bicep          # SQL Server + Database (Entra ID admin)
-│       └── managed-identity.bicep      # User Assigned MI + roles (SB Data Owner, AcrPull, SQL)
+│       ├── cosmos-db.bicep             # Cosmos DB + Containers (personas, leases, errors) + role assignment
+│       └── managed-identity.bicep      # User Assigned MI + roles (SB, ACR, SQL, Cosmos, KV)
 ├── sql/
 │   └── 001-dashboard-schema.sql        # QueueCounters + ComponentHealth tables
 └── docs/
     ├── EASY-AUTH-TUTORIAL.md           # Guía completa de Easy Auth
     ├── WORKER-KEDA-DESIGN.md           # Diseño Worker + KEDA + Service Bus
-    └── dashboard-poc.md                # Dashboard POC: diseño, arquitectura, implementación
+    ├── dashboard-poc.md                # Dashboard POC: diseño, arquitectura, implementación
+    ├── change-feed-poc.md              # Change Feed POC: arquitectura, eventos, sync Cosmos→SQL
+    └── DEPLOYMENT.md                   # Deployment completo punta a punta (incluye Change Feed POC)
 ```
 
 ---
