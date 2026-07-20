@@ -102,6 +102,33 @@ public class EnqueuerService(
         }
 
         logger.LogInformation("Successfully sent {MessageCount} messages to {QueueName}", messageCount, queueName);
+
+        // Send JobExecuted event to topic (for dashboard tracking)
+        try
+        {
+            var jobEventPayload = JsonSerializer.Serialize(new
+            {
+                eventType = "JobExecuted",
+                jobName,
+                executedAt = DateTime.UtcNow,
+                messagesSent = sent,
+                timestamp = DateTime.UtcNow
+            });
+
+            await topicSender.SendMessageAsync(new ServiceBusMessage(jobEventPayload)
+            {
+                ContentType = "application/json",
+                Subject = "JobExecuted",
+                ApplicationProperties = { ["eventType"] = "JobExecuted", ["jobName"] = jobName }
+            }, cancellationToken);
+
+            logger.LogInformation("Published JobExecuted event for job {JobName}", jobName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to publish JobExecuted event for job {JobName}", jobName);
+        }
+
         logger.LogInformation("Job completed successfully");
     }
 }

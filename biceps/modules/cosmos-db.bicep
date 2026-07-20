@@ -77,6 +77,7 @@ resource personasContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
         ]
         kind: 'Hash'
       }
+      defaultTtl: -1 // Enable per-document TTL (no default expiration)
       indexingPolicy: {
         indexingMode: 'consistent'
         automatic: true

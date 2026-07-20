@@ -31,6 +31,9 @@ public class PersonaDto
     
     [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    
+    [JsonPropertyName("ttl")]
+    public int? Ttl { get; set; }
 }
 
 /// <summary>
@@ -44,6 +47,7 @@ public class CreatePersonaRequest
     public int? Edad { get; set; }
     public string? Ciudad { get; set; }
     public bool Activo { get; set; } = true;
+    public int? Ttl { get; set; }
 }
 
 /// <summary>
@@ -56,4 +60,5 @@ public class UpdatePersonaRequest
     public string? Email { get; set; }
     public int? Edad { get; set; }
     public string? Ciudad { get; set; }
+    public int? Ttl { get; set; }
 }

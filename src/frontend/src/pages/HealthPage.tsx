@@ -91,21 +91,6 @@ export function HealthPage() {
     }
   };
 
-  const getJobStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'succeeded':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Succeeded</Badge>;
-      case 'failed':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Failed</Badge>;
-      case 'running':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Running</Badge>;
-      case 'pending':
-        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Pending</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">

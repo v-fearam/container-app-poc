@@ -120,7 +120,6 @@ export function SchedulerPage() {
                   <TableHead>Job</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Frecuencia</TableHead>
-                  <TableHead>Mensajes/Ejecución</TableHead>
                   <TableHead>Última Ejecución</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -145,7 +144,6 @@ export function SchedulerPage() {
                     <TableCell className="font-mono text-sm">
                       {job.cronExpression || 'N/A'}
                     </TableCell>
-                    <TableCell>{job.messageCount}</TableCell>
                     <TableCell>
                       {job.lastExecutionTime
                         ? formatDateTime(job.lastExecutionTime)

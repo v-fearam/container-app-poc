@@ -128,7 +128,8 @@ public class CosmosPersonasController : ControllerBase
             Edad = request.Edad,
             Ciudad = request.Ciudad,
             Activo = request.Activo,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            Ttl = request.Ttl
         };
 
         try
@@ -178,6 +179,7 @@ public class CosmosPersonasController : ControllerBase
             updated.Email = request.Email;
             updated.Edad = request.Edad;
             updated.Ciudad = request.Ciudad;
+            updated.Ttl = request.Ttl;
             updated.UpdatedAt = DateTime.UtcNow;
 
             var response = await container.ReplaceItemAsync(

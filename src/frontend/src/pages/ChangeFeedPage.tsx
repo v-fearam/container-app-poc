@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Database, RefreshCw, Plus, Pencil, Trash2, CheckCircle, AlertCircle, BarChart3 } from 'lucide-react';
+import { Database, RefreshCw, Plus, Pencil, Trash2, CheckCircle, AlertCircle, BarChart3, Timer } from 'lucide-react';
 
 // ============================================================================
 // Types
@@ -22,6 +22,7 @@ interface Persona {
   ciudad: string;
   activo: boolean;
   updatedAt?: string;
+  ttl?: number | null;
 }
 
 interface PersonasResponse {
@@ -120,6 +121,7 @@ function CosmosEditorTab() {
     edad: 0,
     ciudad: '',
     activo: true,
+    ttl: null,
   });
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -155,7 +157,7 @@ function CosmosEditorTab() {
       }
       
       // Reset form
-      setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true });
+      setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true, ttl: null });
       setEditingId(null);
       
       // Refresh list
@@ -186,12 +188,13 @@ function CosmosEditorTab() {
       edad: persona.edad,
       ciudad: persona.ciudad,
       activo: persona.activo,
+      ttl: persona.ttl ?? null,
     });
     setEditingId(persona.id);
   };
 
   const resetForm = () => {
-    setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true });
+    setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true, ttl: null });
     setEditingId(null);
   };
 
@@ -264,6 +267,34 @@ function CosmosEditorTab() {
                   placeholder="Buenos Aires"
                 />
               </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="ttl">TTL (segundos)</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="ttl"
+                    type="number"
+                    min="1"
+                    value={formData.ttl ?? ''}
+                    onChange={(e) => setFormData({ ...formData, ttl: e.target.value ? parseInt(e.target.value) : null })}
+                    placeholder="Sin expiración"
+                    className="max-w-[200px]"
+                  />
+                  {formData.ttl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormData({ ...formData, ttl: null })}
+                      className="cursor-pointer text-muted-foreground"
+                    >
+                      Quitar TTL
+                    </Button>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {formData.ttl ? `Expira en ${formData.ttl >= 3600 ? `${Math.floor(formData.ttl / 3600)}h ${Math.floor((formData.ttl % 3600) / 60)}m` : formData.ttl >= 60 ? `${Math.floor(formData.ttl / 60)}m ${formData.ttl % 60}s` : `${formData.ttl}s`}` : 'El documento no expira'}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -325,6 +356,7 @@ function CosmosEditorTab() {
                     <TableHead>Email</TableHead>
                     <TableHead>Edad</TableHead>
                     <TableHead>Ciudad</TableHead>
+                    <TableHead>TTL</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -337,6 +369,16 @@ function CosmosEditorTab() {
                       <TableCell>{persona.email}</TableCell>
                       <TableCell>{persona.edad}</TableCell>
                       <TableCell>{persona.ciudad}</TableCell>
+                      <TableCell>
+                        {persona.ttl ? (
+                          <Badge variant="outline" className="gap-1 text-orange-600 border-orange-300">
+                            <Timer className="h-3 w-3" />
+                            {persona.ttl >= 3600 ? `${Math.floor(persona.ttl / 3600)}h` : persona.ttl >= 60 ? `${Math.floor(persona.ttl / 60)}m` : `${persona.ttl}s`}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">∞</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button
                           variant="ghost"

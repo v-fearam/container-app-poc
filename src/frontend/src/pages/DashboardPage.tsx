@@ -334,7 +334,6 @@ export function DashboardPage() {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="font-mono text-sm font-medium text-slate-900">{job.jobName}</span>
-                                <Badge variant="outline" className="text-xs">{job.hoursWithExecutions} horas activas</Badge>
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="flex items-baseline gap-2">
@@ -346,14 +345,6 @@ export function DashboardPage() {
                                     {diff > 0 ? '↑' : diff < 0 ? '↓' : '→'} {Math.abs(Number(percentChange))}% vs ayer
                                   </div>
                                 )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <p className="text-xs text-muted-foreground mb-1">Promedio/hora</p>
-                                <p className="text-lg font-semibold text-slate-700">
-                                  {job.hoursWithExecutions > 0 ? (job.totalExecutions / job.hoursWithExecutions).toFixed(1) : '0'}
-                                </p>
                               </div>
                             </div>
                           </div>
