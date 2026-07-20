@@ -459,6 +459,21 @@ az deployment group show -g $RG --name "easyauth" \
 
 ## Paso 8: Validar Change Feed POC End-to-End
 
+### 8.0 Asignar rol Service Bus Data Sender a tu usuario (para el enqueuer local)
+
+```bash
+az role assignment create \
+  --assignee $(az ad signed-in-user show --query id -o tsv) \
+  --role "Azure Service Bus Data Sender" \
+  --scope $(az servicebus namespace show -g $RG \
+    --name $(echo $SB_NAMESPACE | cut -d'.' -f1) \
+    --query id -o tsv)
+
+echo "⏳ Esperar ~60 segundos para propagación de RBAC..."
+sleep 60
+echo "✅ Rol asignado"
+```
+
 ### 8.1 Test Frontend con autenticación
 
 ```bash
@@ -581,39 +596,79 @@ az deployment group create \
 
 ---
 
-## Verificación end-to-end
+## Paso 8: Validar Change Feed POC End-to-End
 
-### Backend Health
+### 8.1 Backend Health
 
 ```bash
 curl $BACKEND_URL/health
 # Esperar: {"status":"healthy","timestamp":"..."}
 ```
 
-### Service Bus
+### 8.2 Service Bus — Enviar mensajes de prueba
 
 ```bash
-# Enviar mensaje de prueba (desde WSL)
+# 1. Obtener namespace FQDN
+export SB_NS=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
+
+echo "Service Bus Namespace: $SB_NS"
+
+# 2. Asignar rol "Azure Service Bus Data Sender" a tu usuario (necesario para enviar mensajes)
+az role assignment create \
+  --assignee $(az ad signed-in-user show --query id -o tsv) \
+  --role "Azure Service Bus Data Sender" \
+  --scope $(az servicebus namespace show -g $RG --name $(echo $SB_NS | cut -d'.' -f1) --query id -o tsv)
+
+echo "✅ Rol asignado. Esperar ~60 segundos para propagación RBAC..."
+sleep 60
+
+# 3. Enviar 100 mensajes de prueba a la cola weather-jobs
 cd src/tools/ServiceBusEnqueuer
-dotnet run
+dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
+
+# Verificar que el WeatherWorker procesa los mensajes (logs en Azure Portal o az containerapp logs)
 ```
 
-### Dashboard
+### 8.3 Dashboard
 
 ```bash
 # Abrir en navegador (autenticarse con Entra ID)
 open $FRONTEND_URL
 ```
 
-### Cosmos DB
+### 8.4 Cosmos DB — Crear documento de prueba y verificar Change Feed
 
 ```bash
-# Listar containers
+# 1. Asignar rol "Cosmos DB Built-in Data Contributor" a tu usuario (necesario para escribir documentos)
+export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.cosmosAccountName.value' -o tsv)
+
+az cosmosdb sql role assignment create \
+  --account-name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --scope "/" \
+  --principal-id $(az ad signed-in-user show --query id -o tsv) \
+  --role-definition-id "00000000-0000-0000-0000-000000000002"
+
+echo "✅ Rol asignado. Esperar ~60 segundos para propagación RBAC..."
+sleep 60
+
+# 2. Crear documento de prueba en container "personas"
+# Usar Azure Portal → Cosmos DB → Data Explorer → personas → New Item
+# O usar REST API con Managed Identity (ejemplo en docs/change-feed-poc.md)
+
+# 3. Verificar que ChangeFeedWorker procesa el cambio:
+# - Logs del ChangeFeedWorker (az containerapp logs show -n ca-changefeed-worker-dev -g $RG)
+# - DashboardWorker recibe evento y actualiza SQL (ver tabla ChangeFeedCounters)
+# - Dashboard muestra contador incrementado en página "Change Feed"
+
+# 4. Listar containers
 az cosmosdb sql container list \
   --account-name $COSMOS_ACCOUNT \
-  --database-name $COSMOS_DB \
+  --database-name dashboard-poc \
   --resource-group $RG \
-  --query "[].id"
+  --query "[].id" -o table
 ```
 
 ---
