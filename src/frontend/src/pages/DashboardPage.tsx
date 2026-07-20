@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
+import { useJobsApi } from '../hooks/useJobsApi';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Inbox, CheckCircle, Trash2, AlertCircle, BarChart3, CalendarDays } from 'lucide-react';
+import { Inbox, CheckCircle, Trash2, AlertCircle, BarChart3, CalendarDays, Calendar } from 'lucide-react';
+import type { JobExecutionCounter } from '../types/jobs';
 
 interface QueueCounter {
   vertical: string;
@@ -24,7 +26,9 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 
 export function DashboardPage() {
   const { get } = useApi();
+  const { getJobExecutionCounters } = useJobsApi();
   const [data, setData] = useState<QueueCounter[] | null>(null);
+  const [jobExecutions, setJobExecutions] = useState<JobExecutionCounter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -38,9 +42,15 @@ export function DashboardPage() {
         const params = new URLSearchParams();
         if (filterDate) params.set('fecha', filterDate);
         const qs = params.toString();
-        const result = await get<QueueCounter[]>(`/api/dashboard/kpi${qs ? `?${qs}` : ''}`);
+        
+        const [queueData, jobData] = await Promise.all([
+          get<QueueCounter[]>(`/api/dashboard/kpi${qs ? `?${qs}` : ''}`),
+          getJobExecutionCounters()
+        ]);
+        
         if (isMounted) {
-          setData(result);
+          setData(queueData);
+          setJobExecutions(jobData);
           setLastRefresh(new Date());
           setError(null);
           setLoading(false);
@@ -272,6 +282,48 @@ export function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Job Executions Widget */}
+            {jobExecutions.length > 0 && (
+              <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 border-b">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-5 w-5 text-purple-600" />
+                      <div>
+                        <CardTitle className="text-slate-900">Container Jobs</CardTitle>
+                        <CardDescription>Ejecuciones de jobs programados</CardDescription>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to="/scheduler">Ver Scheduler</Link>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Job</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="text-right">Total Ejecuciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {jobExecutions.slice(0, 5).map((job, idx) => (
+                        <TableRow key={`${job.jobName}-${job.date}-${idx}`}>
+                          <TableCell className="font-medium">{job.jobName}</TableCell>
+                          <TableCell>{new Date(job.date).toLocaleDateString('es-AR')}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="secondary">{job.totalExecutions}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Queue Groups */}
             {queueGroups.map((queue) => (

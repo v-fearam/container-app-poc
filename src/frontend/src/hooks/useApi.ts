@@ -186,5 +186,40 @@ export function useApi() {
     [accessToken, fetchWithRetry],
   );
 
-  return { get, post, put, del, baseUrl };
+  const patch = useCallback(
+    async <T>(path: string, body?: unknown): Promise<T> => {
+      if (!baseUrl) {
+        throw new ApiError(0, 'API URL no configurada. Define API_URL (runtime) o VITE_API_URL (build).');
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
+      const res = await fetchWithRetry(`${baseUrl}${path}`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!res.ok) {
+        throw new ApiError(res.status, await res.text());
+      }
+
+      // Handle empty response (204 No Content)
+      const contentType = res.headers.get('content-type');
+      if (res.status === 204 || !contentType?.includes('application/json')) {
+        return undefined as T;
+      }
+
+      return res.json() as Promise<T>;
+    },
+    [accessToken, fetchWithRetry],
+  );
+
+  return { get, post, put, patch, del, baseUrl };
 }

@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { DlqManagerPage } from './pages/DlqManagerPage';
 import { HealthPage } from './pages/HealthPage';
 import { ChangeFeedPage } from './pages/ChangeFeedPage';
+import { SchedulerPage } from './pages/SchedulerPage';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="dashboard/dlq/*" element={<DlqManagerPage />} />
         <Route path="changefeed" element={<ChangeFeedPage />} />
+        <Route path="scheduler" element={<SchedulerPage />} />
         <Route path="health" element={<HealthPage />} />
         <Route
           path="admin"

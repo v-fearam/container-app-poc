@@ -31,6 +31,9 @@ export function Navbar() {
                   <Link to="/changefeed">Change Feed</Link>
                 </Button>
                 <Button variant="ghost" size="sm" asChild>
+                  <Link to="/scheduler">Scheduler</Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
                   <Link to="/health">Health</Link>
                 </Button>
                 {user?.roles.includes('Admin') && (
