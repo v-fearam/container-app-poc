@@ -25,9 +25,9 @@ export LOCATION="eastus2"
 export WORKLOAD="weather"
 export ENV="dev"
 
-# Tu Entra ID admin (reemplazar con tu UPN y Object ID)
-export SQL_ADMIN_LOGIN="far@microsoft.com"  # Tu UPN
-export SQL_ADMIN_OBJECT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Tu Object ID
+# Tu Entra ID admin (obtenido automáticamente desde az cli)
+export SQL_ADMIN_LOGIN=$(az account show --query user.name -o tsv)
+export SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
 ```
 
 ---
@@ -60,6 +60,16 @@ export APP_INSIGHTS_CONN=$(az deployment group show -g $RG --name main --query '
 
 echo "ACR: $ACR_NAME"
 echo "Key Vault: $KV_NAME"
+
+# Asignar rol "Key Vault Secrets Officer" a tu usuario (necesario para escribir secrets)
+az role assignment create \
+  --role "Key Vault Secrets Officer" \
+  --assignee $(az ad signed-in-user show --query id -o tsv) \
+  --scope $(az keyvault show --name $KV_NAME --resource-group $RG --query id -o tsv)
+
+echo "⏳ Esperar ~60 segundos para propagación de RBAC antes de continuar..."
+sleep 60
+echo "✅ Rol asignado y propagado"
 ```
 
 ---
@@ -140,6 +150,7 @@ az deployment group create \
     deployDashboard=true \
     deployCosmosDB=true \
     deployContainerApps=false \
+    sqlLocation=centralus \
     sqlAdminLogin=$SQL_ADMIN_LOGIN \
     sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
   --name "main"
@@ -165,18 +176,21 @@ echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
 ### 5.1 Crear usuario de managed identity en SQL
 
 ```bash
-# Conectar a SQL con tu admin Entra ID
-# (Usar Azure Portal Data Studio o az sql query si está disponible)
+# Obtener el nombre de la managed identity del deployment
+export WORKER_IDENTITY_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.workerIdentityName.value' -o tsv)
 
-# T-SQL a ejecutar (reemplazar principalId con el output de deployment):
-export WORKER_IDENTITY_PRINCIPAL=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.workerIdentityPrincipalId.value' -o tsv)
+echo "Worker identity name: $WORKER_IDENTITY_NAME"
 
-echo "Ejecutar en SQL Server:"
-echo "CREATE USER [id-weather-worker-dev] FROM EXTERNAL PROVIDER;"
-echo "ALTER ROLE db_datareader ADD MEMBER [id-weather-worker-dev];"
-echo "ALTER ROLE db_datawriter ADD MEMBER [id-weather-worker-dev];"
+# Imprimir el T-SQL a ejecutar (con el nombre real de la identity)
+echo ""
+echo "-- Ejecutar en Azure Portal → SQL Database → Query editor:"
+echo "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
 ```
+
+**Cómo ejecutarlo:** Abrir [Azure Portal](https://portal.azure.com) → SQL Database `dashboard-poc` → **Query editor** → autenticarse con Entra ID → pegar y ejecutar el SQL de arriba.
 
 ### 5.2 Correr EF Core migrations
 
@@ -196,6 +210,14 @@ az sql server firewall-rule create \
 # Connection string con tu Entra ID admin
 export ConnectionStrings__DefaultConnection="Server=$SQL_SERVER;Database=$SQL_DB;Authentication=Active Directory Default;TrustServerCertificate=True"
 
+# Instalar dotnet-ef tool (si no está instalado)
+dotnet tool install --global dotnet-ef
+# O actualizar si ya existe:
+# dotnet tool update --global dotnet-ef
+
+# Asegurarse que ~/.dotnet/tools está en PATH (común en WSL)
+export PATH="$PATH:$HOME/.dotnet/tools"
+
 # Correr migrations
 dotnet ef database update --context DashboardDbContext
 
@@ -206,9 +228,9 @@ az sql server firewall-rule delete \
   --name AllowMyIP
 
 # Opción 2: Desde Azure Portal SQL Query Editor (manual)
-# - Abrir portal.azure.com → SQL Database → Query editor
-# - Autenticarse con Entra ID
-# - Copiar y ejecutar el SQL de las migrations manualmente
+# Portal → SQL Database dashboard-poc → Query editor → autenticarse con Entra ID
+# Ejecutar el siguiente script (crea todas las tablas necesarias):
+# → Copiar y pegar contenido de: sql/003-changefeed-tables.sql
 ```
 
 **Migrations incluidas:**
@@ -221,15 +243,22 @@ az sql server firewall-rule delete \
 
 ```bash
 # Deploy: Backend + Frontend + WeatherWorker + DashboardWorker + ChangeFeedWorker
+# IMPORTANTE: pasar todos los flags deploy* para que las condiciones del Bicep sean true
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/main.bicep \
   --parameters \
     deployContainerApps=true \
+    deployWorker=true \
     deployWorkerApp=true \
+    deployDashboard=true \
     deployDashboardWorkerApp=true \
+    deployCosmosDB=true \
     deployChangeFeedWorker=true \
-  --name "apps-$(date +%s)"
+    sqlLocation=centralus \
+    sqlAdminLogin=$SQL_ADMIN_LOGIN \
+    sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
+  --name "main"
 
 # Outputs
 export BACKEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.backendAppUrl.value' -o tsv)
@@ -243,17 +272,43 @@ echo "Frontend: https://$FRONTEND_URL"
 
 ## Paso 7: Deploy Easy Auth (Entra ID OIDC)
 
+⚠️ **CRÍTICO:** Este paso es **obligatorio**. Sin Easy Auth configurado, el backend devolverá **401 - No autenticado** en todos los endpoints aunque el frontend muestre "Autenticado".
+
 ### 7.1 Actualizar Redirect URIs (si cambió el FQDN)
 
 ```bash
 # Portal → Entra ID → App registrations → Frontend App → Authentication
-# Verificar que exista: https://<frontend-fqdn>/.auth/login/aad/callback
-# Si el FQDN cambió, agregar nueva redirect URI
+# Verificar que exista la redirect URI correcta según el tipo de tenant:
+#
+#   Entra ID normal (workforce):  https://<frontend-fqdn>/.auth/login/aad/callback
+#   Entra External ID (CIAM):     https://<frontend-fqdn>/.auth/login/entraid/callback
+#
+# Si el FQDN cambió, agregar nueva redirect URI del tipo correcto
 ```
 
 ### 7.2 Deploy Easy Auth config
 
 ```bash
+# OIDC Well-Known URL según el tipo de tenant:
+#   Entra External ID (CIAM):    https://<subdomain>.ciamlogin.com/$TENANT_ID/v2.0/.well-known/openid-configuration
+#   Entra ID normal (workforce): https://login.microsoftonline.com/$TENANT_ID/v2.0/.well-known/openid-configuration
+#
+# Este proyecto usa CIAM (cognitomigration):
+export OIDC_WELL_KNOWN_URL="https://cognitomigration.ciamlogin.com/$TENANT_ID/v2.0/.well-known/openid-configuration"
+
+# IMPORTANTE: inyectar client secrets en los Container Apps ANTES del deploy.
+# El Bicep referencia "microsoft-provider-authentication-secret" por nombre pero no lo crea.
+az containerapp secret set \
+  --name ca-weather-fe-dev \
+  --resource-group $RG \
+  --secrets "microsoft-provider-authentication-secret=$FRONTEND_CLIENT_SECRET"
+
+az containerapp secret set \
+  --name ca-weather-be-dev \
+  --resource-group $RG \
+  --secrets "microsoft-provider-authentication-secret=$BACKEND_CLIENT_SECRET"
+
+# Deploy Easy Auth (nombre fijo "easyauth" para poder leer outputs después)
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/easyauth.bicep \
@@ -262,11 +317,34 @@ az deployment group create \
     frontendAppName="ca-weather-fe-dev" \
     frontendClientId=$FRONTEND_CLIENT_ID \
     backendClientId=$BACKEND_CLIENT_ID \
-    tenantId=$TENANT_ID \
-    keyVaultName=$KV_NAME \
-  --name "easyauth-$(date +%s)"
+    oidcWellKnownUrl="$OIDC_WELL_KNOWN_URL" \
+    providerName="entraid" \
+  --name "easyauth"
+
+# Actualizar token-store-sas en Key Vault con el valor real generado por el deployment
+export TOKEN_STORE_SAS=$(az deployment group show -g $RG \
+  --name "easyauth" \
+  --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
+
+az keyvault secret set --vault-name $KV_NAME \
+  --name token-store-sas \
+  --value "$TOKEN_STORE_SAS"
+
+# Reiniciar frontend para que lea el nuevo token-store-sas
+REVISION=$(az containerapp revision list \
+  --name ca-weather-fe-dev \
+  --resource-group $RG \
+  --query "[?properties.active].name" -o tsv)
+
+az containerapp revision restart \
+  --name ca-weather-fe-dev \
+  --resource-group $RG \
+  --revision "$REVISION"
 
 echo "✅ Easy Auth configurado"
+echo "Callback URL para App Registration:"
+az deployment group show -g $RG --name "easyauth" \
+  --query 'properties.outputs.frontendCallbackUrl.value' -o tsv
 ```
 
 ---
@@ -527,6 +605,26 @@ az deployment group create \
     dataContributorPrincipalId=$(az deployment group show -g $RG --name main \
       --query 'properties.outputs.workerIdentityPrincipalId.value' -o tsv)
 ```
+
+### Backend devuelve 401 aunque frontend muestre "Autenticado"
+
+**Síntomas:**
+- Frontend muestra "Estado de autenticación: Autenticado"
+- DevTools → Network → Headers muestra `accessToken: ""`
+- Backend devuelve **401 - No autenticado** en todos los endpoints
+
+**Causa:** Falta el Paso 7 (Deploy Easy Auth) o se redeployaron los Container Apps después de configurar Easy Auth.
+
+**Solución:**
+1. Verificar que Easy Auth está configurado:
+   ```bash
+   az rest --method GET --url "/subscriptions/<sub-id>/resourceGroups/$RG/providers/Microsoft.App/containerApps/ca-weather-be-dev/authConfigs/current?api-version=2023-05-01" \
+     --query '{enabled: properties.platform.enabled, clientId: properties.identityProviders.azureActiveDirectory.registration.clientId}'
+   ```
+
+2. Si `enabled: null`, ejecutar Paso 7 completo (Deploy Easy Auth)
+
+3. **Cerrar sesión y volver a autenticarse** (el accessToken se genera en el login, no se puede renovar sin re-autenticar)
 
 ---
 

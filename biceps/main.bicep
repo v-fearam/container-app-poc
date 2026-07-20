@@ -70,7 +70,7 @@ param deployDashboard bool = false
 param sqlLocation string = location
 
 @description('SQL Server name (required if deployDashboard=true)')
-param sqlServerName string = ''
+param sqlServerName string = 'sql-${workloadName}-dash-${take(uniqueString(resourceGroup().id), 6)}'
 
 @description('Entra ID admin object ID for SQL Server (required if deployDashboard=true)')
 param sqlAdminObjectId string = ''
