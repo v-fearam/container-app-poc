@@ -328,6 +328,50 @@ az deployment group create \
 export BACKEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.backendAppUrl.value' -o tsv)
 export FRONTEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.frontendAppUrl.value' -o tsv)
 
+echo "Backend URL: $BACKEND_URL"
+echo "Frontend URL: $FRONTEND_URL"
+
+# ⚠️ VERIFICACIÓN POST-DEPLOY (CRÍTICO para Managed Identity)
+# Verificar que el backend tenga los env vars CORRECTOS (NO secrets)
+echo ""
+echo "=== Verificando configuración del backend ==="
+
+# 1. Secrets (deberían ser solo 2: appinsights + auth)
+echo "Secrets en backend (esperado: 2):"
+az containerapp show -n ca-weather-be-dev -g $RG \
+  --query "properties.configuration.secrets[].name" -o table
+
+# 2. Env vars críticos (Cosmos__Endpoint y SQL_CONNECTION_STRING deben ser 'value', NO 'secretRef')
+echo ""
+echo "Environment variables (Cosmos__Endpoint y SQL_CONNECTION_STRING deben tener valor, NO secret ref):"
+az containerapp show -n ca-weather-be-dev -g $RG \
+  --query "properties.template.containers[0].env[?contains(name, 'Cosmos') || contains(name, 'SQL')].{name:name, value:value, secretRef:secretRef}" \
+  -o table
+
+# 3. Secrets en Key Vault (deberían ser solo 3: appinsights + 2 auth secrets)
+echo ""
+echo "Secrets en Key Vault (esperado: 3):"
+az keyvault secret list --vault-name $KV_NAME --query "[].name" -o tsv
+
+echo ""
+echo "✅ Si hay más de 2 secrets en backend O más de 3 en Key Vault, ver sección Troubleshooting"
+```
+
+**Configuración esperada después del deploy:**
+
+| Componente | Configuración | Esperado |
+|------------|---------------|----------|
+| **Backend secrets** | `appinsights-connection-string`, `microsoft-provider-authentication-secret` | ✅ 2 secrets |
+| **Backend env vars** | `Cosmos__Endpoint` (value), `SQL_CONNECTION_STRING` (value), `ServiceBus__Namespace` (value) | ✅ env vars con valor directo |
+| **Key Vault secrets** | `appinsights-connection-string`, `auth-client-secret-backend`, `auth-client-secret-frontend` | ✅ 3 secrets |
+
+**⚠️ ANTI-PATTERNS (si ves esto, el deploy está mal):**
+- ❌ `cosmos-connection-string` o `sql-connection-string` en Key Vault
+- ❌ `COSMOS_CONNECTION_STRING` env var en backend (debería ser `Cosmos__Endpoint`)
+- ❌ Backend env vars con `secretRef` para Cosmos o SQL (deben ser `value`)
+
+---
+
 echo "Backend: https://$BACKEND_URL"
 echo "Frontend: https://$FRONTEND_URL"
 ```
@@ -746,14 +790,128 @@ Después de ejecutar el T-SQL en el portal, el error desaparece inmediatamente (
 - Backend logs muestran: `Unable to resolve service for type 'Microsoft.Azure.Cosmos.CosmosClient'`
 - DevTools → Network muestra: `500 Internal Server Error`
 
-**Causa:** El backend identity no tiene rol "Cosmos DB Built-in Data Contributor" en la cuenta de Cosmos DB.
+**Causa posible #1:** Backend no tiene env var `Cosmos__Endpoint` (el CosmosClient solo se registra si ese env var existe)
 
 **Solución:**
-Verificar que el role assignment existe:
 ```bash
 export RG="rg-far-container-app-easyauth"
+
+# Verificar si tiene el env var
+az containerapp show -n ca-weather-be-dev -g $RG \
+  --query "properties.template.containers[0].env[?name=='Cosmos__Endpoint'].{name:name, value:value}" \
+  -o table
+
+# Si NO aparece o value está vacío, ejecutar sección "Ambiente actual con secrets obsoletos"
+```
+
+**Causa posible #2:** Backend identity no tiene rol "Cosmos DB Built-in Data Contributor"
+
+**Solución:**
+```bash
 export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
 export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
+export BACKEND_PRINCIPAL_ID=$(az identity show -n $BACKEND_IDENTITY_NAME -g $RG --query principalId -o tsv)
+
+# Ver roles
+az cosmosdb sql role assignment list \
+  --account-name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --query "[?principalId=='$BACKEND_PRINCIPAL_ID'].{RoleDefinitionId:roleDefinitionId}" \
+  -o table
+
+# Si NO tiene rol, asignar:
+az cosmosdb sql role assignment create \
+  --account-name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --scope "/" \
+  --principal-id $BACKEND_PRINCIPAL_ID \
+  --role-definition-id "00000000-0000-0000-0000-000000000002"
+```
+
+---
+
+### Ambiente actual con secrets obsoletos (cosmos-connection-string, sql-connection-string)
+
+**Síntomas:**
+- Backend tiene secrets `cosmos-connection-string` y/o `sql-connection-string` en Container App
+- Backend tiene env vars `COSMOS_CONNECTION_STRING` y/o `SQL_CONNECTION_STRING` con `secretRef` (en lugar de `value`)
+- Key Vault tiene secrets `cosmos-connection-string` y/o `sql-connection-string`
+- Backend falla con `Unable to resolve service for type 'Microsoft.Azure.Cosmos.CosmosClient'`
+
+**Causa:** El ambiente fue deployado ANTES de la refactorización a Managed Identity (commits `5497d24` y `3ac881d`). Los secrets obsoletos bloquean el registro de servicios.
+
+**Solución:** Limpiar secrets obsoletos y redeploy con Managed Identity:
+
+```bash
+export RG="rg-far-container-app-easyauth"
+export KV_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.keyVaultName.value' -o tsv)
+export ACR_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.acrName.value' -o tsv)
+export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
+export COSMOS_ENDPOINT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosEndpoint.value' -o tsv)
+export SQL_SERVER=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlServerFqdn.value' -o tsv)
+export SQL_DB=$(az deployment group show -g $RG --name main --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
+export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
+export BACKEND_PRINCIPAL_ID=$(az identity show -n $BACKEND_IDENTITY_NAME -g $RG --query principalId -o tsv)
+
+# 1. Eliminar secrets obsoletos de Key Vault
+echo "Eliminando secrets obsoletos de Key Vault..."
+az keyvault secret delete --vault-name $KV_NAME --name cosmos-connection-string 2>/dev/null || echo "cosmos-connection-string ya no existe (OK)"
+az keyvault secret delete --vault-name $KV_NAME --name sql-connection-string 2>/dev/null || echo "sql-connection-string ya no existe (OK)"
+
+# 2. Asignar rol Cosmos DB Data Contributor al backend identity (si no existe)
+echo ""
+echo "Asignando rol Cosmos DB Data Contributor..."
+az cosmosdb sql role assignment create \
+  --account-name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --scope "/" \
+  --principal-id $BACKEND_PRINCIPAL_ID \
+  --role-definition-id "00000000-0000-0000-0000-000000000002" \
+  2>/dev/null || echo "Rol ya existe (OK)"
+
+# 3. Rebuild backend (código usa Managed Identity)
+echo ""
+echo "Rebuilding backend con Managed Identity..."
+cd /mnt/c/repos/container-app-poc
+az acr build \
+  --registry $ACR_NAME \
+  --image weather-api:latest \
+  --file src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+# 4. Generar connection string SQL con MI
+export SQL_CONN_STR="Server=tcp:${SQL_SERVER},1433;Initial Catalog=${SQL_DB};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+
+# 5. Redeploy backend con env vars correctos (NO secrets)
+echo ""
+echo "Redeployando backend con Managed Identity env vars..."
+az containerapp update \
+  -n ca-weather-be-dev \
+  -g $RG \
+  --image ${ACR_NAME}.azurecr.io/weather-api:latest \
+  --set-env-vars \
+    "Cosmos__Endpoint=${COSMOS_ENDPOINT}" \
+    "SQL_CONNECTION_STRING=${SQL_CONN_STR}" \
+  --remove-env-vars COSMOS_CONNECTION_STRING \
+  --revision-suffix "be-mi-full-$(date +%s)"
+
+echo ""
+echo "✅ Backend migrado a Managed Identity"
+echo ""
+echo "Verificación (esperar ~30s para que arranque):"
+echo "  Backend secrets: az containerapp show -n ca-weather-be-dev -g $RG --query 'properties.configuration.secrets[].name' -o table"
+echo "  Backend env vars: az containerapp show -n ca-weather-be-dev -g $RG --query \"properties.template.containers[0].env[?contains(name, 'Cosmos') || contains(name, 'SQL')].{name:name, value:value}\" -o table"
+echo "  Key Vault secrets: az keyvault secret list --vault-name $KV_NAME --query '[].name' -o tsv"
+echo ""
+echo "Configuración esperada:"
+echo "  - Backend secrets: 2 (appinsights-connection-string, microsoft-provider-authentication-secret)"
+echo "  - Backend env vars: Cosmos__Endpoint (value), SQL_CONNECTION_STRING (value)"
+echo "  - Key Vault secrets: 3 (appinsights-connection-string, auth-client-secret-backend, auth-client-secret-frontend)"
+```
+
+---
   --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
 
 # Ver roles
