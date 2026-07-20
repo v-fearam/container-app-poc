@@ -35,4 +35,15 @@ public record DashboardEvent
     
     [JsonPropertyName("errorMessage")]
     public string? ErrorMessage { get; init; } // Only for ChangeFeedError events
+
+    // ─── Job Execution specific fields ──────────────────────────────────────
+    
+    [JsonPropertyName("jobName")]
+    public string? JobName { get; init; } // Only for JobExecuted events
+    
+    [JsonPropertyName("executedAt")]
+    public DateTimeOffset? ExecutedAt { get; init; } // Only for JobExecuted events
+    
+    [JsonPropertyName("messageCount")]
+    public int? MessageCount { get; init; } // Only for JobExecuted events
 }

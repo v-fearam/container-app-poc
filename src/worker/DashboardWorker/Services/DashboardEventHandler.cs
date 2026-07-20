@@ -20,6 +20,7 @@ public class DashboardEventHandler(
             "MessageEnqueued" or "MessageProcessed" => await UpsertQueueCounterAndComplete(evt, cancellationToken),
             "ChangeFeedProcessed" => await UpsertChangeFeedCounterAndComplete(evt, isSuccess: true, cancellationToken),
             "ChangeFeedError" => await UpsertChangeFeedCounterAndComplete(evt, isSuccess: false, cancellationToken),
+            "JobExecuted" => await UpsertJobExecutionCounterAndComplete(evt, cancellationToken),
             _ => RejectUnknownEventType(evt)
         };
     }
@@ -176,5 +177,86 @@ public class DashboardEventHandler(
                 && q.QueueName == evt.QueueName
                 && q.ProcessType == evt.ProcessType
                 && q.Date == date);
+    }
+
+    private async Task<MessageHandleResult> UpsertJobExecutionCounterAndComplete(
+        DashboardEvent evt, CancellationToken cancellationToken)
+    {
+        // Extract jobName and executedAt from event
+        if (string.IsNullOrEmpty(evt.JobName))
+        {
+            logger.LogWarning("JobExecuted event missing 'jobName' property. Sending to dead-letter.");
+            return new MessageHandleResult(
+                MessageSettlement.DeadLetter,
+                "MissingJobName",
+                "JobExecuted event requires 'jobName' property");
+        }
+
+        if (!evt.ExecutedAt.HasValue)
+        {
+            logger.LogWarning("JobExecuted event missing 'executedAt' property. Sending to dead-letter.");
+            return new MessageHandleResult(
+                MessageSettlement.DeadLetter,
+                "MissingExecutedAt",
+                "JobExecuted event requires 'executedAt' property");
+        }
+
+        var jobName = evt.JobName;
+        var date = evt.ExecutedAt.Value.Date;
+        var hour = evt.ExecutedAt.Value.Hour;
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var updated = await IncrementExistingJobExecutionCounter(dbContext, jobName, date, hour, cancellationToken);
+
+        if (!updated)
+            await InsertNewJobExecutionCounterOrRetry(jobName, dbContext, date, hour, cancellationToken);
+
+        return new MessageHandleResult(MessageSettlement.Complete);
+    }
+
+    private static async Task<bool> IncrementExistingJobExecutionCounter(
+        DashboardDbContext dbContext, string jobName, DateTime date, int hour, CancellationToken cancellationToken)
+    {
+        var filter = dbContext.JobExecutions
+            .Where(j => j.JobName == jobName && j.Date == date && j.Hour == hour);
+
+        var rowsAffected = await filter.ExecuteUpdateAsync(j => j
+            .SetProperty(x => x.ExecutionCount, x => x.ExecutionCount + 1)
+            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken);
+
+        return rowsAffected > 0;
+    }
+
+    private async Task InsertNewJobExecutionCounterOrRetry(
+        string jobName, DashboardDbContext dbContext, DateTime date, int hour, CancellationToken cancellationToken)
+    {
+        var counter = new JobExecution
+        {
+            JobName = jobName,
+            Date = date,
+            Hour = hour,
+            ExecutionCount = 1,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        dbContext.JobExecutions.Add(counter);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx && sqlEx.Number == 2627)
+        {
+            logger.LogDebug("Concurrent INSERT detected for job execution counter. Falling back to increment.");
+            await RetryIncrementJobExecutionWithFreshContext(jobName, date, hour, cancellationToken);
+        }
+    }
+
+    private async Task RetryIncrementJobExecutionWithFreshContext(
+        string jobName, DateTime date, int hour, CancellationToken cancellationToken)
+    {
+        await using var retryDbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await IncrementExistingJobExecutionCounter(retryDbContext, jobName, date, hour, cancellationToken);
     }
 }

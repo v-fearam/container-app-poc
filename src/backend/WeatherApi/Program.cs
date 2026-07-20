@@ -90,6 +90,13 @@ if (!string.IsNullOrEmpty(sqlConnectionString) && !string.IsNullOrEmpty(serviceB
 // Memory Cache (for infrastructure health service)
 builder.Services.AddMemoryCache();
 
+// Azure Resource Manager SDK (for Container Apps Jobs management)
+builder.Services.AddSingleton<Azure.ResourceManager.ArmClient>(sp =>
+{
+    var credential = sp.GetRequiredService<TokenCredential>();
+    return new Azure.ResourceManager.ArmClient(credential);
+});
+
 // Infrastructure Health Service (ARM API + Service Bus metrics)
 builder.Services.AddHttpClient("arm");
 builder.Services.AddSingleton<TokenCredential>(new DefaultAzureCredential());
