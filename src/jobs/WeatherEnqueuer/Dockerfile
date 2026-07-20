@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for WeatherEnqueuer Console App
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy csproj and restore dependencies
@@ -12,12 +12,12 @@ RUN dotnet restore
 COPY . .
 RUN dotnet publish -c Release -o /app/publish --no-restore
 
-# Runtime image
-FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine
+# Runtime image - USE DEBIAN (default) INSTEAD OF ALPINE (Alpine causes SIGSEGV with .NET 10)
+FROM mcr.microsoft.com/dotnet/runtime:10.0
 WORKDIR /app
 
 # Create non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 USER appuser
 
 # Copy published app from build stage

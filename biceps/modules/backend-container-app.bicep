@@ -122,6 +122,17 @@ resource rgReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+// Contributor role on resource group for updating Container Apps Jobs (PATCH operations)
+// This is required for the JobsController UpdateSchedule endpoint
+resource rgContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(userAssignedIdentity.id, resourceGroup().id, 'Contributor')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Cosmos DB Built-in Data Contributor role (for Managed Identity access)
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existing = if (!empty(cosmosAccountId)) {
   name: last(split(cosmosAccountId, '/'))

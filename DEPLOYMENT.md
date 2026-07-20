@@ -623,10 +623,11 @@ az acr build --registry $ACR \
 ```
 
 **¿Qué hace WeatherEnqueuer?**
-- ✅ Encola N mensajes a `weather-queue` (N = env var `MESSAGE_COUNT`)
-- ✅ Publica evento `JobExecuted` a `dashboard-events` topic
+- ✅ Encola N mensajes a `weather-jobs` (N = env var `MESSAGE_COUNT`)
+- ✅ Publica evento `MessageEnqueued` a `nd-dashboard-events` topic
 - ✅ Usa .NET Generic Host + DI + AddAzureClients
-- ✅ Managed Identity para Service Bus
+- ✅ Managed Identity para Service Bus (NO connection string)
+- ✅ Debian base image (.NET 10 + Alpine = SIGSEGV crash)
 
 ### Paso 3: Deploy Infraestructura con Container Jobs
 
@@ -666,7 +667,13 @@ az deployment group create \
 - ✅ Container App Job `ca-weather-enqueuer-dev`
 - ✅ Schedule trigger (CRON: cada 5 minutos)
 - ✅ Managed Identity con roles Service Bus Data Sender
+- ✅ Backend Identity con roles: Reader + **Contributor** (para actualizar jobs desde UI)
 - ✅ Environment variables (MESSAGE_COUNT, SERVICE_BUS_NAMESPACE, etc.)
+
+**IMPORTANTE - RBAC del Backend:**
+- El backend necesita **Contributor** role en el RG para actualizar Container Jobs vía ARM API
+- Sin Contributor: el botón "Guardar Cambios" en Scheduler page falla con 401 Authorization Failed
+- Bicep asigna automáticamente Reader + Contributor al backend identity
 
 ### Paso 4: Redeploy Backend y Frontend (con Scheduler UI)
 
@@ -736,12 +743,42 @@ az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG
 ```
 
 Buscar:
-- ✅ `Starting job: ca-weather-enqueuer-dev`
-- ✅ `Sending 50 messages to weather-queue...`
+- ✅ `=== WeatherEnqueuer starting ===`
+- ✅ `Sending 50 messages to weather-jobs...`
 - ✅ `Successfully sent 50 messages`
-- ✅ `Published JobExecuted event to dashboard-events`
+- ✅ `Published MessageEnqueued event to nd-dashboard-events`
 
-#### 5.4 Validar en SQL (JobExecutions table)
+Si no hay logs de aplicación:
+1. Ver **ContainerAppSystemLogs** en Log Analytics (puede ser crash del runtime)
+2. Buscar `ExitCode` diferente de 0
+3. Ver troubleshooting section más abajo
+
+#### 5.4 Validar Service Bus
+
+```bash
+# Verificar mensajes encolados
+az servicebus queue show \
+  --namespace-name sb-weather-dev-u6qlzs \
+  -g $RG \
+  --name weather-jobs \
+  --query '{ActiveMessages:countDetails.activeMessageCount, DeadLetter:countDetails.deadLetterMessageCount}' \
+  -o table
+
+# Verificar eventos publicados (counter-updater subscription)
+az servicebus topic subscription show \
+  --namespace-name sb-weather-dev-u6qlzs \
+  -g $RG \
+  --topic-name nd-dashboard-events \
+  --name counter-updater \
+  --query '{ActiveMessages:countDetails.activeMessageCount}' \
+  -o table
+```
+
+Esperado después de 1 ejecución:
+- ✅ `weather-jobs` queue: 50 mensajes activos (MESSAGE_COUNT)
+- ✅ `nd-dashboard-events/counter-updater`: 1 mensaje activo (MessageEnqueued event)
+
+#### 5.5 Validar en SQL (JobExecutions table)
 
 ```bash
 # Query JobExecutions via Azure CLI
@@ -759,21 +796,39 @@ JobName                    | Date       | Hour | ExecutionCount | UpdatedAt
 ca-weather-enqueuer-dev    | 2026-07-20 | 13   | 1              | 2026-07-20 13:05:12
 ```
 
-#### 5.5 Verificar en Frontend (Scheduler Page)
+#### 5.6 Verificar en Frontend (Scheduler Page)
 
 1. Navegar a `https://ca-weather-fe-dev.<FQDN>/scheduler`
 2. Ver tabla de jobs con CRON expression
 3. Verificar "Última Ejecución" timestamp
 4. Click en "Editar Frecuencia" (ícono Settings)
-5. Cambiar CRON (ej: `*/10 * * * *` para cada 10 minutos)
-6. Guardar y verificar que se actualiza
+5. Cambiar CRON (ej: `0 * * * *` para cada hora)
+6. Click en "Guardar Cambios"
+7. **Verificar que el modal se cierra sin error** (si da 401, ver troubleshooting RBAC abajo)
+8. Verificar que la tabla muestra el nuevo CRON
 
-#### 5.6 Verificar Dashboard Widget
+#### 5.7 Verificar Dashboard Page (Job Executions Widget)
 
 1. Navegar a `/dashboard`
+2. Seleccionar la fecha de hoy en el date picker
+3. Scroll y ver sección "Container Jobs Ejecutados"
+4. Verificar:
+   - ✅ Card mostrando `ca-weather-enqueuer-dev`
+   - ✅ Total ejecuciones del día
+   - ✅ Comparación vs ayer (↑ X% vs ayer)
+   - ✅ Horas activas (cuántas horas diferentes ejecutó)
+   - ✅ Promedio de ejecuciones por hora
+
+#### 5.8 Verificar Health Page (Container Jobs Section)
+
+1. Navegar a `/health`
 2. Scroll a sección "Container Jobs"
-3. Ver counters de ejecuciones por job por fecha
-4. Verificar que incrementa después de cada ejecución
+3. Ver tabla con:
+   - ✅ Job name: `ca-weather-enqueuer-dev`
+   - ✅ Trigger type: `Schedule`
+   - ✅ CRON expression: `*/5 * * * *`
+   - ✅ Last execution time y status
+   - ✅ Running executions count (0 cuando terminó)
 
 ### Paso 6: Editar Schedule desde Frontend
 
@@ -826,6 +881,80 @@ az role assignment list \
 
 Debería tener:
 - `Azure Service Bus Data Sender` (scope: Service Bus namespace)
+
+#### Job falla con "connection string could not be parsed"
+
+**Error:** `System.FormatException: The connection string could not be parsed`
+
+**Causa:** El código usa `AddServiceBusClient(connectionString)` pero debe usar `ServiceBusClient(namespace, credential)` para Managed Identity.
+
+**Solución:** Verificar que `Program.cs` use este patrón:
+
+```csharp
+builder.Services.AddAzureClients(clientBuilder =>
+{
+    // ✅ CORRECTO - Namespace + Managed Identity
+    clientBuilder.AddClient<ServiceBusClient, ServiceBusClientOptions>(
+        (options, credential, provider) =>
+        {
+            return new ServiceBusClient(serviceBusNamespace, credential, options);
+        })
+        .WithCredential(new DefaultAzureCredential());
+    
+    // ❌ INCORRECTO - Connection string
+    // clientBuilder.AddServiceBusClient(serviceBusNamespace)
+    //     .WithCredential(new DefaultAzureCredential());
+});
+```
+
+#### Job falla con exit code 139 (SIGSEGV)
+
+**Error:** ContainerAppSystemLogs muestra `ExitCode: 139` sin logs de aplicación.
+
+**Causa:** .NET 10 runtime + Alpine Linux = segmentation fault (incompatibilidad conocida).
+
+**Solución:** Usar Debian base image en Dockerfile:
+
+```dockerfile
+# ✅ CORRECTO - Debian
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/runtime:10.0
+
+# ❌ INCORRECTO - Alpine
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine
+```
+
+Rebuild y redeploy después del cambio.
+
+#### Scheduler Page: Error 401 al guardar frecuencia
+
+**Error:** Modal "Editar Frecuencia" muestra "Error al guardar: The client 'ff2ccc-...' with object id '...' does not have authorization..."
+
+**Causa:** El backend managed identity NO tiene permiso para actualizar Container Jobs (solo tiene Reader role).
+
+**Solución:** El backend necesita **Contributor** role en el RG para modificar jobs via ARM API.
+
+```bash
+# Verificar roles asignados al backend identity
+export BACKEND_IDENTITY=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
+
+az role assignment list \
+  --assignee $(az identity show -n $BACKEND_IDENTITY -g $RG --query principalId -o tsv) \
+  --resource-group $RG \
+  -o table
+
+# Debe mostrar:
+# Reader       (para listar apps/jobs en Health page)
+# Contributor  (para PATCH jobs en Scheduler page)
+```
+
+Si falta Contributor:
+1. Verificar que `biceps/modules/backend-container-app.bicep` tiene `rgContributorRole` resource
+2. Redeploy infrastructure con `deployContainerApps=true`
+3. Esperar ~60 segundos (RBAC propagation)
+4. Reintentar guardar frecuencia desde UI
 
 #### Scheduler Page no muestra jobs
 

@@ -231,13 +231,17 @@ public class DashboardEventHandler(
     private async Task InsertNewJobExecutionCounterOrRetry(
         string jobName, DashboardDbContext dbContext, DateTime date, int hour, CancellationToken cancellationToken)
     {
+        var now = DateTime.UtcNow;
         var counter = new JobExecution
         {
             JobName = jobName,
             Date = date,
             Hour = hour,
             ExecutionCount = 1,
-            UpdatedAt = DateTime.UtcNow
+            SuccessCount = 0,
+            FailureCount = 0,
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         dbContext.JobExecutions.Add(counter);

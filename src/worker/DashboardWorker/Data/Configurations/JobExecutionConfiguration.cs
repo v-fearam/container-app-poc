@@ -15,7 +15,7 @@ public class JobExecutionConfiguration : IEntityTypeConfiguration<JobExecution>
 
         builder.Property(j => j.JobName)
             .IsRequired()
-            .HasMaxLength(100);
+            .HasMaxLength(255);
 
         builder.Property(j => j.Date)
             .IsRequired()
@@ -28,6 +28,18 @@ public class JobExecutionConfiguration : IEntityTypeConfiguration<JobExecution>
             .IsRequired()
             .HasDefaultValue(0);
 
+        builder.Property(j => j.SuccessCount)
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        builder.Property(j => j.FailureCount)
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        builder.Property(j => j.CreatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
         builder.Property(j => j.UpdatedAt)
             .IsRequired()
             .HasDefaultValueSql("GETUTCDATE()");
@@ -39,6 +51,7 @@ public class JobExecutionConfiguration : IEntityTypeConfiguration<JobExecution>
 
         // Index for dashboard queries (get recent executions by date)
         builder.HasIndex(j => new { j.Date, j.JobName })
-            .HasDatabaseName("IX_JobExecutions_Date_JobName");
+            .HasDatabaseName("IX_JobExecutions_Date_JobName")
+            .IncludeProperties(j => new { j.Hour, j.ExecutionCount, j.SuccessCount, j.FailureCount });
     }
 }

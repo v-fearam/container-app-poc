@@ -284,46 +284,86 @@ export function DashboardPage() {
             </div>
 
             {/* Job Executions Widget */}
-            {jobExecutions.length > 0 && (
-              <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 border-b">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Calendar className="h-5 w-5 text-purple-600" />
-                      <div>
-                        <CardTitle className="text-slate-900">Container Jobs</CardTitle>
-                        <CardDescription>Ejecuciones de jobs programados</CardDescription>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to="/scheduler">Ver Scheduler</Link>
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Job</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead className="text-right">Total Ejecuciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {jobExecutions.slice(0, 5).map((job, idx) => (
-                        <TableRow key={`${job.jobName}-${job.date}-${idx}`}>
-                          <TableCell className="font-medium">{job.jobName}</TableCell>
-                          <TableCell>{new Date(job.date).toLocaleDateString('es-AR')}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="secondary">{job.totalExecutions}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+            {jobExecutions.length === 0 && (
+              <Card className="bg-slate-50 border-slate-200">
+                <CardContent className="p-6 flex items-center gap-3 text-center">
+                  <span className="text-lg">📋</span>
+                  <p className="text-sm text-muted-foreground">No hay datos de ejecución de Container Jobs aún</p>
                 </CardContent>
               </Card>
             )}
+
+            {jobExecutions.length > 0 && (() => {
+              // Filter jobs for selected date
+              const jobsToday = jobExecutions.filter(j => j.date.split('T')[0] === filterDate);
+              const jobsYesterday = jobExecutions.filter(j => {
+                const yesterday = new Date(filterDate);
+                yesterday.setDate(yesterday.getDate() - 1);
+                return j.date.split('T')[0] === yesterday.toISOString().split('T')[0];
+              });
+
+              if (jobsToday.length === 0) return null;
+
+              return (
+                <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-5 w-5 text-purple-600" />
+                        <div>
+                          <CardTitle className="text-slate-900">Container Jobs Ejecutados</CardTitle>
+                          <CardDescription>Jobs ejecutados el {new Date(filterDate).toLocaleDateString('es-AR')}</CardDescription>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to="/scheduler">Ver Scheduler</Link>
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="space-y-4">
+                      {jobsToday.map((job, idx) => {
+                        const yesterday = jobsYesterday.find(j => j.jobName === job.jobName);
+                        const diff = yesterday ? job.totalExecutions - yesterday.totalExecutions : 0;
+                        const percentChange = yesterday && yesterday.totalExecutions > 0
+                          ? ((diff / yesterday.totalExecutions) * 100).toFixed(0)
+                          : null;
+
+                        return (
+                          <div key={`${job.jobName}-${job.date}-${idx}`} className="flex items-center justify-between p-4 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-mono text-sm font-medium text-slate-900">{job.jobName}</span>
+                                <Badge variant="outline" className="text-xs">{job.hoursWithExecutions} horas activas</Badge>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-3xl font-bold text-purple-600">{job.totalExecutions}</span>
+                                  <span className="text-sm text-muted-foreground">ejecuciones</span>
+                                </div>
+                                {percentChange !== null && (
+                                  <div className={`flex items-center gap-1 text-xs ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                    {diff > 0 ? '↑' : diff < 0 ? '↓' : '→'} {Math.abs(Number(percentChange))}% vs ayer
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-xs text-muted-foreground mb-1">Promedio/hora</p>
+                                <p className="text-lg font-semibold text-slate-700">
+                                  {job.hoursWithExecutions > 0 ? (job.totalExecutions / job.hoursWithExecutions).toFixed(1) : '0'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Queue Groups */}
             {queueGroups.map((queue) => (

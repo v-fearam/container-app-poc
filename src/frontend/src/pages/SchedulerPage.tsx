@@ -75,10 +75,6 @@ export function SchedulerPage() {
     }).format(date);
   };
 
-  const getMessageCount = (envVars: Record<string, string>) => {
-    return envVars['MESSAGE_COUNT'] || 'N/A';
-  };
-
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
@@ -135,8 +131,8 @@ export function SchedulerPage() {
                   <TableRow key={job.name}>
                     <TableCell className="font-medium">{job.name}</TableCell>
                     <TableCell>
-                      <Badge variant={job.triggerType === 'Schedule' ? 'default' : 'outline'}>
-                        {job.triggerType === 'Schedule' ? (
+                      <Badge variant={job.type === 'Schedule' ? 'default' : 'outline'}>
+                        {job.type === 'Schedule' ? (
                           <>
                             <Clock className="w-3 h-3 mr-1" />
                             Programado
@@ -149,20 +145,20 @@ export function SchedulerPage() {
                     <TableCell className="font-mono text-sm">
                       {job.cronExpression || 'N/A'}
                     </TableCell>
-                    <TableCell>{getMessageCount(job.environmentVariables)}</TableCell>
+                    <TableCell>{job.messageCount}</TableCell>
                     <TableCell>
-                      {job.latestExecution?.startTime
-                        ? formatDateTime(job.latestExecution.startTime)
+                      {job.lastExecutionTime
+                        ? formatDateTime(job.lastExecutionTime)
                         : 'Nunca'}
                     </TableCell>
                     <TableCell>
-                      {job.latestExecution
-                        ? formatExecutionStatus(job.latestExecution.status)
+                      {job.lastExecutionStatus
+                        ? formatExecutionStatus(job.lastExecutionStatus)
                         : <span className="text-slate-400">—</span>}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {job.triggerType === 'Schedule' && (
+                        {job.type === 'Schedule' && (
                           <Button
                             onClick={() => handleEditSchedule(job)}
                             variant="ghost"

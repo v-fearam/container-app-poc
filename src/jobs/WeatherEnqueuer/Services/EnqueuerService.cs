@@ -5,89 +5,104 @@ using System.Text.Json;
 
 namespace WeatherEnqueuer.Services;
 
-public class EnqueuerService : IEnqueuerService
+public class EnqueuerService(
+    ServiceBusClient serviceBusClient,
+    IConfiguration configuration,
+    ILogger<EnqueuerService> logger) : IEnqueuerService
 {
-    private readonly ServiceBusClient _serviceBusClient;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<EnqueuerService> _logger;
-
-    public EnqueuerService(
-        ServiceBusClient serviceBusClient,
-        IConfiguration configuration,
-        ILogger<EnqueuerService> logger)
-    {
-        _serviceBusClient = serviceBusClient;
-        _configuration = configuration;
-        _logger = logger;
-    }
-
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        var weatherQueueName = _configuration["WEATHER_QUEUE_NAME"] ?? "weather-queue";
-        var dashboardTopicName = _configuration["DASHBOARD_TOPIC_NAME"] ?? "dashboard-events";
-        var messageCountStr = _configuration["MESSAGE_COUNT"] ?? "50";
-        var jobName = _configuration["JOB_NAME"] ?? "weather-enqueuer";
+        Console.WriteLine("=== WeatherEnqueuer starting ===");
+        
+        var queueName = configuration["WEATHER_QUEUE_NAME"] ?? "weather-jobs";
+        var topicName = configuration["DASHBOARD_TOPIC_NAME"] ?? "nd-dashboard-events";
+        var messageCountStr = configuration["MESSAGE_COUNT"] ?? "50";
+        var jobName = configuration["JOB_NAME"] ?? "weather-enqueuer";
+        var vertical = configuration["VERTICAL"] ?? "Vertical1";
+
+        Console.WriteLine($"Config - Queue: {queueName}, Topic: {topicName}, Count: {messageCountStr}, Vertical: {vertical}");
 
         if (!int.TryParse(messageCountStr, out var messageCount) || messageCount <= 0)
         {
             throw new InvalidOperationException($"Invalid MESSAGE_COUNT: {messageCountStr}. Must be a positive integer.");
         }
 
-        _logger.LogInformation("Starting job: {JobName}", jobName);
-        _logger.LogInformation("Weather Queue: {QueueName}, Dashboard Topic: {TopicName}, Message Count: {MessageCount}",
-            weatherQueueName, dashboardTopicName, messageCount);
+        logger.LogInformation("Starting job: {JobName}", jobName);
+        logger.LogInformation("Queue: {QueueName}, Topic: {TopicName}, Message Count: {MessageCount}, Vertical: {Vertical}",
+            queueName, topicName, messageCount, vertical);
 
         var executedAt = DateTime.UtcNow;
 
-        await using var weatherQueueSender = _serviceBusClient.CreateSender(weatherQueueName);
-        await using var dashboardTopicSender = _serviceBusClient.CreateSender(dashboardTopicName);
-
-        // Send messages to weather-queue
-        _logger.LogInformation("Sending {MessageCount} messages to {QueueName}...", messageCount, weatherQueueName);
+        Console.WriteLine("Creating Service Bus senders...");
+        await using var queueSender = serviceBusClient.CreateSender(queueName);
+        Console.WriteLine("Queue sender created");
         
+        await using var topicSender = serviceBusClient.CreateSender(topicName);
+        Console.WriteLine("Topic sender created");
+
+        // Send messages to weather-jobs queue (same format as ServiceBusEnqueuer)
+        logger.LogInformation("Sending {MessageCount} messages to {QueueName}...", messageCount, queueName);
+        
+        var sent = 0;
         for (int i = 1; i <= messageCount; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var message = new ServiceBusMessage(JsonSerializer.Serialize(new
+            // Random processType (weather1 or weather2) - same as ServiceBusEnqueuer
+            var processType = Random.Shared.Next(0, 2) == 0 ? "weather1" : "weather2";
+
+            var payload = JsonSerializer.Serialize(new
             {
-                Temperature = Random.Shared.Next(-10, 40),
-                Location = $"Location-{i}",
-                Timestamp = DateTime.UtcNow
-            }))
+                number = i,
+                timestamp = DateTime.UtcNow.ToString("O"),
+                processType,
+                vertical
+            });
+
+            var message = new ServiceBusMessage(payload)
             {
+                ContentType = "application/json",
+                Subject = $"job-{i}",
                 MessageId = Guid.NewGuid().ToString()
             };
 
-            await weatherQueueSender.SendMessageAsync(message, cancellationToken);
+            // Send to queue (work)
+            await queueSender.SendMessageAsync(message, cancellationToken);
+            sent++;
+
+            // Publish MessageEnqueued event to topic (fire-and-forget)
+            try
+            {
+                var eventPayload = JsonSerializer.Serialize(new
+                {
+                    eventType = "MessageEnqueued",
+                    vertical,
+                    queueName,
+                    processType,
+                    timestamp = DateTime.UtcNow,
+                    messageId = message.MessageId
+                });
+
+                await topicSender.SendMessageAsync(new ServiceBusMessage(eventPayload)
+                {
+                    ContentType = "application/json",
+                    Subject = "MessageEnqueued",
+                    ApplicationProperties = { ["eventType"] = "MessageEnqueued", ["vertical"] = vertical }
+                }, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to publish event for message {Number}", i);
+            }
 
             if (i % 10 == 0 || i == messageCount)
             {
-                _logger.LogInformation("Sent {Current}/{Total} messages", i, messageCount);
+                logger.LogInformation("Sent {Current}/{Total} messages", i, messageCount);
             }
         }
 
-        _logger.LogInformation("Successfully sent {MessageCount} messages to {QueueName}", messageCount, weatherQueueName);
-
-        // Publish JobExecuted event to dashboard-events topic
-        var jobExecutedEvent = new
-        {
-            EventType = "JobExecuted",
-            EventId = Guid.NewGuid().ToString(),
-            JobName = jobName,
-            ExecutedAt = executedAt,
-            MessageCount = messageCount,
-            Timestamp = DateTime.UtcNow
-        };
-
-        var dashboardMessage = new ServiceBusMessage(JsonSerializer.Serialize(jobExecutedEvent))
-        {
-            MessageId = Guid.NewGuid().ToString(),
-            Subject = "JobExecuted"
-        };
-
-        await dashboardTopicSender.SendMessageAsync(dashboardMessage, cancellationToken);
-        _logger.LogInformation("Published JobExecuted event to {TopicName}", dashboardTopicName);
-        _logger.LogInformation("Job completed successfully");
+        logger.LogInformation("Successfully sent {MessageCount} messages to {QueueName}", messageCount, queueName);
+        logger.LogInformation("Job completed successfully");
     }
 }
+

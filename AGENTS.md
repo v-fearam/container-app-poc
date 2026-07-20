@@ -196,7 +196,7 @@ Usar estos skills según la tarea:
 ### C# (.NET 10)
 - Minimal API style (no controllers tradicionales excepto los existentes)
 - File-scoped namespaces
-- Primary constructors
+- **Primary constructors:** SIEMPRE usar primary constructors para inyección de dependencias (C# 12+). Sintaxis: `public class Service(IDependency dep, ILogger<Service> logger) : IService { ... }`. No usar constructores explícitos con asignaciones `_field = param`. Ver `ChangeFeedHandler`, `DashboardEventHandler` como referencia.
 - Global usings
 - Nullable reference types enabled
 - `IResult` return types en endpoints
@@ -223,7 +223,7 @@ Usar estos skills según la tarea:
 | Resource | Name | Notes |
 |----------|------|-------|
 | Resource Group | `rg-far-container-app-easyauth` | eastus2 |
-| ACR | `acrweatheru6qlzsmy` | Backend, Frontend, Workers images |
+| ACR | `acrweatheru6qlzsmy` | Backend, Frontend, Workers, Jobs images |
 | Key Vault | `kv-weather-dev-u6qlzs` | RBAC-enabled, secrets auto-seeded |
 | Service Bus | `sb-weather-dev-u6qlzs` | Standard tier, diagnostics enabled |
 | SQL Server | `sql-weather-dash-7446` | DB: `dashboard-poc` |
@@ -232,6 +232,7 @@ Usar estos skills según la tarea:
 | Backend App | `ca-weather-be-dev` | Identity: `uami-ca-weather-be-dev` |
 | Frontend App | `ca-weather-fe-dev` | Identity: `uami-ca-weather-fe-dev` |
 | Worker Identity | `id-weather-worker-dev` | Shared by both workers |
+| Container Job | `ca-weather-enqueuer-dev` | Identity: `id-weather-job-dev`, CRON: */5 * * * * |
 
 ---
 
@@ -249,6 +250,7 @@ az acr build --registry acrweatheru6qlzsmy --image weather-api:latest --file src
 az acr build --registry acrweatheru6qlzsmy --image weather-frontend:latest --file src/frontend/Dockerfile src/frontend
 az acr build --registry acrweatheru6qlzsmy --image dashboard-worker:latest --file src/worker/DashboardWorker/Dockerfile src/worker/DashboardWorker
 az acr build --registry acrweatheru6qlzsmy --image weather-worker:latest --file src/worker/WeatherWorker/Dockerfile src/worker/WeatherWorker
+az acr build --registry acrweatheru6qlzsmy --image weather-enqueuer:latest --file src/jobs/WeatherEnqueuer/Dockerfile src/jobs/WeatherEnqueuer
 
 # Redeploy container app (ALWAYS use --revision-suffix to force fresh image pull)
 az containerapp update -n ca-weather-be-dev -g rg-far-container-app-easyauth \
@@ -305,4 +307,11 @@ curl https://ca-weather-be-dev.wonderfulglacier-bd1b5cf9.eastus2.azurecontainera
 19. **Backend identity necesita CREATE USER en SQL Database:** Después del deployment, el backend tiene managed identity con RBAC roles en Azure, pero **NO** tiene usuario SQL dentro de la database. Sin el `CREATE USER` manual, el backend falla al conectarse a SQL con error `"Login failed for user '<token-identified principal>'"`. **Solución:** Ejecutar Paso 5.1 para crear usuarios SQL para AMBOS backend identity Y worker identity. Bicep NO puede automatizar esto (limitación de Azure SQL, no de Bicep).
 20. **Cosmos DB usa Managed Identity (NO connection string):** Backend y Workers usan `DefaultAzureCredential` + endpoint para acceder a Cosmos DB. Bicep asigna automáticamente el rol "Cosmos DB Built-in Data Contributor" al backend identity. **No se necesita secret en Key Vault**. SQL también usa Managed Identity (`Authentication=Active Directory Default` en connection string).
 21. **Managed Identity migration requiere cleanup manual:** Ambientes deployados ANTES de commits `5497d24` (Cosmos MI) y `3ac881d` (SQL MI) tienen secrets obsoletos (`cosmos-connection-string`, `sql-connection-string`) en Key Vault y Container Apps. Backend falla con `"Unable to resolve service for type 'CosmosClient'"` porque `Cosmos__Endpoint` env var no existe. **Solución:** Ejecutar sección "Ambiente actual con secrets obsoletos" en DEPLOYMENT.md: (1) Eliminar secrets obsoletos de Key Vault, (2) Asignar rol Cosmos al backend, (3) Rebuild backend, (4) Redeploy con `--set-env-vars Cosmos__Endpoint=... SQL_CONNECTION_STRING=...` y `--remove-env-vars COSMOS_CONNECTION_STRING`. Estado final esperado: 2 secrets en backend (appinsights + auth), 3 secrets en Key Vault (appinsights + 2x auth), env vars como `value:` (NO `secretRef`).
+
+### Container Jobs (20/07/2026)
+22. **.NET 10 + Alpine = SIGSEGV crash:** Container Jobs que usan `mcr.microsoft.com/dotnet/runtime:10.0-alpine` fallan con exit code 139 (segmentation fault) antes de que la aplicación inicie. **Solución:** Usar Debian base image (`mcr.microsoft.com/dotnet/runtime:10.0`). No hay workaround para Alpine + .NET 10.
+23. **AddServiceBusClient + Managed Identity:** `AddServiceBusClient(connectionString)` NO funciona con Managed Identity aunque se use `.WithCredential()`. Azure SDK espera connection string si se pasa string. **Solución:** Usar `AddClient<ServiceBusClient, ServiceBusClientOptions>` con constructor explícito: `new ServiceBusClient(namespace, credential, options)`. Ver DEPLOYMENT.md sección "Job falla con connection string could not be parsed".
+24. **Container Jobs logs vacíos:** `az containerapp job logs show` solo muestra logs después de que el logging provider se inicializa. Si el job crashea antes (runtime crash, DI error), los logs quedan vacíos. **Solución:** Consultar **ContainerAppSystemLogs** en Log Analytics para ver ExitCode y errores del container runtime.
+25. **Service Bus queue/topic names:** El ambiente usa `weather-jobs` (queue) y `nd-dashboard-events` (topic) — NO `weather-queue` ni `dashboard-events`. El typo "nd-" existe en producción pero el código debe matchearlo. Cambiar nombres requiere recrear recursos y actualizar todos los consumers.
+26. **Backend necesita Contributor para editar jobs:** El backend tiene Reader role para listar Container Apps/Jobs (Health page), pero necesita **Contributor** role para modificar jobs (Scheduler page "Guardar Cambios"). Sin Contributor: error 401 "does not have authorization to perform action 'Microsoft.App/jobs/write'". **Solución:** Bicep asigna automáticamente Reader + Contributor al backend identity (ver `backend-container-app.bicep`). Ambientes viejos: ejecutar redeploy con `deployContainerApps=true` para agregar el rol.
 

@@ -13,6 +13,15 @@ interface ContainerAppStatus {
   latestRevision?: string;
 }
 
+interface ContainerAppJobStatus {
+  name: string;
+  triggerType: string;
+  cronExpression?: string;
+  lastExecutionStatus?: string;
+  lastExecutionTime?: string;
+  runningExecutions: number;
+}
+
 interface QueueStatus {
   name: string;
   activeMessages: number;
@@ -29,6 +38,7 @@ interface SubscriptionStatus {
 
 interface InfrastructureHealth {
   containerApps: ContainerAppStatus[];
+  containerAppJobs: ContainerAppJobStatus[];
   serviceBus: {
     queues: QueueStatus[];
     subscriptions: SubscriptionStatus[];
@@ -76,6 +86,21 @@ export function HealthPage() {
         return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Scaled to 0</Badge>;
       case 'provisioning':
         return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Provisioning</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const getJobStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'succeeded':
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Succeeded</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-200">Failed</Badge>;
+      case 'running':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">Running</Badge>;
+      case 'pending':
+        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">Pending</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -162,6 +187,65 @@ export function HealthPage() {
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {app.latestRevision ?? '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Container Apps Jobs Section */}
+      <Card className="mb-8">
+        <CardHeader className="bg-slate-50 border-b">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <RefreshCw className="h-5 w-5 text-indigo-600" /> Container Apps Jobs
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {infra?.containerAppJobs.length === 0 ? (
+            <p className="p-6 text-center text-muted-foreground">No se encontraron Container Apps Jobs</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Job</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Frecuencia</TableHead>
+                  <TableHead>Última Ejecución</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">En Ejecución</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {infra?.containerAppJobs.map((job) => (
+                  <TableRow key={job.name}>
+                    <TableCell className="font-mono text-sm font-medium">{job.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={job.triggerType === 'Schedule' ? 'default' : 'outline'}>
+                        {job.triggerType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {job.cronExpression || '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {job.lastExecutionTime
+                        ? new Date(job.lastExecutionTime).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+                        : 'Nunca'}
+                    </TableCell>
+                    <TableCell>
+                      {job.lastExecutionStatus ? (
+                        <Badge variant={job.lastExecutionStatus === 'Succeeded' ? 'secondary' : job.lastExecutionStatus === 'Failed' ? 'destructive' : 'default'}>
+                          {job.lastExecutionStatus}
+                        </Badge>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`font-mono font-bold ${job.runningExecutions > 0 ? 'text-blue-600' : 'text-muted-foreground'}`}>
+                        {job.runningExecutions}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}

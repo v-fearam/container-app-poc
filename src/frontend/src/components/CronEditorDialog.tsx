@@ -36,6 +36,7 @@ export function CronEditorDialog({
   const [humanReadable, setHumanReadable] = useState('');
   const [nextExecutions, setNextExecutions] = useState<Date[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setCronExpression(job.cronExpression || '');
@@ -127,12 +128,15 @@ export function CronEditorDialog({
     if (!isValid || !cronExpression.trim()) return;
 
     setIsSaving(true);
+    setSaveError(null);
     try {
       await updateJobSchedule(job.name, { cronExpression });
       onScheduleUpdated();
       onClose();
     } catch (error) {
       console.error('Failed to update schedule:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar la frecuencia';
+      setSaveError(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -240,13 +244,21 @@ export function CronEditorDialog({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={!isValid || isSaving}>
-            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-          </Button>
+        <DialogFooter className="flex-col gap-2">
+          {saveError && (
+            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md p-3 text-sm text-red-700 dark:text-red-300">
+              <p className="font-semibold mb-1">Error al guardar</p>
+              <p>{saveError}</p>
+            </div>
+          )}
+          <div className="flex gap-2 justify-end w-full">
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={!isValid || isSaving}>
+              {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

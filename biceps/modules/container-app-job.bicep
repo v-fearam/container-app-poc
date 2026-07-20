@@ -25,10 +25,13 @@ param managedIdentityClientId string
 param serviceBusNamespaceFqdn string
 
 @description('Service Bus queue name for weather messages')
-param weatherQueueName string = 'weather-queue'
+param weatherQueueName string = 'weather-jobs'
 
 @description('Service Bus topic name for dashboard events')
-param dashboardTopicName string = 'dashboard-events'
+param dashboardTopicName string = 'nd-dashboard-events'
+
+@description('Vertical name for message metadata')
+param vertical string = 'Vertical1'
 
 @description('Number of messages to enqueue per execution')
 param messageCount string = '50'
@@ -133,6 +136,10 @@ resource containerAppJob 'Microsoft.App/jobs@2024-10-02-preview' = {
             {
               name: 'MESSAGE_COUNT'
               value: messageCount
+            }
+            {
+              name: 'VERTICAL'
+              value: vertical
             }
             {
               name: 'JOB_NAME'

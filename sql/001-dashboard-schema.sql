@@ -45,4 +45,26 @@ CREATE NONCLUSTERED INDEX IX_ComponentHealth_Type_Status
     ON dbo.ComponentHealth(ComponentType, Status) 
     INCLUDE (ComponentName, LastHeartbeat);
 
+-- Tabla de ejecuciones de Container App Jobs (agregaciones por hora)
+CREATE TABLE dbo.JobExecutions (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    JobName NVARCHAR(255) NOT NULL,
+    Date DATE NOT NULL,
+    Hour INT NOT NULL, -- 0-23
+    ExecutionCount INT NOT NULL DEFAULT 0,
+    SuccessCount INT NOT NULL DEFAULT 0,
+    FailureCount INT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    
+    -- Constraint única por job + date + hour
+    CONSTRAINT UQ_JobExecutions_JobName_Date_Hour 
+        UNIQUE (JobName, Date, Hour)
+);
+
+-- Índice para queries del Dashboard (por job + date)
+CREATE NONCLUSTERED INDEX IX_JobExecutions_JobName_Date 
+    ON dbo.JobExecutions(JobName, Date) 
+    INCLUDE (Hour, ExecutionCount, SuccessCount, FailureCount);
+
 GO

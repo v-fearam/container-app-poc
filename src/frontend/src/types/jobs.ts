@@ -2,13 +2,11 @@
 
 export interface ContainerJobDto {
   name: string;
-  triggerType: 'Schedule' | 'Manual';
+  type: 'Schedule' | 'Manual';
   cronExpression?: string;
-  replicaTimeout: number;
-  replicaRetryLimit: number;
-  containerImage: string;
-  environmentVariables: Record<string, string>;
-  latestExecution?: JobExecutionDto;
+  lastExecutionTime?: string;
+  lastExecutionStatus?: 'Pending' | 'Running' | 'Succeeded' | 'Failed';
+  messageCount: number;
 }
 
 export interface JobExecutionDto {

@@ -1,11 +1,12 @@
 namespace WeatherApi.Models;
 
 /// <summary>
-/// Infrastructure health response combining Container Apps and Service Bus status
+/// Infrastructure health response combining Container Apps, Jobs, and Service Bus status
 /// </summary>
 public class InfrastructureHealthResponse
 {
     public List<ContainerAppStatusDto> ContainerApps { get; set; } = [];
+    public List<ContainerAppJobStatusDto> ContainerAppJobs { get; set; } = [];
     public ServiceBusStatusDto ServiceBus { get; set; } = new();
     public DateTime CachedAt { get; set; } = DateTime.UtcNow;
 }
@@ -17,6 +18,16 @@ public class ContainerAppStatusDto
     public int ActiveReplicas { get; set; }
     public int MaxReplicas { get; set; }
     public string? LatestRevision { get; set; }
+}
+
+public class ContainerAppJobStatusDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string TriggerType { get; set; } = "Unknown";
+    public string? CronExpression { get; set; }
+    public string? LastExecutionStatus { get; set; }
+    public DateTime? LastExecutionTime { get; set; }
+    public int RunningExecutions { get; set; }
 }
 
 public class ServiceBusStatusDto

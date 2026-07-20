@@ -31,5 +31,23 @@ public class JobExecution
     /// </summary>
     public int ExecutionCount { get; set; }
 
+    /// <summary>
+    /// Number of successful executions in this hour.
+    /// </summary>
+    public int SuccessCount { get; set; }
+
+    /// <summary>
+    /// Number of failed executions in this hour.
+    /// </summary>
+    public int FailureCount { get; set; }
+
+    /// <summary>
+    /// Timestamp when the record was created.
+    /// </summary>
+    public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Timestamp when the record was last updated.
+    /// </summary>
     public DateTime UpdatedAt { get; set; }
 }

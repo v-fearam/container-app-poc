@@ -36,13 +36,15 @@ public class InfrastructureHealthService(
 
         var response = new InfrastructureHealthResponse();
 
-        // Parallel: Container Apps + Service Bus
+        // Parallel: Container Apps + Container App Jobs + Service Bus
         var containerAppsTask = GetContainerAppsStatusAsync(ct);
+        var containerAppJobsTask = GetContainerAppJobsStatusAsync(ct);
         var serviceBusTask = GetServiceBusStatusAsync(ct);
 
-        await Task.WhenAll(containerAppsTask, serviceBusTask);
+        await Task.WhenAll(containerAppsTask, containerAppJobsTask, serviceBusTask);
 
         response.ContainerApps = await containerAppsTask;
+        response.ContainerAppJobs = await containerAppJobsTask;
         response.ServiceBus = await serviceBusTask;
         response.CachedAt = DateTime.UtcNow;
 
@@ -154,6 +156,161 @@ public class InfrastructureHealthService(
         {
             logger.LogDebug(ex, "Could not get replicas for {App}/{Revision}", appName, revisionName);
             return 0;
+        }
+    }
+
+    private async Task<List<ContainerAppJobStatusDto>> GetContainerAppJobsStatusAsync(CancellationToken ct)
+    {
+        var subscriptionId = configuration["AZURE_SUBSCRIPTION_ID"] ?? "";
+        var resourceGroup = configuration["AZURE_RESOURCE_GROUP"] ?? "";
+
+        if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroup))
+        {
+            logger.LogWarning("AZURE_SUBSCRIPTION_ID or AZURE_RESOURCE_GROUP not configured");
+            return [];
+        }
+
+        try
+        {
+            var token = await credential.GetTokenAsync(
+                new TokenRequestContext(ArmScopes), ct);
+
+            var client = httpClientFactory.CreateClient("arm");
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token.Token);
+
+            // List all container app jobs in the resource group
+            var listUrl = $"https://management.azure.com/subscriptions/{subscriptionId}" +
+                          $"/resourceGroups/{resourceGroup}/providers/Microsoft.App/jobs" +
+                          "?api-version=2024-03-01";
+
+            var listResponse = await client.GetAsync(listUrl, ct);
+            if (!listResponse.IsSuccessStatusCode)
+            {
+                logger.LogWarning("ARM API returned {StatusCode} listing container app jobs",
+                    listResponse.StatusCode);
+                return [];
+            }
+
+            var json = await listResponse.Content.ReadAsStringAsync(ct);
+            var doc = JsonDocument.Parse(json);
+            var jobs = new List<ContainerAppJobStatusDto>();
+
+            foreach (var job in doc.RootElement.GetProperty("value").EnumerateArray())
+            {
+                var name = job.GetProperty("name").GetString() ?? "";
+                var props = job.GetProperty("properties");
+                var config = props.GetProperty("configuration");
+
+                var triggerType = config.GetProperty("triggerType").GetString() ?? "Unknown";
+                
+                string? cronExpression = null;
+                if (config.TryGetProperty("scheduleTriggerConfig", out var scheduleTrigger) &&
+                    scheduleTrigger.TryGetProperty("cronExpression", out var cronProp))
+                {
+                    cronExpression = cronProp.GetString();
+                }
+
+                // Get running executions count
+                var runningExecutions = await GetRunningExecutionsCountAsync(
+                    client, subscriptionId, resourceGroup, name, ct);
+
+                // Get last execution info
+                var (lastStatus, lastTime) = await GetLastExecutionInfoAsync(
+                    client, subscriptionId, resourceGroup, name, ct);
+
+                jobs.Add(new ContainerAppJobStatusDto
+                {
+                    Name = name,
+                    TriggerType = triggerType,
+                    CronExpression = cronExpression,
+                    LastExecutionStatus = lastStatus,
+                    LastExecutionTime = lastTime,
+                    RunningExecutions = runningExecutions
+                });
+            }
+
+            return jobs;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error querying Container App Jobs status via ARM API");
+            return [];
+        }
+    }
+
+    private async Task<int> GetRunningExecutionsCountAsync(
+        HttpClient client, string subscriptionId, string resourceGroup,
+        string jobName, CancellationToken ct)
+    {
+        try
+        {
+            var url = $"https://management.azure.com/subscriptions/{subscriptionId}" +
+                      $"/resourceGroups/{resourceGroup}/providers/Microsoft.App" +
+                      $"/jobs/{jobName}/executions?api-version=2024-03-01";
+
+            var response = await client.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode) return 0;
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            var doc = JsonDocument.Parse(json);
+            
+            int runningCount = 0;
+            foreach (var exec in doc.RootElement.GetProperty("value").EnumerateArray())
+            {
+                var status = exec.GetProperty("properties").GetProperty("status").GetString();
+                if (status == "Running" || status == "Pending")
+                    runningCount++;
+            }
+
+            return runningCount;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not get executions for job {JobName}", jobName);
+            return 0;
+        }
+    }
+
+    private async Task<(string? status, DateTime? time)> GetLastExecutionInfoAsync(
+        HttpClient client, string subscriptionId, string resourceGroup,
+        string jobName, CancellationToken ct)
+    {
+        try
+        {
+            var url = $"https://management.azure.com/subscriptions/{subscriptionId}" +
+                      $"/resourceGroups/{resourceGroup}/providers/Microsoft.App" +
+                      $"/jobs/{jobName}/executions?api-version=2024-03-01";
+
+            var response = await client.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode) return (null, null);
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            var doc = JsonDocument.Parse(json);
+            
+            var executions = doc.RootElement.GetProperty("value").EnumerateArray().ToList();
+            if (executions.Count == 0) return (null, null);
+
+            // First execution is the latest
+            var lastExec = executions[0];
+            var props = lastExec.GetProperty("properties");
+            
+            var status = props.GetProperty("status").GetString();
+            DateTime? startTime = null;
+            
+            if (props.TryGetProperty("startTime", out var startProp) &&
+                startProp.ValueKind == JsonValueKind.String)
+            {
+                DateTime.TryParse(startProp.GetString(), out var parsed);
+                startTime = parsed;
+            }
+
+            return (status, startTime);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not get last execution info for job {JobName}", jobName);
+            return (null, null);
         }
     }
 
