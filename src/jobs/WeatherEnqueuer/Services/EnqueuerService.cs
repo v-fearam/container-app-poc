@@ -5,14 +5,6 @@ using System.Text.Json;
 
 namespace WeatherEnqueuer.Services;
 
-/// <summary>
-/// Service responsible for enqueuing weather messages and publishing job execution events.
-/// </summary>
-public interface IEnqueuerService
-{
-    Task ExecuteAsync(CancellationToken cancellationToken);
-}
-
 public class EnqueuerService : IEnqueuerService
 {
     private readonly ServiceBusClient _serviceBusClient;
