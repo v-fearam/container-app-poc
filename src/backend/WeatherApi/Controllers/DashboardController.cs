@@ -72,4 +72,40 @@ public class DashboardController(
 
         return Ok(counters);
     }
+
+    /// <summary>
+    /// Get Job Execution counters (hourly aggregated stats per job).
+    /// </summary>
+    /// <param name="days">Number of days to retrieve (default 7, max 30)</param>
+    [HttpGet("job-executions")]
+    [ProducesResponseType(typeof(List<JobExecutionCounterDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> GetJobExecutions([FromQuery] int days = 7)
+    {
+        if (dbContext == null)
+        {
+            logger.LogWarning("SQL Database not configured");
+            return StatusCode(503, new { error = "SQL Database not configured" });
+        }
+
+        days = Math.Min(days, 30); // Cap at 30 days
+        var cutoffDate = DateTime.UtcNow.Date.AddDays(-days);
+
+        // Group by job name and date, sum execution counts for all hours
+        var counters = await dbContext.JobExecutions
+            .Where(j => j.Date >= cutoffDate)
+            .GroupBy(j => new { j.JobName, j.Date })
+            .Select(g => new JobExecutionCounterDto
+            {
+                JobName = g.Key.JobName,
+                Date = g.Key.Date,
+                TotalExecutions = g.Sum(j => j.ExecutionCount),
+                HoursWithExecutions = g.Count()
+            })
+            .OrderByDescending(j => j.Date)
+            .ThenBy(j => j.JobName)
+            .ToListAsync();
+
+        return Ok(counters);
+    }
 }

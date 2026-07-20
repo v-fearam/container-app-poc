@@ -15,6 +15,7 @@ public class DashboardDbContext : DbContext
     public DbSet<QueueCounter> QueueCounters => Set<QueueCounter>();
     public DbSet<PersonaSync> PersonasSync => Set<PersonaSync>();
     public DbSet<ChangeFeedCounter> ChangeFeedCounters => Set<ChangeFeedCounter>();
+    public DbSet<JobExecution> JobExecutions => Set<JobExecution>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

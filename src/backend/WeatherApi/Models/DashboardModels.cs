@@ -51,3 +51,14 @@ public record DiscardDlqMessageRequest
     public required string MessageId { get; init; }
     public required string QueueName { get; init; }
 }
+
+/// <summary>
+/// Job Execution counter DTO for dashboard API.
+/// </summary>
+public record JobExecutionCounterDto
+{
+    public required string JobName { get; init; }
+    public DateTime Date { get; init; }
+    public int TotalExecutions { get; init; }
+    public int HoursWithExecutions { get; init; }
+}

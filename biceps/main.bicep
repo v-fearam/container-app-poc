@@ -108,6 +108,18 @@ param processorName string = 'cfp-personas'
 @description('Vertical name for telemetry')
 param verticalName string = 'personas'
 
+@description('Deploy Container Apps Jobs infrastructure and WeatherEnqueuer job')
+param deployJob bool = false
+
+@description('WeatherEnqueuer Job image name in ACR')
+param jobImageName string = 'weather-enqueuer'
+
+@description('Number of messages to enqueue per job execution')
+param jobMessageCount string = '50'
+
+@description('Job CRON expression (default: every 5 minutes)')
+param jobCronExpression string = '*/5 * * * *'
+
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics-deployment'
@@ -329,6 +341,35 @@ module changeFeedWorkerApp 'modules/changefeed-worker-container-app.bicep' = if 
 }
 
 // =============================================================================
+// Container Apps Jobs - WeatherEnqueuer Scheduled Job
+// =============================================================================
+
+module weatherEnqueuerJob 'modules/container-app-job.bicep' = if (deployJob && deployWorker && deployDashboard && deployContainerApps) {
+  name: 'weather-enqueuer-job-deployment'
+  params: {
+    location: location
+    jobName: 'ca-${workloadName}-enqueuer-${environmentShortName}'
+    environmentId: environment.outputs.environmentId
+    containerImage: '${containerRegistry.outputs.acrLoginServer}/${jobImageName}:${imageTag}'
+    acrName: containerRegistryName
+    managedIdentityId: workerIdentity!.outputs.identityId
+    managedIdentityClientId: workerIdentity!.outputs.identityClientId
+    serviceBusNamespaceFqdn: serviceBus!.outputs.namespaceFqdn
+    weatherQueueName: 'weather-queue'
+    dashboardTopicName: 'nd-dashboard-events'
+    messageCount: jobMessageCount
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
+    cronExpression: jobCronExpression
+    replicaTimeout: 300    // 5 minutes max execution time
+    replicaRetryLimit: 2   // Retry up to 2 times on failure
+    triggerType: 'Schedule'
+    cpu: '0.5'
+    memory: '1.0Gi'
+  }
+}
+
+// =============================================================================
 // Dashboard Infrastructure (SQL Database)
 // =============================================================================
 
@@ -368,6 +409,7 @@ output sqlDatabaseName string = deployDashboard ? sqlDatabase!.outputs.databaseN
 output sqlConnectionString string = deployDashboard ? sqlDatabase!.outputs.connectionString : ''
 output cosmosEndpoint string = deployCosmosDB ? cosmosDB!.outputs.endpoint : ''
 output cosmosAccountName string = deployCosmosDB ? cosmosDB!.outputs.accountName : ''
+output jobName string = deployJob ? weatherEnqueuerJob!.outputs.jobName : ''
 output cosmosDatabaseName string = deployCosmosDB ? cosmosDB!.outputs.databaseName : ''
 output dashboardWorkerAppName string = deployDashboardWorkerApp ? dashboardWorkerApp!.outputs.containerAppName : ''
 output changeFeedWorkerAppName string = deployChangeFeedWorker ? changeFeedWorkerApp!.outputs.containerAppName : ''
