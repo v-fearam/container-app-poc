@@ -27,8 +27,8 @@ param corsAllowedOrigins string = 'http://localhost:5173,http://localhost:3000'
 @description('Comma-separated host suffixes allowed for CORS origins')
 param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 
-@description('Whether SQL connection string secret exists in Key Vault')
-param enableSql bool = false
+@description('Optional SQL connection string with Managed Identity (no credentials)')
+param sqlConnectionString string = ''
 
 @description('Optional Cosmos DB account resource ID for role assignment (Managed Identity)')
 param cosmosAccountId string = ''
@@ -178,13 +178,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             identity: userAssignedIdentity.id
           }
         ],
-        enableSql ? [
-          {
-            name: 'sql-connection-string'
-            keyVaultUrl: '${keyVaultUri}secrets/sql-connection-string'
-            identity: userAssignedIdentity.id
-          }
-        ] : [],
         enableAuth ? [
           {
             name: 'microsoft-provider-authentication-secret'
@@ -223,10 +216,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: corsAllowedOriginSuffixes
               }
             ],
-            enableSql ? [
+            !empty(sqlConnectionString) ? [
               {
                 name: 'SQL_CONNECTION_STRING'
-                secretRef: 'sql-connection-string'
+                value: sqlConnectionString
               }
             ] : [],
             !empty(cosmosEndpoint) ? [
@@ -241,7 +234,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: serviceBusNamespaceFqdn
               }
             ] : [],
-            !empty(serviceBusNamespaceFqdn) || enableSql || !empty(cosmosEndpoint) ? [
+            !empty(serviceBusNamespaceFqdn) || !empty(sqlConnectionString) || !empty(cosmosEndpoint) ? [
               {
                 name: 'AZURE_CLIENT_ID'
                 value: userAssignedIdentity.properties.clientId

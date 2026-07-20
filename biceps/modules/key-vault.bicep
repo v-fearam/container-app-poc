@@ -35,10 +35,6 @@ param tags object = {}
 @secure()
 param appInsightsConnectionString string = ''
 
-@description('SQL connection string (seeded automatically)')
-@secure()
-param sqlConnectionString string = ''
-
 // Key Vault resource
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
@@ -88,14 +84,6 @@ resource secretAppInsights 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (
   name: 'appinsights-connection-string'
   properties: {
     value: appInsightsConnectionString
-  }
-}
-
-resource secretSqlConnection 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(sqlConnectionString)) {
-  parent: keyVault
-  name: 'sql-connection-string'
-  properties: {
-    value: sqlConnectionString
   }
 }
 

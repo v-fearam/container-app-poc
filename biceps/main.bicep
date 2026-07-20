@@ -148,7 +148,7 @@ module environment 'modules/container-app-environment.bicep' = {
 }
 
 // Key Vault for centralized secrets
-// NOTE: Deployed after App Insights and SQL so we can seed their connection strings.
+// NOTE: Deployed after App Insights so we can seed the connection string.
 // Container Apps depend on KV being ready (they reference secrets via keyVaultUrl).
 module keyVault 'modules/key-vault.bicep' = if (deployKeyVault) {
   name: 'key-vault-deployment'
@@ -157,7 +157,6 @@ module keyVault 'modules/key-vault.bicep' = if (deployKeyVault) {
     keyVaultName: keyVaultName
     secretUserPrincipalIds: []
     appInsightsConnectionString: appInsights.outputs.connectionString
-    sqlConnectionString: deployDashboard ? 'Server=${sqlDatabase!.outputs.sqlServerFqdn};Database=${sqlDatabase!.outputs.databaseName};Authentication=Active Directory Default' : ''
     tags: {
       workload: workloadName
       environment: environmentShortName
@@ -183,7 +182,7 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     maxReplicas: 3
     cpu: '0.5'
     memory: '1.0Gi'
-    enableSql: deployDashboard
+    sqlConnectionString: deployDashboard ? sqlDatabase!.outputs.connectionStringWithMI : ''
     cosmosAccountId: deployCosmosDB ? cosmosDB!.outputs.accountId : ''
     cosmosEndpoint: deployCosmosDB ? cosmosDB!.outputs.endpoint : ''
     serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceFqdn : ''

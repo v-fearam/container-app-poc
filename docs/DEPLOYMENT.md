@@ -5,6 +5,25 @@
 
 ---
 
+## Managed Identity & Secrets Architecture
+
+**Filosofía:** Todos los Azure services usan **Managed Identity** (NO connection strings con credenciales).
+
+| Service | Auth Method | Secret in Key Vault? |
+|---------|-------------|---------------------|
+| **SQL Database** | Connection string con `Authentication=Active Directory Default` | ❌ NO — se pasa como env var directo (no tiene credenciales) |
+| **Cosmos DB** | Endpoint + `DefaultAzureCredential` | ❌ NO — endpoint se pasa como env var directo (público) |
+| **Service Bus** | Namespace FQDN + `DefaultAzureCredential` | ❌ NO — FQDN se pasa como env var directo (público) |
+| **App Insights** | Connection string (tiene instrumentation key) | ✅ SÍ — `appinsights-connection-string` |
+| **Easy Auth** | Client secrets (credenciales de Entra ID apps) | ✅ SÍ — `auth-client-secret-frontend`, `auth-client-secret-backend` |
+| **Token Store** | SAS URL (short-lived, regenerado en cada deploy) | ✅ SÍ — `token-store-sas` |
+
+**Roles de Bicep:**
+- Bicep asigna automáticamente todos los roles RBAC necesarios (Cosmos Data Contributor, Service Bus Owner, SQL AAD Admin, Key Vault Secrets User)
+- **Excepción:** SQL Database requiere `CREATE USER` manual (Bicep no puede ejecutar T-SQL)
+
+---
+
 ## Pre-requisitos
 
 1. Azure CLI autenticado: `az login`

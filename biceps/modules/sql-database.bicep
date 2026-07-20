@@ -87,3 +87,4 @@ output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output sqlServerName string = sqlServer.name
 output databaseName string = database.name
 output connectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${database.name};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+output connectionStringWithMI string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Initial Catalog=${database.name};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
