@@ -76,24 +76,36 @@ echo "✅ Rol asignado y propagado"
 
 ## Paso 2: Configurar Easy Auth secrets en Key Vault
 
+⚠️ **CRÍTICO:** Los Container Apps (frontend y backend) referencian estos secrets desde Key Vault. Si no existen, el deployment de Container Apps (Paso 6) va a **fallar** o los apps no van a arrancar.
+
 ```bash
 # App Registrations (REUTILIZAR las existentes del ambiente actual)
-# Portal → Entra ID → App registrations → buscar "Weather App"
+# Portal → Entra ID → App registrations → buscar "Weather App Backend" y "Weather App Frontend"
 
-export FRONTEND_CLIENT_ID="<frontend-app-id>"
-export FRONTEND_CLIENT_SECRET="<regenerar-o-usar-existente>"
-export BACKEND_CLIENT_ID="<backend-app-id>"  
-export BACKEND_CLIENT_SECRET="<regenerar-o-usar-existente>"
-export TENANT_ID="<tu-tenant-id>"
+export FRONTEND_CLIENT_ID="e9e60b6c-3b17-40f9-8722-0e2387fb232d"
+export BACKEND_CLIENT_ID="9cbeba2f-de5d-42c5-b886-1f1395e59e3e"
 
-# Guardar secrets en Key Vault
-az keyvault secret set --vault-name $KV_NAME \
+# Regenerar client secrets en el portal (o usar existentes si los tenés guardados):
+# Frontend App Registration → Certificates & secrets → New client secret → copiar value
+export FRONTEND_CLIENT_SECRET="<value-del-portal>"
+
+# Backend App Registration → Certificates & secrets → New client secret → copiar value  
+export BACKEND_CLIENT_SECRET="<value-del-portal>"
+
+# Guardar secrets en Key Vault (REQUERIDO ANTES del Paso 6)
+az keyvault secret set \
+  --vault-name $KV_NAME \
   --name auth-client-secret-frontend \
   --value "$FRONTEND_CLIENT_SECRET"
 
-az keyvault secret set --vault-name $KV_NAME \
+az keyvault secret set \
+  --vault-name $KV_NAME \
   --name auth-client-secret-backend \
   --value "$BACKEND_CLIENT_SECRET"
+
+# Verificar que existen
+az keyvault secret show --vault-name $KV_NAME --name auth-client-secret-frontend --query name -o tsv
+az keyvault secret show --vault-name $KV_NAME --name auth-client-secret-backend --query name -o tsv
 
 echo "✅ Easy Auth secrets guardados en Key Vault"
 ```
