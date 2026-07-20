@@ -306,22 +306,20 @@ export function DashboardPage() {
 
               return (
                 <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
-                  <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 border-b">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 border-b py-3 px-4">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Calendar className="h-5 w-5 text-purple-600" />
-                        <div>
-                          <CardTitle className="text-slate-900">Container Jobs Ejecutados</CardTitle>
-                          <CardDescription>Jobs ejecutados el {new Date(filterDate).toLocaleDateString('es-AR')}</CardDescription>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-purple-600" />
+                        <CardTitle className="text-sm text-slate-900">Container Jobs</CardTitle>
+                        <span className="text-xs text-muted-foreground">({new Date(filterDate).toLocaleDateString('es-AR')})</span>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to="/scheduler">Ver Scheduler</Link>
+                      <Button variant="ghost" size="sm" asChild className="h-7 text-xs">
+                        <Link to="/scheduler">Scheduler →</Link>
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
+                  <CardContent className="p-3">
+                    <div className="divide-y">
                       {jobsToday.map((job, idx) => {
                         const yesterday = jobsYesterday.find(j => j.jobName === job.jobName);
                         const diff = yesterday ? job.totalExecutions - yesterday.totalExecutions : 0;
@@ -330,22 +328,16 @@ export function DashboardPage() {
                           : null;
 
                         return (
-                          <div key={`${job.jobName}-${job.date}-${idx}`} className="flex items-center justify-between p-4 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="font-mono text-sm font-medium text-slate-900">{job.jobName}</span>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-baseline gap-2">
-                                  <span className="text-3xl font-bold text-purple-600">{job.totalExecutions}</span>
-                                  <span className="text-sm text-muted-foreground">ejecuciones</span>
-                                </div>
-                                {percentChange !== null && (
-                                  <div className={`flex items-center gap-1 text-xs ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-                                    {diff > 0 ? '↑' : diff < 0 ? '↓' : '→'} {Math.abs(Number(percentChange))}% vs ayer
-                                  </div>
-                                )}
-                              </div>
+                          <div key={`${job.jobName}-${job.date}-${idx}`} className="flex items-center justify-between py-2 px-2">
+                            <span className="font-mono text-xs text-slate-700">{job.jobName}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-bold text-purple-600">{job.totalExecutions}</span>
+                              <span className="text-xs text-muted-foreground">ejec.</span>
+                              {percentChange !== null && (
+                                <span className={`text-xs ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {diff > 0 ? '↑' : diff < 0 ? '↓' : '→'}{Math.abs(Number(percentChange))}%
+                                </span>
+                              )}
                             </div>
                           </div>
                         );

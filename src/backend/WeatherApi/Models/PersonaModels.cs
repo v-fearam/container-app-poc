@@ -33,6 +33,7 @@ public class PersonaDto
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     
     [JsonPropertyName("ttl")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Ttl { get; set; }
 }
 

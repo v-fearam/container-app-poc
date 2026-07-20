@@ -66,15 +66,16 @@ if (!string.IsNullOrEmpty(cosmosEndpoint))
     builder.Services.AddSingleton(sp =>
     {
         var credential = new DefaultAzureCredential();
-        var serializerOptions = new Microsoft.Azure.Cosmos.CosmosSerializationOptions
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions
         {
-            PropertyNamingPolicy = Microsoft.Azure.Cosmos.CosmosPropertyNamingPolicy.CamelCase
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
         var options = new Microsoft.Azure.Cosmos.CosmosClientOptions
         {
             ApplicationName = "WeatherApi",
             ConnectionMode = Microsoft.Azure.Cosmos.ConnectionMode.Direct,
-            SerializerOptions = serializerOptions
+            Serializer = new WeatherApi.Services.CosmosSystemTextJsonSerializer(jsonOptions)
         };
         return new Microsoft.Azure.Cosmos.CosmosClient(cosmosEndpoint, credential, options);
     });

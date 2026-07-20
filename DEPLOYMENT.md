@@ -704,7 +704,7 @@ az acr build --registry $ACR \
   --file src/worker/DashboardWorker/Dockerfile \
   src/worker/DashboardWorker
 
-az containerapp update -n ca-dashboard-worker-dev -g $RG \
+az containerapp update -n ca-weather-dashworker-dev -g $RG \
   --image $ACR.azurecr.io/dashboard-worker:latest \
   --revision-suffix "dw-$(date +%s)"
 ```
@@ -739,7 +739,7 @@ az containerapp job execution list -n ca-weather-enqueuer-dev -g $RG -o table
 
 ```bash
 # Logs de la última ejecución
-az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG
+az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG --container weather-enqueuer
 ```
 
 Buscar:
@@ -862,7 +862,7 @@ az containerapp job execution list -n ca-weather-enqueuer-dev -g $RG -o table
 
 # 3. Trigger manual para ver logs
 az containerapp job start -n ca-weather-enqueuer-dev -g $RG
-az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG
+az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG --container weather-enqueuer
 ```
 
 #### Job falla con RBAC error
@@ -927,6 +927,32 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine
 
 Rebuild y redeploy después del cambio.
 
+#### Job falla con "MessagingEntityNotFound"
+
+**Error:** `ServiceBusException: The messaging entity 'sb://sb-weather-dev-u6qlzs.servicebus.windows.net/weather-queue' could not be found`
+
+**Causa:** La env var `WEATHER_QUEUE_NAME` tiene un valor incorrecto. El nombre de la queue es `weather-jobs` (NO `weather-queue`).
+
+**Verificar:**
+
+```bash
+# Ver env vars actuales del job
+az containerapp job show -n ca-weather-enqueuer-dev -g $RG \
+  --query 'properties.template.containers[0].env[?name==`WEATHER_QUEUE_NAME`]' -o json
+
+# Ver que la queue existe
+az servicebus queue show --namespace-name sb-weather-dev-u6qlzs -g $RG --name weather-jobs
+```
+
+**Solución:** Actualizar env var:
+
+```bash
+az containerapp job update -n ca-weather-enqueuer-dev -g $RG \
+  --set-env-vars "WEATHER_QUEUE_NAME=weather-jobs"
+```
+
+**NOTA:** Si se despliega desde Bicep con `deployJob=true`, el parámetro `weatherQueueName` ya tiene default `weather-jobs`. Este error ocurre cuando se hizo un deploy parcial anterior con el nombre viejo.
+
 #### Scheduler Page: Error 401 al guardar frecuencia
 
 **Error:** Modal "Editar Frecuencia" muestra "Error al guardar: The client 'ff2ccc-...' with object id '...' does not have authorization..."
@@ -972,6 +998,57 @@ Buscar errores `403 Forbidden` o `Unable to resolve service for type 'Azure.Reso
 ```bash
 # Ver código en Program.cs
 grep -n "AddSingleton<ArmClient>" src/backend/WeatherApi/Program.cs
+```
+
+---
+
+## ⏱️ Cosmos DB TTL (Time To Live)
+
+El container `personas` tiene TTL habilitado a nivel de container (`defaultTtl: -1`), lo que permite establecer TTL **per-document** sin un default global.
+
+### Cómo funciona
+
+- `defaultTtl: -1` en Bicep → habilita TTL sin expiración por defecto
+- Documentos **sin** propiedad `ttl` → no expiran (viven para siempre)
+- Documentos **con** `ttl: N` (segundos) → Cosmos los borra automáticamente después de N segundos
+- Quitar el `ttl` (setear a `null`) → el documento deja de expirar
+
+### Habilitar TTL (incluido en deploy estándar)
+
+```bash
+# El deploy normal con deployCosmosDB=true ya aplica defaultTtl: -1
+az deployment group create -g $RG -f biceps/main.bicep \
+  --parameters deployCosmosDB=true ...
+```
+
+### Habilitar TTL manualmente (sin redeploy)
+
+```bash
+# Actualizar container personas vía Azure CLI
+az cosmosdb sql container update \
+  --account-name cosmos-weather-dev-u6qlzs \
+  -g $RG \
+  --database-name change-feed-poc \
+  --name personas \
+  --ttl -1
+```
+
+O desde Portal: Cosmos DB → Database → personas → Settings → Time to Live → "On (no default)"
+
+### Usar TTL desde la UI
+
+1. Ir a la página **Change Feed** → tab "Cosmos Editor"
+2. Al crear/editar una persona, campo **TTL (segundos)**:
+   - Vacío = no expira
+   - Valor numérico = expira en N segundos (ej: 60 = 1 minuto, 3600 = 1 hora)
+3. El badge naranja en la tabla muestra el TTL activo
+4. Después de expirar, Cosmos elimina el documento automáticamente (el Change Feed captura el delete)
+
+### Verificar TTL en documentos
+
+```bash
+# Desde Azure Portal → Data Explorer → query:
+SELECT c.id, c.nombre, c.ttl FROM c WHERE IS_DEFINED(c.ttl)
 ```
 
 ---

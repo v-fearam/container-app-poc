@@ -41,13 +41,31 @@ public class ChangeFeedWorkerService(
             .WithInstanceName($"{Environment.MachineName}-{Guid.NewGuid():N}") // Unique instance per pod
             .WithLeaseContainer(leaseContainer)
             .WithStartTime(DateTime.UtcNow.AddMinutes(-5)) // POC: start 5 min ago to catch recent changes
-            .Build();
+                .WithErrorNotification(HandleInfrastructureErrorAsync)
+                .Build();
 
         await _processor.StartAsync();
         logger.LogInformation("Change Feed Processor started successfully");
 
         // Keep running until cancellation
         await Task.Delay(Timeout.Infinite, stoppingToken);
+    }
+
+    /// <summary>
+    /// Handles SDK infrastructure errors: lease failures, partition read errors, connectivity issues.
+    /// These fire BEFORE the delegate — meaning the SDK couldn't even read the batch.
+    /// The SDK will retry automatically with exponential backoff.
+    /// </summary>
+    private Task HandleInfrastructureErrorAsync(string leaseToken, Exception exception)
+    {
+        logger.LogError(
+            exception,
+            "Change Feed infrastructure error on partition {LeaseToken}. " +
+            "Type: {ErrorType}. The SDK will retry automatically.",
+            leaseToken,
+            exception.GetType().Name);
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
