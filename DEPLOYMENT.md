@@ -586,10 +586,273 @@ Debería incluir:
 
 ---
 
+## 🔧 Container Apps Jobs - Despliegue de Jobs Programados
+
+Esta sección cubre cómo desplegar Container Apps Jobs (tareas programadas) para ejecutar workloads batch y event-driven.
+
+### Paso 1: Ejecutar Migración SQL para JobExecutions
+
+```bash
+# Variables
+export RG="rg-far-container-app-easyauth"
+export SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
+
+# Ejecutar migración 003_JobExecutions.sql
+az sql db query \
+  --server $SQL_SERVER \
+  --database dashboard-poc \
+  --auth-mode ActiveDirectoryPassword \
+  --file sql/003_JobExecutions.sql
+```
+
+Esta migración crea la tabla `JobExecutions` para trackear ejecuciones de jobs programados.
+
+### Paso 2: Build y Push WeatherEnqueuer Job Image
+
+```bash
+# Variables
+export ACR=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.acrName.value' -o tsv)
+
+# Build usando ACR (recomendado para evitar problemas de encoding en Windows)
+az acr build --registry $ACR \
+  --image weather-enqueuer:latest \
+  --file src/jobs/WeatherEnqueuer/Dockerfile \
+  src/jobs/WeatherEnqueuer
+```
+
+**¿Qué hace WeatherEnqueuer?**
+- ✅ Encola N mensajes a `weather-queue` (N = env var `MESSAGE_COUNT`)
+- ✅ Publica evento `JobExecuted` a `dashboard-events` topic
+- ✅ Usa .NET Generic Host + DI + AddAzureClients
+- ✅ Managed Identity para Service Bus
+
+### Paso 3: Deploy Infraestructura con Container Jobs
+
+```bash
+# Obtener user info para SQL admin
+export SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+export SQL_ADMIN_LOGIN=$(az ad signed-in-user show --query userPrincipalName -o tsv)
+
+# Deploy con deployJob=true
+az deployment group create \
+  -g $RG \
+  -f biceps/main.bicep \
+  --parameters workloadName='weather' \
+  --parameters environmentShortName='dev' \
+  --parameters deployContainerApps=true \
+  --parameters deployWorker=true \
+  --parameters deployWorkerApp=true \
+  --parameters deployDashboard=true \
+  --parameters deployDashboardWorkerApp=true \
+  --parameters deployKeyVault=true \
+  --parameters deployCosmosDB=true \
+  --parameters deployChangeFeedWorker=true \
+  --parameters deployJob=true \
+  --parameters sqlLocation='centralus' \
+  --parameters sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
+  --parameters sqlAdminLogin=$SQL_ADMIN_LOGIN \
+  --parameters jobMessageCount='50' \
+  --parameters jobCronExpression='*/5 * * * *'
+```
+
+**Parámetros del Job:**
+- `deployJob=true` - Habilita deploy del Container Job
+- `jobMessageCount='50'` - Mensajes a encolar por ejecución
+- `jobCronExpression='*/5 * * * *'` - Ejecuta cada 5 minutos
+
+**Qué se despliega:**
+- ✅ Container App Job `ca-weather-enqueuer-dev`
+- ✅ Schedule trigger (CRON: cada 5 minutos)
+- ✅ Managed Identity con roles Service Bus Data Sender
+- ✅ Environment variables (MESSAGE_COUNT, SERVICE_BUS_NAMESPACE, etc.)
+
+### Paso 4: Redeploy Backend y Frontend (con Scheduler UI)
+
+```bash
+# Backend (incluye JobsController)
+az acr build --registry $ACR \
+  --image weather-api:latest \
+  --file src/backend/WeatherApi/Dockerfile \
+  src/backend/WeatherApi
+
+az containerapp update -n ca-weather-be-dev -g $RG \
+  --image $ACR.azurecr.io/weather-api:latest \
+  --revision-suffix "be-$(date +%s)"
+
+# Frontend (incluye SchedulerPage)
+az acr build --registry $ACR \
+  --image weather-frontend:latest \
+  --file src/frontend/Dockerfile \
+  src/frontend
+
+az containerapp update -n ca-weather-fe-dev -g $RG \
+  --image $ACR.azurecr.io/weather-frontend:latest \
+  --revision-suffix "fe-$(date +%s)"
+
+# DashboardWorker (incluye JobExecuted handler)
+az acr build --registry $ACR \
+  --image dashboard-worker:latest \
+  --file src/worker/DashboardWorker/Dockerfile \
+  src/worker/DashboardWorker
+
+az containerapp update -n ca-dashboard-worker-dev -g $RG \
+  --image $ACR.azurecr.io/dashboard-worker:latest \
+  --revision-suffix "dw-$(date +%s)"
+```
+
+**IMPORTANTE**: Usar `--revision-suffix` único para forzar repull de imagen desde ACR.
+
+### Paso 5: Validación E2E del Container Job
+
+#### 5.1 Ver Jobs y Próxima Ejecución
+
+```bash
+# Listar jobs en el ambiente
+az containerapp job list -g $RG -o table
+
+# Ver detalles del job
+az containerapp job show -n ca-weather-enqueuer-dev -g $RG \
+  --query '{Name:name, TriggerType:properties.configuration.triggerType, CRON:properties.configuration.scheduleTriggerConfig.cronExpression, MessageCount:properties.template.containers[0].env[?name==`MESSAGE_COUNT`].value | [0]}' \
+  -o json
+```
+
+#### 5.2 Ejecutar Job Manualmente (sin esperar CRON)
+
+```bash
+# Trigger manual
+az containerapp job start -n ca-weather-enqueuer-dev -g $RG
+
+# Ver ejecuciones
+az containerapp job execution list -n ca-weather-enqueuer-dev -g $RG -o table
+```
+
+#### 5.3 Ver Logs del Job
+
+```bash
+# Logs de la última ejecución
+az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG
+```
+
+Buscar:
+- ✅ `Starting job: ca-weather-enqueuer-dev`
+- ✅ `Sending 50 messages to weather-queue...`
+- ✅ `Successfully sent 50 messages`
+- ✅ `Published JobExecuted event to dashboard-events`
+
+#### 5.4 Validar en SQL (JobExecutions table)
+
+```bash
+# Query JobExecutions via Azure CLI
+az sql db query \
+  --server $SQL_SERVER \
+  --database dashboard-poc \
+  --auth-mode ActiveDirectoryPassword \
+  --query "SELECT JobName, Date, Hour, ExecutionCount, UpdatedAt FROM JobExecutions ORDER BY UpdatedAt DESC"
+```
+
+Esperado:
+```
+JobName                    | Date       | Hour | ExecutionCount | UpdatedAt
+---------------------------|------------|------|----------------|-------------------
+ca-weather-enqueuer-dev    | 2026-07-20 | 13   | 1              | 2026-07-20 13:05:12
+```
+
+#### 5.5 Verificar en Frontend (Scheduler Page)
+
+1. Navegar a `https://ca-weather-fe-dev.<FQDN>/scheduler`
+2. Ver tabla de jobs con CRON expression
+3. Verificar "Última Ejecución" timestamp
+4. Click en "Editar Frecuencia" (ícono Settings)
+5. Cambiar CRON (ej: `*/10 * * * *` para cada 10 minutos)
+6. Guardar y verificar que se actualiza
+
+#### 5.6 Verificar Dashboard Widget
+
+1. Navegar a `/dashboard`
+2. Scroll a sección "Container Jobs"
+3. Ver counters de ejecuciones por job por fecha
+4. Verificar que incrementa después de cada ejecución
+
+### Paso 6: Editar Schedule desde Frontend
+
+```bash
+# 1. Abrir frontend en browser
+export FRONTEND_URL=$(az containerapp show -n ca-weather-fe-dev -g $RG \
+  --query 'properties.configuration.ingress.fqdn' -o tsv)
+
+echo "Frontend: https://$FRONTEND_URL/scheduler"
+
+# 2. En el browser:
+# - Click en Settings button del job
+# - Cambiar CRON expression (ej: */15 * * * * para cada 15 min)
+# - Save
+
+# 3. Verificar desde CLI que se actualizó
+az containerapp job show -n ca-weather-enqueuer-dev -g $RG \
+  --query 'properties.configuration.scheduleTriggerConfig.cronExpression' -o tsv
+```
+
+### Troubleshooting Container Jobs
+
+#### Job no ejecuta
+
+```bash
+# 1. Verificar que el job existe
+az containerapp job show -n ca-weather-enqueuer-dev -g $RG
+
+# 2. Ver executions (puede estar vacia si nunca corrió)
+az containerapp job execution list -n ca-weather-enqueuer-dev -g $RG -o table
+
+# 3. Trigger manual para ver logs
+az containerapp job start -n ca-weather-enqueuer-dev -g $RG
+az containerapp job logs show -n ca-weather-enqueuer-dev -g $RG
+```
+
+#### Job falla con RBAC error
+
+El job necesita rol `Azure Service Bus Data Sender`. Verificar:
+
+```bash
+# Ver roles asignados al job identity
+export JOB_IDENTITY=$(az containerapp job show -n ca-weather-enqueuer-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
+
+az role assignment list \
+  --assignee $(az identity show -n $JOB_IDENTITY -g $RG --query principalId -o tsv) \
+  --all -o table | grep "Service Bus"
+```
+
+Debería tener:
+- `Azure Service Bus Data Sender` (scope: Service Bus namespace)
+
+#### Scheduler Page no muestra jobs
+
+1. **Backend JobsController:** Verificar que el backend tiene RBAC Reader en el RG
+2. **Logs del backend:**
+
+```bash
+az containerapp logs show -n ca-weather-be-dev -g $RG --tail 50
+```
+
+Buscar errores `403 Forbidden` o `Unable to resolve service for type 'Azure.ResourceManager.ArmClient'`
+
+3. **Verificar que el backend tiene ArmClient registrado:**
+
+```bash
+# Ver código en Program.cs
+grep -n "AddSingleton<ArmClient>" src/backend/WeatherApi/Program.cs
+```
+
+---
+
 ## 📚 Referencias
 
 - [Azure Container Apps Docs](https://learn.microsoft.com/en-us/azure/container-apps/)
+- [Azure Container Apps Jobs Docs](https://learn.microsoft.com/en-us/azure/container-apps/jobs)
 - [Application Insights Docs](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview)
 - [Easy Auth Tutorial](docs/EASY-AUTH-TUTORIAL.md)
+- [Container Jobs POC Design](docs/container-jobs-poc.md)
 - [.NET Instrumentation Guide](docs/DOTNET-INSTRUMENTATION.md)
 - [Docker Guide](DOCKER.md)
