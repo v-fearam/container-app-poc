@@ -30,6 +30,9 @@ param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 @description('Whether SQL connection string secret exists in Key Vault')
 param enableSql bool = false
 
+@description('Whether Cosmos DB connection string secret exists in Key Vault')
+param enableCosmos bool = false
+
 @description('Optional Service Bus namespace FQDN for Dashboard features')
 param serviceBusNamespaceFqdn string = ''
 
@@ -164,6 +167,13 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             identity: userAssignedIdentity.id
           }
         ] : [],
+        enableCosmos ? [
+          {
+            name: 'cosmos-connection-string'
+            keyVaultUrl: '${keyVaultUri}secrets/cosmos-connection-string'
+            identity: userAssignedIdentity.id
+          }
+        ] : [],
         enableAuth ? [
           {
             name: 'microsoft-provider-authentication-secret'
@@ -208,13 +218,19 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 secretRef: 'sql-connection-string'
               }
             ] : [],
+            enableCosmos ? [
+              {
+                name: 'COSMOS_CONNECTION_STRING'
+                secretRef: 'cosmos-connection-string'
+              }
+            ] : [],
             !empty(serviceBusNamespaceFqdn) ? [
               {
                 name: 'ServiceBus__Namespace'
                 value: serviceBusNamespaceFqdn
               }
             ] : [],
-            !empty(serviceBusNamespaceFqdn) || enableSql ? [
+            !empty(serviceBusNamespaceFqdn) || enableSql || enableCosmos ? [
               {
                 name: 'AZURE_CLIENT_ID'
                 value: userAssignedIdentity.properties.clientId

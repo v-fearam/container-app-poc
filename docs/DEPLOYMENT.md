@@ -171,6 +171,37 @@ echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
 
 ---
 
+## Paso 4.1: Agregar Cosmos connection string a Key Vault
+
+⚠️ **CRÍTICO:** El backend necesita `cosmos-connection-string` en Key Vault para funcionar. Sin este secret, todos los endpoints de Cosmos (`/api/cosmos/personas`, `/api/dashboard/kpi`) devuelven 500 Internal Server Error.
+
+```bash
+# Obtener Cosmos connection string
+export COSMOS_CONN_STR=$(az cosmosdb keys list \
+  --name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --type connection-strings \
+  --query "connectionStrings[0].connectionString" -o tsv)
+
+# Guardar en Key Vault
+az keyvault secret set \
+  --vault-name $KV_NAME \
+  --name cosmos-connection-string \
+  --value "$COSMOS_CONN_STR"
+
+echo "✅ Cosmos connection string guardado en Key Vault"
+
+# Verificar que existe
+az keyvault secret show \
+  --vault-name $KV_NAME \
+  --name cosmos-connection-string \
+  --query name -o tsv
+```
+
+**Explicación:** Bicep no puede auto-seed el Cosmos connection string porque crea un ciclo de dependencias (KeyVault → Cosmos → WorkerIdentity → KeyVault). Por eso se agrega manualmente después del deploy de infraestructura.
+
+---
+
 ## Paso 5: Configurar SQL Database (User + Migrations)
 
 ### 5.1 Crear usuario de managed identity en SQL
@@ -617,6 +648,57 @@ az deployment group create \
 
 **Solución:**
 1. Verificar que Easy Auth está configurado:
+   ```bash
+   az rest --method GET --url "/subscriptions/<sub-id>/resourceGroups/$RG/providers/Microsoft.App/containerApps/ca-weather-be-dev/authConfigs/current?api-version=2023-05-01" \
+     --query '{enabled: properties.platform.enabled, clientId: properties.identityProviders.azureActiveDirectory.registration.clientId}'
+   ```
+
+2. Si `enabled: null`, ejecutar Paso 7 completo (Deploy Easy Auth)
+
+3. **Cerrar sesión y volver a autenticarse** (el accessToken se genera en el login, no se puede renovar sin re-autenticar)
+
+---
+
+### Backend devuelve 500 en /api/dashboard/kpi o /api/cosmos/personas
+
+**Síntomas:**
+- Frontend muestra "Error al cargar datos"
+- Backend logs muestran: `Unable to resolve service for type 'Microsoft.Azure.Cosmos.CosmosClient'`
+- DevTools → Network muestra: `500 Internal Server Error`
+
+**Causa:** Falta el secret `cosmos-connection-string` en Key Vault.
+
+**Solución:**
+Ejecutar **Paso 4.1** para agregar el Cosmos connection string:
+```bash
+export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
+export KV_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.keyVaultName.value' -o tsv)
+
+export COSMOS_CONN_STR=$(az cosmosdb keys list \
+  --name $COSMOS_ACCOUNT \
+  --resource-group $RG \
+  --type connection-strings \
+  --query "connectionStrings[0].connectionString" -o tsv)
+
+az keyvault secret set \
+  --vault-name $KV_NAME \
+  --name cosmos-connection-string \
+  --value "$COSMOS_CONN_STR"
+
+# Verificar
+az keyvault secret show --vault-name $KV_NAME --name cosmos-connection-string --query name -o tsv
+```
+
+Luego **redeploy del backend** para que tome el nuevo secret:
+```bash
+az containerapp update \
+  -n ca-weather-be-dev \
+  -g $RG \
+  --image $ACR_NAME.azurecr.io/weather-api:latest \
+  --revision-suffix "be-$(date +%s)"
+```
+
+---
    ```bash
    az rest --method GET --url "/subscriptions/<sub-id>/resourceGroups/$RG/providers/Microsoft.App/containerApps/ca-weather-be-dev/authConfigs/current?api-version=2023-05-01" \
      --query '{enabled: properties.platform.enabled, clientId: properties.identityProviders.azureActiveDirectory.registration.clientId}'
