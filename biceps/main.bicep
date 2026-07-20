@@ -184,7 +184,8 @@ module backendApp 'modules/backend-container-app.bicep' = if (deployContainerApp
     cpu: '0.5'
     memory: '1.0Gi'
     enableSql: deployDashboard
-    enableCosmos: deployCosmosDB
+    cosmosAccountId: deployCosmosDB ? cosmosDB!.outputs.accountId : ''
+    cosmosEndpoint: deployCosmosDB ? cosmosDB!.outputs.endpoint : ''
     serviceBusNamespaceFqdn: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceFqdn : ''
     serviceBusNamespaceId: (deployWorker || deployDashboard) ? serviceBus!.outputs.namespaceId : ''
     enableAuth: true

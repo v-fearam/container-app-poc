@@ -181,36 +181,7 @@ echo "Service Bus: $SB_NAMESPACE"
 echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
 ```
 
----
-
-## Paso 4.1: Agregar Cosmos connection string a Key Vault
-
-⚠️ **CRÍTICO:** El backend necesita `cosmos-connection-string` en Key Vault para funcionar. Sin este secret, todos los endpoints de Cosmos (`/api/cosmos/personas`, `/api/dashboard/kpi`) devuelven 500 Internal Server Error.
-
-```bash
-# Obtener Cosmos connection string
-export COSMOS_CONN_STR=$(az cosmosdb keys list \
-  --name $COSMOS_ACCOUNT \
-  --resource-group $RG \
-  --type connection-strings \
-  --query "connectionStrings[0].connectionString" -o tsv)
-
-# Guardar en Key Vault
-az keyvault secret set \
-  --vault-name $KV_NAME \
-  --name cosmos-connection-string \
-  --value "$COSMOS_CONN_STR"
-
-echo "✅ Cosmos connection string guardado en Key Vault"
-
-# Verificar que existe
-az keyvault secret show \
-  --vault-name $KV_NAME \
-  --name cosmos-connection-string \
-  --query name -o tsv
-```
-
-**Explicación:** Bicep no puede auto-seed el Cosmos connection string porque crea un ciclo de dependencias (KeyVault → Cosmos → WorkerIdentity → KeyVault). Por eso se agrega manualmente después del deploy de infraestructura.
+**NOTA:** Cosmos DB usa Managed Identity (no connection string). El backend identity obtiene automáticamente el rol "Cosmos DB Built-in Data Contributor" via Bicep.
 
 ---
 
@@ -749,44 +720,31 @@ Después de ejecutar el T-SQL en el portal, el error desaparece inmediatamente (
 
 ---
 
-### Backend devuelve 500 en /api/dashboard/kpi o /api/cosmos/personas
+### Backend devuelve 500 en /api/cosmos/personas
 
 **Síntomas:**
 - Frontend muestra "Error al cargar datos"
 - Backend logs muestran: `Unable to resolve service for type 'Microsoft.Azure.Cosmos.CosmosClient'`
 - DevTools → Network muestra: `500 Internal Server Error`
 
-**Causa:** Falta el secret `cosmos-connection-string` en Key Vault.
+**Causa:** El backend identity no tiene rol "Cosmos DB Built-in Data Contributor" en la cuenta de Cosmos DB.
 
 **Solución:**
-Ejecutar **Paso 4.1** para agregar el Cosmos connection string:
+Verificar que el role assignment existe:
 ```bash
+export RG="rg-far-container-app-easyauth"
 export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main --query 'properties.outputs.cosmosAccountName.value' -o tsv)
-export KV_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.keyVaultName.value' -o tsv)
+export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
 
-export COSMOS_CONN_STR=$(az cosmosdb keys list \
-  --name $COSMOS_ACCOUNT \
-  --resource-group $RG \
-  --type connection-strings \
-  --query "connectionStrings[0].connectionString" -o tsv)
-
-az keyvault secret set \
-  --vault-name $KV_NAME \
-  --name cosmos-connection-string \
-  --value "$COSMOS_CONN_STR"
-
-# Verificar
-az keyvault secret show --vault-name $KV_NAME --name cosmos-connection-string --query name -o tsv
+# Ver roles
+az role assignment list \
+  --assignee $(az identity show -n $BACKEND_IDENTITY_NAME -g $RG --query principalId -o tsv) \
+  --scope $(az cosmosdb show -n $COSMOS_ACCOUNT -g $RG --query id -o tsv) \
+  --query "[].{Role:roleDefinitionName}" -o table
 ```
 
-Luego **redeploy del backend** para que tome el nuevo secret:
-```bash
-az containerapp update \
-  -n ca-weather-be-dev \
-  -g $RG \
-  --image $ACR_NAME.azurecr.io/weather-api:latest \
-  --revision-suffix "be-$(date +%s)"
-```
+Si NO tiene rol, redeploy la infraestructura con `deployCosmosDB=true` (el Bicep asigna el rol automáticamente).
 
 ---
    ```bash

@@ -30,8 +30,11 @@ param corsAllowedOriginSuffixes string = '.azurecontainerapps.io'
 @description('Whether SQL connection string secret exists in Key Vault')
 param enableSql bool = false
 
-@description('Whether Cosmos DB connection string secret exists in Key Vault')
-param enableCosmos bool = false
+@description('Optional Cosmos DB account resource ID for role assignment (Managed Identity)')
+param cosmosAccountId string = ''
+
+@description('Optional Cosmos DB endpoint for CosmosClient (Managed Identity)')
+param cosmosEndpoint string = ''
 
 @description('Optional Service Bus namespace FQDN for Dashboard features')
 param serviceBusNamespaceFqdn string = ''
@@ -119,6 +122,21 @@ resource rgReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+// Cosmos DB Built-in Data Contributor role (for Managed Identity access)
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existing = if (!empty(cosmosAccountId)) {
+  name: last(split(cosmosAccountId, '/'))
+}
+
+resource cosmosDataContributorRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = if (!empty(cosmosAccountId)) {
+  parent: cosmosAccount
+  name: guid(userAssignedIdentity.id, cosmosAccountId, 'CosmosDBDataContributor')
+  properties: {
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002' // Cosmos DB Built-in Data Contributor
+    principalId: userAssignedIdentity.properties.principalId
+    scope: cosmosAccount.id
+  }
+}
+
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
@@ -167,13 +185,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             identity: userAssignedIdentity.id
           }
         ] : [],
-        enableCosmos ? [
-          {
-            name: 'cosmos-connection-string'
-            keyVaultUrl: '${keyVaultUri}secrets/cosmos-connection-string'
-            identity: userAssignedIdentity.id
-          }
-        ] : [],
         enableAuth ? [
           {
             name: 'microsoft-provider-authentication-secret'
@@ -218,10 +229,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 secretRef: 'sql-connection-string'
               }
             ] : [],
-            enableCosmos ? [
+            !empty(cosmosEndpoint) ? [
               {
-                name: 'COSMOS_CONNECTION_STRING'
-                secretRef: 'cosmos-connection-string'
+                name: 'Cosmos__Endpoint'
+                value: cosmosEndpoint
               }
             ] : [],
             !empty(serviceBusNamespaceFqdn) ? [
@@ -230,7 +241,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 value: serviceBusNamespaceFqdn
               }
             ] : [],
-            !empty(serviceBusNamespaceFqdn) || enableSql || enableCosmos ? [
+            !empty(serviceBusNamespaceFqdn) || enableSql || !empty(cosmosEndpoint) ? [
               {
                 name: 'AZURE_CLIENT_ID'
                 value: userAssignedIdentity.properties.clientId
