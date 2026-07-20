@@ -216,24 +216,55 @@ az keyvault secret show \
 
 ## Paso 5: Configurar SQL Database (User + Migrations)
 
-### 5.1 Crear usuario de managed identity en SQL
+⚠️ **CRÍTICO:** SQL Database necesita usuarios para las managed identities (Worker Y Backend) antes de que los apps puedan conectarse. Sin esto: `Login failed for user '<token-identified principal>'` error.
+
+### 5.1 Crear usuarios de managed identity en SQL
 
 ```bash
-# Obtener el nombre de la managed identity del deployment
+# Obtener nombres de las managed identities del deployment
 export WORKER_IDENTITY_NAME=$(az deployment group show -g $RG --name main \
   --query 'properties.outputs.workerIdentityName.value' -o tsv)
 
-echo "Worker identity name: $WORKER_IDENTITY_NAME"
+export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
 
-# Imprimir el T-SQL a ejecutar (con el nombre real de la identity)
+export SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
+
+export SQL_DB=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
+
+echo "Worker identity: $WORKER_IDENTITY_NAME"
+echo "Backend identity: $BACKEND_IDENTITY_NAME"
+echo "SQL Server: $SQL_SERVER"
+echo "Database: $SQL_DB"
+
+# Imprimir el T-SQL a ejecutar (con los nombres reales de las identities)
 echo ""
-echo "-- Ejecutar en Azure Portal → SQL Database → Query editor:"
+echo "================================================================================"
+echo "EJECUTAR EN AZURE PORTAL → SQL Database → Query editor:"
+echo "================================================================================"
+echo ""
+echo "-- 1. Crear usuario para WORKER identity (DashboardWorker, WeatherWorker, ChangeFeedWorker):"
 echo "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
 echo "ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME];"
 echo "ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo ""
+echo "-- 2. Crear usuario para BACKEND identity (ca-weather-be-dev):"
+echo "CREATE USER [$BACKEND_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+echo ""
+echo "================================================================================"
 ```
 
-**Cómo ejecutarlo:** Abrir [Azure Portal](https://portal.azure.com) → SQL Database `dashboard-poc` → **Query editor** → autenticarse con Entra ID → pegar y ejecutar el SQL de arriba.
+**Cómo ejecutarlo:** 
+1. Abrir [Azure Portal](https://portal.azure.com) → SQL Database `dashboard-poc` → **Query editor**
+2. Autenticarse con **Entra ID** (tu usuario admin)
+3. Copiar y pegar el T-SQL de arriba (ambos bloques: worker Y backend)
+4. Ejecutar (se ejecutan juntos sin problema)
+
+**Explicación:** Bicep puede asignar roles RBAC de Azure, pero **NO** puede crear usuarios SQL dentro de la database. Esto es un paso manual obligatorio (Gotcha #7).
 
 ### 5.2 Correr EF Core migrations
 
@@ -648,6 +679,53 @@ az deployment group create \
     dataContributorPrincipalId=$(az deployment group show -g $RG --name main \
       --query 'properties.outputs.workerIdentityPrincipalId.value' -o tsv)
 ```
+
+---
+
+### Backend o Workers fallan con "Login failed for user '<token-identified principal>'"
+
+**Síntomas:**
+- Backend logs muestran: `Microsoft.Data.SqlClient.SqlException: Login failed for user '<token-identified principal>'`
+- Workers (DashboardWorker, WeatherWorker, ChangeFeedWorker) no pueden conectarse a SQL
+- Error al llamar endpoints que usan SQL: `/api/dashboard/kpi`, `/api/sync/personas`
+
+**Causa:** Falta el paso manual de crear usuarios SQL para las managed identities (backend y/o worker).
+
+**Solución:**
+Ejecutar **Paso 5.1** completo para crear usuarios SQL:
+```bash
+export RG="rg-far-container-app-easyauth"
+export WORKER_IDENTITY_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.workerIdentityName.value' -o tsv)
+
+export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
+
+export SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
+
+export SQL_DB=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
+
+echo "Worker identity: $WORKER_IDENTITY_NAME"
+echo "Backend identity: $BACKEND_IDENTITY_NAME"
+echo ""
+echo "EJECUTAR EN AZURE PORTAL → SQL Database $SQL_DB → Query editor:"
+echo ""
+echo "-- Worker identity:"
+echo "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo ""
+echo "-- Backend identity:"
+echo "CREATE USER [$BACKEND_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+```
+
+Después de ejecutar el T-SQL en el portal, el error desaparece inmediatamente (no requiere redeploy).
+
+---
 
 ### Backend devuelve 401 aunque frontend muestre "Autenticado"
 
