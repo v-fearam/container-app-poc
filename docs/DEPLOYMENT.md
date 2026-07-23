@@ -489,7 +489,7 @@ az deployment group show -g $RG --name "easyauth" \
 
 ---
 
-## Paso 8: Validar Change Feed POC End-to-End
+## Paso 8: Validar POC End-to-End
 
 **Prerequisito:** Haber completado Paso 1-7 y ejecutado Variables globales.
 
@@ -541,13 +541,6 @@ Si llegaste aquí, tenés deployed:
 - ✅ Easy Auth con Entra ID
 - ✅ Service Bus + Key Vault
 - ✅ Telemetry con App Insights
-
-**Próximos pasos:**
-- Crear personas en Cosmos (frontend cuando esté listo)
-- Ver sincronización automática a SQL
-- Ver contadores en dashboard
-- Testear DLQ manager
-- Ver health endpoints
 
 ---
 
