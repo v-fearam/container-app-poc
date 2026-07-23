@@ -355,7 +355,7 @@ module weatherEnqueuerJob 'modules/container-app-job.bicep' = if (deployJob && d
     managedIdentityId: workerIdentity!.outputs.identityId
     managedIdentityClientId: workerIdentity!.outputs.identityClientId
     serviceBusNamespaceFqdn: serviceBus!.outputs.namespaceFqdn
-    weatherQueueName: 'weather-queue'
+    weatherQueueName: 'weather-jobs'
     dashboardTopicName: 'nd-dashboard-events'
     messageCount: jobMessageCount
     keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''

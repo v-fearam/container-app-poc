@@ -186,6 +186,12 @@ az acr build --registry $ACR_NAME \
   --image changefeed-worker:latest \
   --file src/worker/ChangeFeedWorker/Dockerfile \
   src/worker/ChangeFeedWorker
+
+# WeatherEnqueuer (Container Job)
+az acr build --registry $ACR_NAME \
+  --image weather-enqueuer:latest \
+  --file src/jobs/WeatherEnqueuer/Dockerfile \
+  src/jobs/WeatherEnqueuer
 ```
 
 ---
@@ -233,7 +239,7 @@ echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
 # Verificar que variables están seteadas
 echo "RG: $RG" && echo "ACR_NAME: $ACR_NAME"
 
-# Deploy: Backend + Frontend + WeatherWorker + DashboardWorker + ChangeFeedWorker
+# Deploy: Backend + Frontend + WeatherWorker + DashboardWorker + ChangeFeedWorker + Job
 # IMPORTANTE: pasar todos los flags deploy* para que las condiciones del Bicep sean true
 az deployment group create \
   --resource-group $RG \
@@ -246,6 +252,7 @@ az deployment group create \
     deployDashboardWorkerApp=true \
     deployCosmosDB=true \
     deployChangeFeedWorker=true \
+    deployJob=true \
     sqlLocation=centralus \
     sqlAdminLogin=$SQL_ADMIN_LOGIN \
     sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
@@ -254,9 +261,11 @@ az deployment group create \
 # Outputs
 export BACKEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.backendAppUrl.value' -o tsv)
 export FRONTEND_URL=$(az deployment group show -g $RG --name main --query 'properties.outputs.frontendAppUrl.value' -o tsv)
+export JOB_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.jobName.value' -o tsv)
 
 echo "Backend URL: $BACKEND_URL"
 echo "Frontend URL: $FRONTEND_URL"
+echo "Job Name: $JOB_NAME"
 
 # ⚠️ VERIFICACIÓN POST-DEPLOY (CRÍTICO para Managed Identity)
 # Verificar que el backend tenga los env vars CORRECTOS (NO secrets)
@@ -453,7 +462,15 @@ az deployment group create \
     providerName="entraid" \
   --name "easyauth"
 
+export TOKEN_STORE_SAS=$(az deployment group show -g $RG \
+  --name "easyauth" \
+  --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
+
+az keyvault secret set --vault-name $KV_NAME \
+  --name token-store-sas \
+  --file <(echo -n "$TOKEN_STORE_SAS")
 # Reiniciar frontend para que lea la nueva configuración de auth
+
 REVISION=$(az containerapp revision list \
   --name ca-weather-fe-dev \
   --resource-group $RG \
@@ -505,44 +522,12 @@ open https://$FRONTEND_URL
 # Después de login: ver dashboard, DLQ manager, health page
 ```
 
-### 8.2 Test Change Feed POC
+### 8.2 Validación desde la UI
 
-```bash
-# 1. Crear documento de prueba en Cosmos
-az cosmosdb sql container item create \
-  --account-name $COSMOS_ACCOUNT \
-  --database-name change-feed-poc \
-  --container-name personas \
-  --resource-group $RG \
-  --partition-key-value "test-001" \
-  --body '{
-    "id": "test-001",
-    "nombre": "Juan",
-    "apellido": "Pérez",
-    "email": "juan@example.com",
-    "edad": 30,
-    "ciudad": "Buenos Aires",
-    "updatedAt": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-  }'
-
-# 2. Ver logs de ChangeFeedWorker (debe procesar el documento)
-az containerapp logs show \
-# 2. Ver logs de ChangeFeedWorker (esperar ~30 segundos)
-export CHANGEFEED_WORKER_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.changeFeedWorkerAppName.value' -o tsv)
-
-az containerapp logs show \
-  --name $CHANGEFEED_WORKER_NAME \
-  --resource-group $RG \
-  --tail 50
-
-# Buscar: "Processing 1 personas from Change Feed"
-# Buscar: "Inserted new Persona test-001 to SQL"
-
-# 3. Test backend endpoints (CON autenticación - usar browser o Postman con token)
-# GET https://$BACKEND_URL/api/cosmos/personas
-# GET https://$BACKEND_URL/api/sync/personas
-# GET https://$BACKEND_URL/api/dashboard/changefeed
-```
+1. **Dashboard** → Verificar contadores de mensajes y jobs ejecutados
+2. **Change Feed** → Tab "Cosmos Editor": crear/editar persona → Tab "SQL Sync": verificar que aparece sincronizada (~15-20s)
+3. **Health** → Todos los servicios en verde
+4. **Scheduler** → Ver Container Jobs y su frecuencia CRON
 
 ---
 
@@ -550,6 +535,7 @@ az containerapp logs show \
 
 Si llegaste aquí, tenés deployed:
 - ✅ Backend + Frontend + 3 Workers
+- ✅ Container Job (WeatherEnqueuer) con CRON schedule
 - ✅ SQL Database con managed identity + migrations
 - ✅ Cosmos DB con Change Feed POC
 - ✅ Easy Auth con Entra ID
@@ -566,130 +552,43 @@ Si llegaste aquí, tenés deployed:
 ---
 
 ## Anexo A: Crear App Registrations desde cero (si no existen)
-# 1. Frontend App Registration
-#    - Name: "Weather App Frontend - Dev"
-#    - Redirect URI: https://<frontend-fqdn>/.auth/login/aad/callback
-#    - Implicit: ID tokens
-#    - API permissions: User.Read
-#    - Generate client secret → save as $FRONTEND_CLIENT_SECRET
 
-# 2. Backend App Registration
-#    - Name: "Weather App Backend - Dev"
-#    - Expose an API: api://weather-backend-dev
-#    - Scope: Weather.Read
-#    - API permissions: add frontend app as authorized client
-#    - App Roles: Admin, User
-#    - Generate client secret → save as $BACKEND_CLIENT_SECRET
-```
+**1. Frontend App Registration**
+- Name: "Weather App Frontend - Dev"
+- Redirect URI: `https://<frontend-fqdn>/.auth/login/aad/callback`
+- Implicit: ID tokens
+- API permissions: User.Read
+- Generate client secret → guardar como `auth-client-secret-frontend` en Key Vault
 
-### 6.2 Guardar secrets en Key Vault
+**2. Backend App Registration**
+- Name: "Weather App Backend - Dev"
+- Expose an API: `api://weather-backend-dev`
+- Scope: Weather.Read
+- API permissions: add frontend app as authorized client
+- App Roles: Admin, User
+- Generate client secret → guardar como `auth-client-secret-backend` en Key Vault
 
 ```bash
-export FRONTEND_CLIENT_ID="<frontend-app-id>"
-export FRONTEND_CLIENT_SECRET="<frontend-client-secret>"
-export BACKEND_CLIENT_ID="<backend-app-id>"
-export BACKEND_CLIENT_SECRET="<backend-client-secret>"
-
-# Guardar en Key Vault
+# Guardar secrets en Key Vault
 az keyvault secret set --vault-name $KV_NAME \
   --name auth-client-secret-frontend \
-  --value "$FRONTEND_CLIENT_SECRET"
+  --value "<frontend-client-secret>"
 
 az keyvault secret set --vault-name $KV_NAME \
   --name auth-client-secret-backend \
-  --value "$BACKEND_CLIENT_SECRET"
-```
+  --value "<backend-client-secret>"
 
-### 6.3 Deploy Easy Auth config
-
-```bash
+# Deploy Easy Auth config
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/easyauth.bicep \
   --parameters \
     backendAppName="ca-${WORKLOAD}-be-${ENV}" \
     frontendAppName="ca-${WORKLOAD}-fe-${ENV}" \
-    backendClientId=$BACKEND_CLIENT_ID \
-    frontendClientId=$FRONTEND_CLIENT_ID \
+    backendClientId="<backend-app-id>" \
+    frontendClientId="<frontend-app-id>" \
     keyVaultName=$KV_NAME \
   --name "easyauth-$(date +%s)"
-```
-
----
-
-## Paso 8: Validar Change Feed POC End-to-End
-
-### 8.1 Backend Health
-
-```bash
-curl $BACKEND_URL/health
-# Esperar: {"status":"healthy","timestamp":"..."}
-```
-
-### 8.2 Service Bus — Enviar mensajes de prueba
-
-```bash
-# 1. Obtener namespace FQDN
-export SB_NS=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.serviceBusNamespaceFqdn.value' -o tsv)
-
-echo "Service Bus Namespace: $SB_NS"
-
-# 2. Asignar rol "Azure Service Bus Data Sender" a tu usuario (necesario para enviar mensajes)
-az role assignment create \
-  --assignee $(az ad signed-in-user show --query id -o tsv) \
-  --role "Azure Service Bus Data Sender" \
-  --scope $(az servicebus namespace show -g $RG --name $(echo $SB_NS | cut -d'.' -f1) --query id -o tsv)
-
-echo "✅ Rol asignado. Esperar ~60 segundos para propagación RBAC..."
-sleep 60
-
-# 3. Enviar 100 mensajes de prueba a la cola weather-jobs
-cd src/tools/ServiceBusEnqueuer
-dotnet run -- --namespace $SB_NS --queue weather-jobs --count 100
-
-# Verificar que el WeatherWorker procesa los mensajes (logs en Azure Portal o az containerapp logs)
-```
-
-### 8.3 Dashboard
-
-```bash
-# Abrir en navegador (autenticarse con Entra ID)
-open $FRONTEND_URL
-```
-
-### 8.4 Cosmos DB — Crear documento de prueba y verificar Change Feed
-
-```bash
-# 1. Asignar rol "Cosmos DB Built-in Data Contributor" a tu usuario (necesario para escribir documentos)
-export COSMOS_ACCOUNT=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.cosmosAccountName.value' -o tsv)
-
-az cosmosdb sql role assignment create \
-  --account-name $COSMOS_ACCOUNT \
-  --resource-group $RG \
-  --scope "/" \
-  --principal-id $(az ad signed-in-user show --query id -o tsv) \
-  --role-definition-id "00000000-0000-0000-0000-000000000002"
-
-echo "✅ Rol asignado. Esperar ~60 segundos para propagación RBAC..."
-sleep 60
-
-# 2. Crear documento de prueba en container "personas"
-# Usar Azure Portal → Cosmos DB → Data Explorer → personas → New Item
-# O usar REST API con Managed Identity (ejemplo en docs/change-feed-poc.md)
-
-# 3. Verificar que ChangeFeedWorker procesa el cambio:
-# - Logs del ChangeFeedWorker (az containerapp logs show -n ca-changefeed-worker-dev -g $RG)
-# - DashboardWorker recibe evento y actualiza SQL (ver tabla ChangeFeedCounters)
-# - Dashboard muestra contador incrementado en página "Change Feed"
-
-# 4. Listar containers
-az cosmosdb sql container list \
-  --account-name $COSMOS_ACCOUNT \
-  --database-name dashboard-poc \
-  --resource-group $RG \
-  --query "[].id" -o table
 ```
 
 ---
@@ -933,28 +832,6 @@ echo "  - Key Vault secrets: 3 (appinsights-connection-string, auth-client-secre
 ```
 
 ---
-  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
-
-# Ver roles
-az role assignment list \
-  --assignee $(az identity show -n $BACKEND_IDENTITY_NAME -g $RG --query principalId -o tsv) \
-  --scope $(az cosmosdb show -n $COSMOS_ACCOUNT -g $RG --query id -o tsv) \
-  --query "[].{Role:roleDefinitionName}" -o table
-```
-
-Si NO tiene rol, redeploy la infraestructura con `deployCosmosDB=true` (el Bicep asigna el rol automáticamente).
-
----
-   ```bash
-   az rest --method GET --url "/subscriptions/<sub-id>/resourceGroups/$RG/providers/Microsoft.App/containerApps/ca-weather-be-dev/authConfigs/current?api-version=2023-05-01" \
-     --query '{enabled: properties.platform.enabled, clientId: properties.identityProviders.azureActiveDirectory.registration.clientId}'
-   ```
-
-2. Si `enabled: null`, ejecutar Paso 7 completo (Deploy Easy Auth)
-
-3. **Cerrar sesión y volver a autenticarse** (el accessToken se genera en el login, no se puede renovar sin re-autenticar)
-
----
 
 ## Cleanup (viernes al final del día)
 
@@ -965,17 +842,6 @@ az group delete --name $RG --yes --no-wait
 # Verificar que se borró
 az group show --name $RG
 # Esperar: ResourceGroupNotFound
-```
-
----
-
-## Re-deploy completo (lunes)
-
-```bash
-# 1. Copiar este archivo completo
-# 2. Ejecutar paso 1 → paso 7 en secuencia
-# 3. Tiempo estimado: 20-30 minutos
-# 4. Al final tendrás TODO deployado (base + workers + dashboard + Cosmos)
 ```
 
 ---
@@ -999,4 +865,23 @@ az containerapp update \
   --resource-group $RG \
   --image ${ACR_NAME}.azurecr.io/dashboard-worker:latest \
   --revision-suffix "dw-$(date +%s)"
+
+# Re-build y re-deploy Container Job (WeatherEnqueuer)
+az acr build --registry $ACR_NAME \
+  --image weather-enqueuer:latest \
+  --file src/jobs/WeatherEnqueuer/Dockerfile \
+  src/jobs/WeatherEnqueuer \
+  --no-logs
+
+az containerapp job update \
+  --name ca-weather-enqueuer-dev \
+  --resource-group $RG \
+  --image ${ACR_NAME}.azurecr.io/weather-enqueuer:latest
+
+# Ver ejecuciones del Container Job
+az containerapp job execution list \
+  --name ca-weather-enqueuer-dev \
+  --resource-group $RG \
+  --query "[].{Name:name, Status:properties.status, StartTime:properties.startTime}" \
+  -o table
 ```
