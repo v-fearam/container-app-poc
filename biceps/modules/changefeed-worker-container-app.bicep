@@ -90,11 +90,6 @@ resource changeFeedWorkerApp 'Microsoft.App/containerApps@2024-10-02-preview' = 
       ]
       secrets: !empty(keyVaultUri) ? [
         {
-          name: 'sql-connection-string'
-          keyVaultUrl: '${keyVaultUri}secrets/sql-connection-string'
-          identity: managedIdentityId
-        }
-        {
           name: 'appinsights-connection-string'
           keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
           identity: managedIdentityId
@@ -125,11 +120,8 @@ resource changeFeedWorkerApp 'Microsoft.App/containerApps@2024-10-02-preview' = 
             // Managed Identity
             { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
             
-            // SQL connection (from Key Vault or direct)
-            !empty(keyVaultUri) ? {
-              name: 'Sql__ConnectionString'
-              secretRef: 'sql-connection-string'
-            } : {
+            // SQL connection (direct value — uses Managed Identity, no credentials)
+            {
               name: 'Sql__ConnectionString'
               value: sqlConnectionString
             }

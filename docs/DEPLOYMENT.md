@@ -37,6 +37,8 @@
 
 ## Variables globales
 
+⚠️ **CRÍTICO:** Ejecutar PRIMERO antes de cualquier Paso. Estas variables son necesarias en TODOS los pasos.
+
 ```bash
 # Configuración base
 export RG="rg-far-container-app-easyauth"
@@ -45,15 +47,34 @@ export WORKLOAD="weather"
 export ENV="dev"
 
 # Tu Entra ID admin (obtenido automáticamente desde az cli)
-export SQL_ADMIN_LOGIN=$(az account show --query user.name -o tsv)
-export SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+export SQL_ADMIN_LOGIN=$(az account show --query user.name -o tsv | tr -d '[:space:]')
+export SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv | tr -d '[:space:]')
 ```
+
+**Verificar que las variables están seteadas:**
+```bash
+echo "RG: $RG"
+echo "LOCATION: $LOCATION"
+echo "WORKLOAD: $WORKLOAD"
+echo "ENV: $ENV"
+echo "SQL_ADMIN_LOGIN: $SQL_ADMIN_LOGIN"
+echo "SQL_ADMIN_OBJECT_ID: $SQL_ADMIN_OBJECT_ID"
+# Todos deben mostrar valores (no vacíos)
+# SQL_ADMIN_OBJECT_ID debe ser un GUID limpio (sin ~ ni espacios al final)
+```
+
+Si aparecen vacíos, volver a ejecutar los comandos de "Variables globales" arriba.
 
 ---
 
 ## Paso 1: Deploy infraestructura base (sin Container Apps)
 
+**Prerequisito:** Haber ejecutado la sección "Variables globales" arriba.
+
 ```bash
+# Verificar que variables están seteadas (si aparecen vacíos, ejecutar Variables globales primero)
+echo "RG: $RG" && echo "LOCATION: $LOCATION"
+
 # Crear resource group (si no existe)
 az group create --name $RG --location $LOCATION
 
@@ -69,7 +90,7 @@ az deployment group create \
     deployWorker=false \
     deployDashboard=false \
     deployCosmosDB=false \
-  --name "base-infra-$(date +%s)"
+  --name "main"
 
 # Outputs
 export ACR_NAME=$(az deployment group show -g $RG --name main --query 'properties.outputs.acrName.value' -o tsv)
@@ -95,7 +116,7 @@ echo "✅ Rol asignado y propagado"
 
 ## Paso 2: Configurar Easy Auth secrets en Key Vault
 
-⚠️ **CRÍTICO:** Los Container Apps (frontend y backend) referencian estos secrets desde Key Vault. Si no existen, el deployment de Container Apps (Paso 6) va a **fallar** o los apps no van a arrancar.
+⚠️ **CRÍTICO:** Los Container Apps (frontend y backend) referencian estos secrets desde Key Vault. Si no existen, el deployment de Container Apps (Paso 5) va a **fallar** o los apps no van a arrancar.
 
 ```bash
 # App Registrations (REUTILIZAR las existentes del ambiente actual)
@@ -111,7 +132,7 @@ export FRONTEND_CLIENT_SECRET="<value-del-portal>"
 # Backend App Registration → Certificates & secrets → New client secret → copiar value  
 export BACKEND_CLIENT_SECRET="<value-del-portal>"
 
-# Guardar secrets en Key Vault (REQUERIDO ANTES del Paso 6)
+# Guardar secrets en Key Vault (REQUERIDO ANTES del Paso 5)
 az keyvault secret set \
   --vault-name $KV_NAME \
   --name auth-client-secret-frontend \
@@ -204,108 +225,14 @@ echo "Cosmos Endpoint: $COSMOS_ENDPOINT"
 
 ---
 
-## Paso 5: Configurar SQL Database (User + Migrations)
+## Paso 5: Deploy Container Apps (Backend + Frontend + Workers)
 
-⚠️ **CRÍTICO:** SQL Database necesita usuarios para las managed identities (Worker Y Backend) antes de que los apps puedan conectarse. Sin esto: `Login failed for user '<token-identified principal>'` error.
-
-### 5.1 Crear usuarios de managed identity en SQL
+**Prerequisito:** Haber completado Paso 1-4 y ejecutado Variables globales.
 
 ```bash
-# Obtener nombres de las managed identities del deployment
-export WORKER_IDENTITY_NAME=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.workerIdentityName.value' -o tsv)
+# Verificar que variables están seteadas
+echo "RG: $RG" && echo "ACR_NAME: $ACR_NAME"
 
-export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
-  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
-
-export SQL_SERVER=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
-
-export SQL_DB=$(az deployment group show -g $RG --name main \
-  --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
-
-echo "Worker identity: $WORKER_IDENTITY_NAME"
-echo "Backend identity: $BACKEND_IDENTITY_NAME"
-echo "SQL Server: $SQL_SERVER"
-echo "Database: $SQL_DB"
-
-# Imprimir el T-SQL a ejecutar (con los nombres reales de las identities)
-echo ""
-echo "================================================================================"
-echo "EJECUTAR EN AZURE PORTAL → SQL Database → Query editor:"
-echo "================================================================================"
-echo ""
-echo "-- 1. Crear usuario para WORKER identity (DashboardWorker, WeatherWorker, ChangeFeedWorker):"
-echo "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
-echo "ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME];"
-echo "ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
-echo ""
-echo "-- 2. Crear usuario para BACKEND identity (ca-weather-be-dev):"
-echo "CREATE USER [$BACKEND_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
-echo "ALTER ROLE db_datareader ADD MEMBER [$BACKEND_IDENTITY_NAME];"
-echo "ALTER ROLE db_datawriter ADD MEMBER [$BACKEND_IDENTITY_NAME];"
-echo ""
-echo "================================================================================"
-```
-
-**Cómo ejecutarlo:** 
-1. Abrir [Azure Portal](https://portal.azure.com) → SQL Database `dashboard-poc` → **Query editor**
-2. Autenticarse con **Entra ID** (tu usuario admin)
-3. Copiar y pegar el T-SQL de arriba (ambos bloques: worker Y backend)
-4. Ejecutar (se ejecutan juntos sin problema)
-
-**Explicación:** Bicep puede asignar roles RBAC de Azure, pero **NO** puede crear usuarios SQL dentro de la database. Esto es un paso manual obligatorio (Gotcha #7).
-
-### 5.2 Correr EF Core migrations
-
-```bash
-# Opción 1: Desde local (requiere firewall rule para tu IP + connection string)
-cd src/worker/DashboardWorker
-
-# Agregar tu IP al firewall de SQL Server
-MY_IP=$(curl -s ifconfig.me)
-az sql server firewall-rule create \
-  --resource-group $RG \
-  --server $(echo $SQL_SERVER | cut -d'.' -f1) \
-  --name AllowMyIP \
-  --start-ip-address $MY_IP \
-  --end-ip-address $MY_IP
-
-# Connection string con tu Entra ID admin
-export ConnectionStrings__DefaultConnection="Server=$SQL_SERVER;Database=$SQL_DB;Authentication=Active Directory Default;TrustServerCertificate=True"
-
-# Instalar dotnet-ef tool (si no está instalado)
-dotnet tool install --global dotnet-ef
-# O actualizar si ya existe:
-# dotnet tool update --global dotnet-ef
-
-# Asegurarse que ~/.dotnet/tools está en PATH (común en WSL)
-export PATH="$PATH:$HOME/.dotnet/tools"
-
-# Correr migrations
-dotnet ef database update --context DashboardDbContext
-
-# Remover firewall rule (opcional, por seguridad)
-az sql server firewall-rule delete \
-  --resource-group $RG \
-  --server $(echo $SQL_SERVER | cut -d'.' -f1) \
-  --name AllowMyIP
-
-# Opción 2: Desde Azure Portal SQL Query Editor (manual)
-# Portal → SQL Database dashboard-poc → Query editor → autenticarse con Entra ID
-# Ejecutar el siguiente script (crea todas las tablas necesarias):
-# → Copiar y pegar contenido de: sql/003-changefeed-tables.sql
-```
-
-**Migrations incluidas:**
-- Initial: QueueCounters table
-- AddChangeFeedTables: PersonasSync + ChangeFeedCounters tables
-
----
-
-## Paso 6: Deploy Container Apps (Backend + Frontend + Workers)
-
-```bash
 # Deploy: Backend + Frontend + WeatherWorker + DashboardWorker + ChangeFeedWorker
 # IMPORTANTE: pasar todos los flags deploy* para que las condiciones del Bicep sean true
 az deployment group create \
@@ -348,13 +275,13 @@ az containerapp show -n ca-weather-be-dev -g $RG \
   --query "properties.template.containers[0].env[?contains(name, 'Cosmos') || contains(name, 'SQL')].{name:name, value:value, secretRef:secretRef}" \
   -o table
 
-# 3. Secrets en Key Vault (deberían ser solo 3: appinsights + 2 auth secrets)
+# 3. Secrets en Key Vault (deberían ser solo 4: appinsights + 2 auth secrets + token-store-sas)
 echo ""
-echo "Secrets en Key Vault (esperado: 3):"
+echo "Secrets en Key Vault (esperado: 4):"
 az keyvault secret list --vault-name $KV_NAME --query "[].name" -o tsv
 
 echo ""
-echo "✅ Si hay más de 2 secrets en backend O más de 3 en Key Vault, ver sección Troubleshooting"
+echo "✅ Si hay más de 2 secrets en backend O más de 4 en Key Vault, ver sección Troubleshooting"
 ```
 
 **Configuración esperada después del deploy:**
@@ -363,12 +290,119 @@ echo "✅ Si hay más de 2 secrets en backend O más de 3 en Key Vault, ver secc
 |------------|---------------|----------|
 | **Backend secrets** | `appinsights-connection-string`, `microsoft-provider-authentication-secret` | ✅ 2 secrets |
 | **Backend env vars** | `Cosmos__Endpoint` (value), `SQL_CONNECTION_STRING` (value), `ServiceBus__Namespace` (value) | ✅ env vars con valor directo |
-| **Key Vault secrets** | `appinsights-connection-string`, `auth-client-secret-backend`, `auth-client-secret-frontend` | ✅ 3 secrets |
+| **Key Vault secrets** | `appinsights-connection-string`, `auth-client-secret-backend`, `auth-client-secret-frontend`, `token-store-sas` | ✅ 4 secrets |
 
 **⚠️ ANTI-PATTERNS (si ves esto, el deploy está mal):**
 - ❌ `cosmos-connection-string` o `sql-connection-string` en Key Vault
 - ❌ `COSMOS_CONNECTION_STRING` env var en backend (debería ser `Cosmos__Endpoint`)
 - ❌ Backend env vars con `secretRef` para Cosmos o SQL (deben ser `value`)
+
+---
+
+## Paso 6: Configurar SQL Database (User + Migrations)
+
+⚠️ **CRÍTICO:** SQL Database necesita usuarios para las managed identities (Worker Y Backend) antes de que los apps puedan conectarse. Sin esto: `Login failed for user '<token-identified principal>'` error.
+
+**Prerequisito:** Haber completado Paso 5 (Container Apps deployados — las managed identities ya existen).
+
+### 6.0 Verificar y setear variables
+
+```bash
+# Verificar que $RG está seteada (si está vacía, ver sección Variables globales)
+echo "RG: $RG"
+
+# Si RG está vacío, ejecutar:
+export RG="rg-far-container-app-easyauth"
+export LOCATION="eastus2"
+export WORKLOAD="weather"
+export ENV="dev"
+export SQL_ADMIN_LOGIN=$(az account show --query user.name -o tsv | tr -d '[:space:]')
+export SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv | tr -d '[:space:]')
+```
+
+### 6.1 Crear usuarios de managed identity en SQL
+
+```bash
+# Obtener nombres de las managed identities
+export WORKER_IDENTITY_NAME=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.workerIdentityName.value' -o tsv)
+
+# Backend identity: obtener del Container App (creado en Paso 5)
+export BACKEND_IDENTITY_NAME=$(az containerapp show -n ca-weather-be-dev -g $RG \
+  --query 'identity.userAssignedIdentities' -o json | jq -r 'keys[0]' | xargs basename)
+
+export SQL_SERVER=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlServerFqdn.value' -o tsv | cut -d'.' -f1)
+
+export SQL_DB=$(az deployment group show -g $RG --name main \
+  --query 'properties.outputs.sqlDatabaseName.value' -o tsv)
+
+echo "Worker identity: $WORKER_IDENTITY_NAME"
+echo "Backend identity: $BACKEND_IDENTITY_NAME"
+echo "SQL Server: $SQL_SERVER"
+echo "Database: $SQL_DB"
+
+echo ""
+echo "================================================================================"
+echo "Permitir tu IP en el firewall del SQL Server"
+echo "================================================================================"
+echo ""
+echo "Tu IP pública: $(curl -s ifconfig.me)"
+echo ""
+echo "PASOS EN AZURE PORTAL:"
+echo "1. Abrir https://portal.azure.com"
+echo "2. Buscar SQL Server: $SQL_SERVER"
+echo "3. Ir a: Seguridad → Networking → Firewall rules"
+echo "4. Clickear '+ Add your client IP'"
+echo "   (esto crea una regla con tu IP pública actual)"
+echo "5. Clickear 'Save'"
+echo ""
+echo "================================================================================"
+
+echo ""
+echo "================================================================================"
+echo "EJECUTAR EN AZURE PORTAL → SQL Database → Query editor:"
+echo "================================================================================"
+echo ""
+echo "-- 1. Crear usuario para WORKER identity (DashboardWorker, WeatherWorker, ChangeFeedWorker):"
+echo "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo ""
+echo "-- 2. Crear usuario para BACKEND identity (ca-weather-be-dev):"
+echo "CREATE USER [$BACKEND_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
+echo "ALTER ROLE db_datareader ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+echo "ALTER ROLE db_datawriter ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+echo ""
+echo "================================================================================"
+```
+
+**Cómo ejecutarlo:** 
+1. Abrir [Azure Portal](https://portal.azure.com) → SQL Database `dashboard-poc` → **Query editor**
+2. Autenticarse con **Entra ID** (tu usuario admin) — ya puedes acceder porque tu IP fue agregada al firewall arriba
+3. Copiar y pegar el T-SQL de arriba (ambos bloques: worker Y backend)
+4. Ejecutar (se ejecutan juntos sin problema)
+
+**Explicación:** Bicep puede asignar roles RBAC de Azure, pero **NO** puede crear usuarios SQL dentro de la database. Esto es un paso manual obligatorio (Gotcha #7).
+
+### 6.2 Crear tablas (SQL scripts manuales)
+
+En el mismo **Query editor** del portal (ya tenés la sesión abierta del paso anterior):
+
+1. Copiar y pegar el contenido de cada archivo SQL **en orden**:
+   - `sql/001-dashboard-schema.sql`
+   - `sql/002-add-discarded-count.sql`
+   - `sql/003-changefeed-tables.sql`
+   - `sql/003_JobExecutions.sql`
+
+2. Ejecutar cada uno (Run)
+
+**Verificar que las tablas existen:**
+```sql
+SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';
+```
+
+Tablas esperadas: `QueueCounters`, `ComponentHealth`, `JobExecutions`, `PersonasSync`, `ChangeFeedCounters`
 
 ---
 
@@ -379,6 +413,8 @@ echo "Frontend: https://$FRONTEND_URL"
 ---
 
 ## Paso 7: Deploy Easy Auth (Entra ID OIDC)
+
+**Prerequisito:** Haber completado Paso 1-6 y ejecutado Variables globales.
 
 ⚠️ **CRÍTICO:** Este paso es **obligatorio**. Sin Easy Auth configurado, el backend devolverá **401 - No autenticado** en todos los endpoints aunque el frontend muestre "Autenticado".
 
@@ -404,18 +440,6 @@ echo "Frontend: https://$FRONTEND_URL"
 # Este proyecto usa CIAM (cognitomigration):
 export OIDC_WELL_KNOWN_URL="https://cognitomigration.ciamlogin.com/$TENANT_ID/v2.0/.well-known/openid-configuration"
 
-# IMPORTANTE: inyectar client secrets en los Container Apps ANTES del deploy.
-# El Bicep referencia "microsoft-provider-authentication-secret" por nombre pero no lo crea.
-az containerapp secret set \
-  --name ca-weather-fe-dev \
-  --resource-group $RG \
-  --secrets "microsoft-provider-authentication-secret=$FRONTEND_CLIENT_SECRET"
-
-az containerapp secret set \
-  --name ca-weather-be-dev \
-  --resource-group $RG \
-  --secrets "microsoft-provider-authentication-secret=$BACKEND_CLIENT_SECRET"
-
 # Deploy Easy Auth (nombre fijo "easyauth" para poder leer outputs después)
 az deployment group create \
   --resource-group $RG \
@@ -429,16 +453,7 @@ az deployment group create \
     providerName="entraid" \
   --name "easyauth"
 
-# Actualizar token-store-sas en Key Vault con el valor real generado por el deployment
-export TOKEN_STORE_SAS=$(az deployment group show -g $RG \
-  --name "easyauth" \
-  --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
-
-az keyvault secret set --vault-name $KV_NAME \
-  --name token-store-sas \
-  --value "$TOKEN_STORE_SAS"
-
-# Reiniciar frontend para que lea el nuevo token-store-sas
+# Reiniciar frontend para que lea la nueva configuración de auth
 REVISION=$(az containerapp revision list \
   --name ca-weather-fe-dev \
   --resource-group $RG \
@@ -459,9 +474,15 @@ az deployment group show -g $RG --name "easyauth" \
 
 ## Paso 8: Validar Change Feed POC End-to-End
 
-### 8.0 Asignar rol Service Bus Data Sender a tu usuario (para el enqueuer local)
+**Prerequisito:** Haber completado Paso 1-7 y ejecutado Variables globales.
+
+### 8.0 Verificar variables y asignar rol Service Bus Data Sender
 
 ```bash
+# Verificar que variables están seteadas
+echo "RG: $RG" && echo "SB_NAMESPACE: $SB_NAMESPACE"
+
+# Asignar rol
 az role assignment create \
   --assignee $(az ad signed-in-user show --query id -o tsv) \
   --role "Azure Service Bus Data Sender" \
@@ -726,7 +747,7 @@ az deployment group create \
 **Causa:** Falta el paso manual de crear usuarios SQL para las managed identities (backend y/o worker).
 
 **Solución:**
-Ejecutar **Paso 5.1** completo para crear usuarios SQL:
+Ejecutar **Paso 6.1** completo para crear usuarios SQL:
 ```bash
 export RG="rg-far-container-app-easyauth"
 export WORKER_IDENTITY_NAME=$(az deployment group show -g $RG --name main \

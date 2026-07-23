@@ -81,11 +81,6 @@ resource dashboardWorkerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
       ]
       secrets: !empty(keyVaultUri) ? [
         {
-          name: 'sql-connection-string'
-          keyVaultUrl: '${keyVaultUri}secrets/sql-connection-string'
-          identity: managedIdentityId
-        }
-        {
           name: 'appinsights-connection-string'
           keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
           identity: managedIdentityId
@@ -106,10 +101,7 @@ resource dashboardWorkerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ServiceBus__TopicName', value: topicName }
             { name: 'ServiceBus__SubscriptionName', value: subscriptionName }
             { name: 'AZURE_CLIENT_ID', value: managedIdentityClientId }
-            !empty(keyVaultUri) ? {
-              name: 'Sql__ConnectionString'
-              secretRef: 'sql-connection-string'
-            } : {
+            {
               name: 'Sql__ConnectionString'
               value: sqlConnectionString
             }

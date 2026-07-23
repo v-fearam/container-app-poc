@@ -358,7 +358,6 @@ module weatherEnqueuerJob 'modules/container-app-job.bicep' = if (deployJob && d
     weatherQueueName: 'weather-queue'
     dashboardTopicName: 'nd-dashboard-events'
     messageCount: jobMessageCount
-    appInsightsConnectionString: appInsights.outputs.connectionString
     keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
     cronExpression: jobCronExpression
     replicaTimeout: 300    // 5 minutes max execution time

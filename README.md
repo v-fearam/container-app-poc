@@ -1095,6 +1095,6 @@ Crear un workbook con estos paneles:
 | [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) | Diseño Worker + KEDA + Service Bus: arquitectura, DLQ, scaling |
 | [docs/dashboard-poc.md](docs/dashboard-poc.md) | Dashboard POC: diseño completo, arquitectura, implementación paso a paso |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Desarrollo local |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Detalles de deployment |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Detalles de deployment |
 
 

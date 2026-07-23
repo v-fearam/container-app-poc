@@ -36,9 +36,6 @@ param vertical string = 'Vertical1'
 @description('Number of messages to enqueue per execution')
 param messageCount string = '50'
 
-@description('App Insights connection string')
-param appInsightsConnectionString string = ''
-
 @description('Key Vault URI for secrets (if provided, appInsightsConnectionString from KV is used)')
 param keyVaultUri string = ''
 

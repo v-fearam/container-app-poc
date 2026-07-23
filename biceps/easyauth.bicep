@@ -138,7 +138,7 @@ resource backendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' 
         registration: {
           clientId: backendClientId
           clientSecretSettingName: 'microsoft-provider-authentication-secret'
-          openIdIssuer: '${split(oidcWellKnownUrl, '/.well-known')[0]}'
+          openIdIssuer: split(oidcWellKnownUrl, '/.well-known')[0]
         }
         validation: {
           allowedAudiences: [backendClientId]
