@@ -1042,7 +1042,7 @@ O desde Portal: Cosmos DB → Database → personas → Settings → Time to Liv
    - Vacío = no expira
    - Valor numérico = expira en N segundos (ej: 60 = 1 minuto, 3600 = 1 hora)
 3. El badge naranja en la tabla muestra el TTL activo
-4. Después de expirar, Cosmos elimina el documento automáticamente (el Change Feed captura el delete)
+4. Después de expirar, Cosmos elimina el documento automáticamente (el Change Feed en modo LatestVersion NO captura deletes — solo inserts y updates)
 
 ### Verificar TTL en documentos
 

@@ -15,11 +15,12 @@ Esta POC valida que se puede construir **una solución distribuida que se opera 
 | 5 | **├─ Worker de Negocio** | Un proceso que despierta cuando hay mensajes en la queue (KEDA scale 0→N), procesa lógica de negocio, y vuelve a escalar a cero. Reemplaza Windows Services / Hangfire consumers. |
 | 6 | **├─ Workers Internos** | Procesos que mantienen la solución operativa: (a) el que procesa eventos para informar al dashboard qué está pasando en el sistema distribuido, (b) el que implementa Change Feed Processor para detectar cambios en Cosmos DB. |
 | 7 | **├─ Container Job (CRON)** | Algo que despierta, ejecuta y termina — por definición no es una app. Reemplaza tareas croneadas de Hangfire. Sirve para despertar generadores, ejecutar batch, y morir. Schedule editable desde UI. |
-| 8 | **Cosmos DB** | Base NoSQL con TTL para que los documentos desaparezcan automáticamente (ej: 45 días). Change Feed para detectar solo inserts y modificaciones en tiempo real — patrón que servirá para popular el modelo estrella desde eventos de cambio. |
+| 8 | **Cosmos DB** | Base NoSQL con TTL para que los documentos desaparezcan automáticamente (ej: 45 días). Change Feed (modo LatestVersion) para detectar solo inserts y modificaciones en tiempo real — patrón que servirá para popular el modelo estrella desde eventos de cambio. No captura deletes (requiere modo AllVersionsAndDeletes). |
 | 9 | **Dashboard Operativo Unificado** | Que en un contexto de muchos recursos Azure con cada componente corriendo como pod independiente, el dashboard da la noción de que es **un todo, una sola aplicación**. Se puede construir algo orientado al negocio para saber qué está pasando y poder operar la solución distribuida desde un solo lugar. |
-| 10 | **Managed Identity (Zero Secrets)** | Todos los componentes se autentican entre sí sin connection strings ni passwords. Service Bus, Cosmos DB, SQL, Key Vault, ACR — todo via RBAC + User Assigned Managed Identity. |
-| 11 | **Infrastructure as Code** | Todo reproducible desde Bicep modular con feature flags. Se puede borrar y recrear el ambiente completo, o deployar incrementalmente solo lo que cambió (`deployCosmosDB=true`, `deployJob=true`, etc.). |
-| 12 | **Observabilidad E2E** | Distributed tracing desde que un mensaje se encola hasta que se refleja en el dashboard. OpenTelemetry + App Insights + KQL. Cada componente distribuido reporta telemetría que se correlaciona en un solo lugar. |
+| 10 | **Key Vault (Secretos Centralizados)** | Los secretos viven únicamente en Key Vault — los Container Apps los referencian via `keyVaultUrl`, nunca los copian. Rotación sin redeploy: actualizar el secret en KV + nueva revisión del Container App. |
+| 11 | **Managed Identity (Zero Secrets)** | Todos los componentes se autentican entre sí sin connection strings ni passwords. Service Bus, Cosmos DB, SQL, Key Vault, ACR — todo via RBAC + User Assigned Managed Identity. |
+| 12 | **Infrastructure as Code** | Todo reproducible desde Bicep modular con feature flags. Se puede borrar y recrear el ambiente completo, o deployar incrementalmente solo lo que cambió (`deployCosmosDB=true`, `deployJob=true`, etc.). |
+| 13 | **Observabilidad E2E** | Distributed tracing desde que un mensaje se encola hasta que se refleja en el dashboard. OpenTelemetry + App Insights + KQL. Cada componente distribuido reporta telemetría que se correlaciona en un solo lugar. |
 
 ## Tags de referencia
 
@@ -168,7 +169,7 @@ graph TB
 2. **Worker Processing:** `WeatherWorker` (KEDA 0→10) → procesa mensaje → publica `MessageProcessed` a topic
 3. **Dashboard Counters:** `DashboardWorker` (KEDA 0→10) → consume eventos → UPSERT en SQL `QueueCounters`
 4. **Change Feed Sync:** UI crea/edita persona en Cosmos → `ChangeFeedWorker` detecta cambio → sync a SQL + publica `ChangeFeedProcessed`
-5. **TTL Auto-Delete:** Documento con `ttl: N` → Cosmos lo borra después de N segundos → Change Feed captura el delete
+5. **TTL Auto-Delete:** Documento con `ttl: N` → Cosmos lo borra automáticamente después de N segundos (el Change Feed en modo LatestVersion no captura deletes — solo inserts y updates)
 6. **Dashboard UI:** Frontend → GET `/api/dashboard/kpi` → muestra contadores + DLQ + job executions en tiempo real
 
 ## Stack
