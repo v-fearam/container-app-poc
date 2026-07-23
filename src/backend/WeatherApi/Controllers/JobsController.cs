@@ -294,9 +294,12 @@ public class JobsController(
                 return NotFound($"Job '{jobName}' not found");
             }
 
-            // Start a new execution
+            // Start a new execution (async, don't wait for completion)
             var execution = await job.Value.StartAsync(Azure.WaitUntil.Started, cancellationToken: ct);
-            var executionName = execution.Value.Name ?? $"{jobName}-manual-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+            
+            // When using WaitUntil.Started, execution.Value is not available yet.
+            // Generate execution name based on timestamp instead.
+            var executionName = $"{jobName}-manual-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
 
             return Ok(new TriggerJobResponse
             {
