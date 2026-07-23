@@ -742,6 +742,41 @@ private async Task ProcessCounter(string type, bool isNew)
 
 ---
 
+### 31. **Azure SDK: WaitUntil.Started vs WaitUntil.Completed**
+
+**Problema:** ARM API operations (Container Apps, Container Jobs, etc.) pueden tardar 30-60 segundos. Usar `WaitUntil.Completed` bloquea el HTTP request hasta que Azure termina.
+
+**Solución:** Usar `WaitUntil.Started` para respuestas rápidas (~2-3s):
+
+```csharp
+// ❌ Bloquea 30-60 segundos (mala UX)
+var updateOp = await job.Value.UpdateAsync(WaitUntil.Completed, patch, ct);
+
+// ✅ Devuelve en 2-3 segundos (Azure continúa en background)
+var updateOp = await job.Value.UpdateAsync(WaitUntil.Started, patch, ct);
+```
+
+**Cuándo usar cada uno:**
+- `WaitUntil.Started`: Updates no críticos, donde la UI puede refrescar después para ver el resultado
+- `WaitUntil.Completed`: Operaciones donde DEBES saber el resultado inmediatamente (e.g., crear recurso + obtener su ID)
+
+**Gotcha:** Con `WaitUntil.Started`, `.Value` NO está disponible. Ejemplo:
+
+```csharp
+var execution = await job.Value.StartAsync(WaitUntil.Started, ct);
+// ❌ FALLA: execution.Value throws "The operation has not completed yet"
+var name = execution.Value.Name;
+
+// ✅ NO accedas a .Value con WaitUntil.Started
+var executionName = $"{jobName}-manual-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+```
+
+**Referencias:**
+- Microsoft Docs: [Async Operations in ARM](https://learn.microsoft.com/azure/azure-resource-manager/management/async-operations)
+- Ver `JobsController.cs` líneas 246 (UpdateSchedule) y 298 (TriggerJob)
+
+---
+
 ## Frontend (React + shadcn/ui)
 
 ### 31. **Runtime config injection con nginx**

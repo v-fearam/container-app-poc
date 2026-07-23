@@ -243,7 +243,9 @@ public class JobsController(
                     }
                 };
                 
-                var updateOp = await job.Value.UpdateAsync(Azure.WaitUntil.Completed, patch, ct);
+                // Use WaitUntil.Started for faster response (2-3s instead of 30-60s)
+                // The update continues in Azure background. Next GET will show updated CRON.
+                var updateOp = await job.Value.UpdateAsync(Azure.WaitUntil.Started, patch, ct);
                 
                 return Ok(new UpdateScheduleResponse
                 {

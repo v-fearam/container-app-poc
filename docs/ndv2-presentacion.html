@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notificaciones Digitales v2 — Hacia una Solución Cloud-Native</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .slide {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 4rem 2rem;
+            position: relative;
+        }
+
+        .slide-content {
+            max-width: 1200px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideIn 0.8s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            color: #667eea;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        h3 {
+            font-size: 1.8rem;
+            color: #764ba2;
+            margin-bottom: 1.5rem;
+        }
+
+        p {
+            font-size: 1.2rem;
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+            color: #555;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: #666;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .card h4 {
+            color: #667eea;
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .card p {
+            font-size: 1rem;
+            color: #444;
+        }
+
+        .highlight {
+            background: #fffbea;
+            border-left: 4px solid #f59e0b;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+        }
+
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .tech-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .comparison-col {
+            padding: 2rem;
+            border-radius: 15px;
+        }
+
+        .old {
+            background: #fee;
+            border: 2px solid #fcc;
+        }
+
+        .new {
+            background: #efe;
+            border: 2px solid #cfc;
+        }
+
+        .comparison-col h4 {
+            margin-bottom: 1rem;
+            font-size: 1.4rem;
+        }
+
+        .old h4 {
+            color: #c53030;
+        }
+
+        .new h4 {
+            color: #38a169;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        ul li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            font-size: 1.1rem;
+            color: #555;
+        }
+
+        ul li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .old ul li:before {
+            content: "✗";
+            color: #c53030;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            font-size: 1rem;
+            margin-top: 2rem;
+        }
+
+        .architecture-diagram {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 15px;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .layer {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .arrow {
+            font-size: 2rem;
+            color: #764ba2;
+            margin: 0.5rem 0;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2rem; }
+            h2 { font-size: 1.8rem; }
+            .comparison { grid-template-columns: 1fr; }
+            .slide-content { padding: 2rem 1.5rem; }
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .benefit-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .benefit-card h4 {
+            color: white;
+            margin-bottom: 0.8rem;
+            font-size: 1.3rem;
+        }
+
+        .benefit-card p {
+            color: rgba(255,255,255,0.95);
+            font-size: 1rem;
+        }
+
+        .metric {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            margin: 1rem 0;
+        }
+
+        .metric-label {
+            text-align: center;
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .scroll-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Slide 1: Portada -->
+    <div class="slide">
+        <div class="slide-content">
+            <h1>Notificaciones Digitales v2</h1>
+            <p class="subtitle">De un motor que quema aceite a una solución cloud-native escalable</p>
+            <div class="metric">7M</div>
+            <p class="metric-label">comunicaciones mensuales</p>
+            <p style="text-align: center; font-size: 1.1rem; color: #888;">
+                POC validada · Arquitectura probada · Listo para producción
+            </p>
+        </div>
+    </div>
+
+    <!-- Slide 2: El Problema -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>¿Por qué necesitamos NDv2?</h2>
+            
+            <div class="highlight">
+                <p style="font-size: 1.3rem; color: #c53030; font-weight: 600; margin-bottom: 0.5rem;">
+                    El sistema actual no puede escalar
+                </p>
+                <p style="margin-bottom: 0;">
+                    Una sola base de datos para todo: eventos, configuración, Hangfire, consultas. Sin depuración programada. Sin escalabilidad horizontal.
+                </p>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h4>🔥 Competencia de Recursos</h4>
+                    <p>2 instancias de Hangfire + API + recolección de eventos, todos compitiendo por las mismas tablas inmensas.</p>
+                </div>
+                <div class="card">
+                    <h4>🚫 Imposible Escalar</h4>
+                    <p>El cuello de botella es la base de datos compartida. Agregar más workers no ayuda.</p>
+                </div>
+                <div class="card">
+                    <h4>🙈 Sin Visibilidad</h4>
+                    <p>Dashboard de Hangfire muestra jobs, no el estado del negocio. No sabemos qué está fallando.</p>
+                </div>
+                <div class="card">
+                    <h4>💣 Bomba de Tiempo</h4>
+                    <p>Se promete más funcionalidad (Huemul, nuevos procesos) sobre un sistema que ya no da más.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 3: La Solución -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>NDv2 App: Container Apps + Recursos PaaS</h2>
+            
+            <p style="text-align: center; font-size: 1.2rem; color: #555; margin-bottom: 2rem;">
+                Un <strong>Container App Environment</strong> (cluster) + recursos externos
+            </p>
+
+            <!-- Container App Environment (cluster) -->
+            <div style="border: 3px solid #667eea; border-radius: 20px; padding: 2rem; background: linear-gradient(135deg, #f5f7ff 0%, #e8ebff 100%); margin-bottom: 2rem;">
+                <h3 style="text-align: center; color: #667eea; margin-bottom: 1.5rem; font-size: 1.5rem;">
+                    🏢 Container App Environment
+                    <span style="font-size: 0.9rem; color: #888; display: block; margin-top: 0.3rem;">El cluster donde viven las aplicaciones dockerizadas</span>
+                </h3>
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+                    <!-- Frontend -->
+                    <div style="background: white; border: 2px solid #3498db; border-radius: 12px; padding: 1.2rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <h4 style="color: #3498db; margin-bottom: 0.5rem; font-size: 1.1rem;">🌐 Frontend (Container App)</h4>
+                        <p style="margin: 0; font-size: 0.9rem; color: #555;">React + nginx · Easy Auth · Escala 1→3</p>
+                    </div>
+
+                    <!-- Backend API -->
+                    <div style="background: white; border: 2px solid #2ecc71; border-radius: 12px; padding: 1.2rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <h4 style="color: #2ecc71; margin-bottom: 0.5rem; font-size: 1.1rem;">🔧 Backend API (Container App)</h4>
+                        <p style="margin: 0; font-size: 0.9rem; color: #555;">.NET 10 Minimal API · Valida y encola · 1→5</p>
+                    </div>
+
+                    <!-- Workers -->
+                    <div style="background: white; border: 2px solid #e74c3c; border-radius: 12px; padding: 1.2rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <h4 style="color: #e74c3c; margin-bottom: 0.5rem; font-size: 1.1rem;">⚙️ Workers (Container Apps + KEDA)</h4>
+                        <p style="margin: 0; font-size: 0.9rem; color: #555;">Procesan colas · Escalan 0→50 automático</p>
+                    </div>
+
+                    <!-- Jobs -->
+                    <div style="background: white; border: 2px solid #f39c12; border-radius: 12px; padding: 1.2rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <h4 style="color: #f39c12; margin-bottom: 0.5rem; font-size: 1.1rem;">⏰ Jobs (Container App Jobs)</h4>
+                        <p style="margin: 0; font-size: 0.9rem; color: #555;">CRON scheduled · Ejecuta y termina · Efímero</p>
+                    </div>
+                </div>
+
+                <p style="text-align: center; margin-top: 1.5rem; font-size: 0.95rem; color: #666;">
+                    ✅ Todas dockerizadas · ✅ Escalan independientemente · ✅ Managed Identity · ✅ Private networking
+                </p>
+            </div>
+
+            <!-- Recursos PaaS externos -->
+            <div>
+                <h3 style="text-align: center; color: #764ba2; margin-bottom: 1.5rem; font-size: 1.3rem;">
+                    📦 Recursos PaaS (externos al cluster)
+                </h3>
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;">
+                    <div style="background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); color: white; padding: 1rem; border-radius: 10px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">🗄️</div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">CosmosDB</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Ejecución</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%); color: white; padding: 1rem; border-radius: 10px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">📊</div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">SQL Server</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Consumo ⭐</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%); color: white; padding: 1rem; border-radius: 10px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">📬</div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">Service Bus</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Queues</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #55efc4 0%, #00b894 100%); color: white; padding: 1rem; border-radius: 10px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">📦</div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">Blob Storage</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Archivos</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #fab1a0 0%, #ff7675 100%); color: white; padding: 1rem; border-radius: 10px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">🔐</div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">Key Vault</div>
+                        <div style="font-size: 0.75rem; opacity: 0.9;">Secrets</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight" style="margin-top: 2rem; background: #e8f5e9; border-left-color: #4caf50;">
+                <p style="font-size: 1.2rem; color: #2e7d32; font-weight: 600; margin-bottom: 0.5rem; text-align: center;">
+                    = NDv2 App
+                </p>
+                <p style="margin-bottom: 0; text-align: center; color: #555; font-size: 1.05rem;">
+                    <strong>Todo esto junto es la aplicación:</strong> un montón de piezas ejecutables que se comunican asincrónicamente a través de queues en la nube.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 4: Separación Ejecución vs Consumo -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Tres Verticales, Tres Capas de Datos</h2>
+            
+            <p style="text-align: center; font-size: 1.2rem; color: #555; margin-bottom: 2rem;">
+                <strong>Genéricos · Negocio · Campañas</strong> — cada vertical completamente aislada
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 2rem 0;">
+                <!-- Configuración -->
+                <div style="background: linear-gradient(135deg, #e1bee7 0%, #ba68c8 100%); padding: 1.8rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                    <h3 style="color: #6a1b9a; text-align: center; margin-bottom: 1.2rem;">⚙️ Configuración</h3>
+                    <div style="background: white; padding: 1.3rem; border-radius: 10px;">
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📝 Templates</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">🔧 Parámetros</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">💾 Stored procedures</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📊 Topes y dominios</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.3); padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; text-align: center;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; font-size: 0.9rem;">Dashboard DB</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #2d3436; font-size: 0.8rem;">Centralizado (3 verticales)</p>
+                    </div>
+                </div>
+
+                <!-- Ejecución -->
+                <div style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); padding: 1.8rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                    <h3 style="color: #d63031; text-align: center; margin-bottom: 1.2rem;">⚡ Ejecución</h3>
+                    <div style="background: white; padding: 1.3rem; border-radius: 10px;">
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📸 Toma "foto" de datos</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📧 Genera y envía</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📡 Recibe eventos</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">⚡ Ejecuta rápido</li>
+                        </ul>
+                    </div>
+                    <div style="background: #fff3cd; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 2px solid #d63031;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; text-align: center; font-size: 0.9rem;">CosmosDB · TTL 45 días</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #636e72; font-size: 0.85rem; text-align: center;">Datos temporales</p>
+                    </div>
+                </div>
+
+                <!-- Consumo -->
+                <div style="background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%); padding: 1.8rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                    <h3 style="color: white; text-align: center; margin-bottom: 1.2rem;">📊 Consumo</h3>
+                    <div style="background: white; padding: 1.3rem; border-radius: 10px;">
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">🔍 Consultas OV/PAC</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📈 Dashboard/reportes</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">⭐ Modelo estrella</li>
+                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">🚫 Nunca infinito</li>
+                        </ul>
+                    </div>
+                    <div style="background: #e3e1fc; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 2px solid white;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; text-align: center; font-size: 0.9rem;">SQL · Particionado por año</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #636e72; font-size: 0.85rem; text-align: center;">Retención 4 años acordada</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verticales separadas -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 2rem 0;">
+                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 1rem; border-radius: 10px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 1.1rem;">Genéricos</p>
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Collection + DB SQL + Config aislados</p>
+                </div>
+                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 1rem; border-radius: 10px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 1.1rem;">Negocio</p>
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Collection + DB SQL + Config aislados</p>
+                </div>
+                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 1rem; border-radius: 10px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 1.1rem;">Campañas</p>
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Collection + DB SQL + Config aislados</p>
+                </div>
+            </div>
+
+            <p style="text-align: center; font-size: 0.95rem; color: #666; margin: 1rem 0;">
+                <em>Infraestructura compartida: 1 CosmosDB (3 collections), 1 SQL Server (3 databases), 1 Dashboard centralizado</em>
+            </p>
+
+            <!-- Change Feed -->
+            <div class="architecture-diagram" style="margin-top: 2rem;">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 2rem; flex-wrap: wrap;">
+                    <div style="background: #fdcb6e; padding: 1.2rem 1.8rem; border-radius: 10px; font-weight: bold; color: #2d3436; font-size: 0.95rem;">
+                        Ejecución<br>(Cosmos 45d)
+                    </div>
+                    <div style="font-size: 1.5rem; color: #764ba2;">
+                        → Change Feed →
+                    </div>
+                    <div style="background: #6c5ce7; padding: 1.2rem 1.8rem; border-radius: 10px; font-weight: bold; color: white; font-size: 0.95rem;">
+                        Consumo<br>(SQL 4 años)
+                    </div>
+                </div>
+                <p style="margin-top: 1rem; font-size: 1rem; color: #555; text-align: center;">
+                    Sincronización automática · Sin polling · Sin batch
+                </p>
+            </div>
+
+            <!-- Base de Negocio -->
+            <div style="background: #d4edda; border: 2px solid #28a745; padding: 1.5rem; border-radius: 15px; margin-top: 2rem; text-align: center;">
+                <h4 style="color: #155724; margin-bottom: 0.5rem; font-size: 1.2rem;">📦 Base de Negocio</h4>
+                <p style="margin: 0; color: #155724; font-size: 1rem;">Datos del AS/400 (Read-Only) · Réplica para no consumir recursos del mainframe</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 5: Tecnologías -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Stack Tecnológico</h2>
+            
+            <div class="tech-stack">
+                <div class="tech-badge">Azure Container Apps</div>
+                <div class="tech-badge">CosmosDB (NoSQL)</div>
+                <div class="tech-badge">Azure SQL (Modelo Estrella)</div>
+                <div class="tech-badge">Service Bus (Standard)</div>
+                <div class="tech-badge">KEDA Autoscaling</div>
+                <div class="tech-badge">.NET 10</div>
+                <div class="tech-badge">Easy Auth (Entra ID)</div>
+                <div class="tech-badge">App Insights</div>
+                <div class="tech-badge">Key Vault</div>
+                <div class="tech-badge">Managed Identity</div>
+                <div class="tech-badge">Blob Storage</div>
+                <div class="tech-badge">Change Feed Processor</div>
+            </div>
+
+            <div class="highlight" style="margin-top: 3rem;">
+                <p style="font-size: 1.2rem; margin-bottom: 0;">
+                    <strong>✅ Todo validado en POC:</strong> Container Apps con Easy Auth, workers con KEDA, Change Feed hacia SQL, Container Jobs programados, dashboard operacional con métricas en tiempo real.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 6: Antes vs Después -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Antes vs Después</h2>
+            
+            <div class="comparison">
+                <div class="comparison-col old">
+                    <h4>❌ NDv1 (Estado Actual)</h4>
+                    <ul>
+                        <li>Una sola base de datos SQL para todo</li>
+                        <li>Hangfire con infraestructura always-on</li>
+                        <li>Sin depuración programada (años de datos)</li>
+                        <li>Sin escalabilidad horizontal</li>
+                        <li>Visibilidad limitada (logs de Hangfire)</li>
+                        <li>VMs (IaaS) — mantener OS, parches, actualizaciones</li>
+                        <li>Cuello de botella en la BD compartida</li>
+                    </ul>
+                </div>
+                <div class="comparison-col new">
+                    <h4>✅ NDv2 (Nueva Arquitectura)</h4>
+                    <ul>
+                        <li>Bases separadas: Cosmos (ejecución), SQL (consumo), Dashboard (config)</li>
+                        <li>Container Apps Jobs (efímero, $0 cuando no corre)</li>
+                        <li>TTL automático en Cosmos (45 días), particiones en SQL (4 años)</li>
+                        <li>KEDA autoscaling (0 → 50 workers dinámico)</li>
+                        <li>Dashboard operacional en tiempo real</li>
+                        <li>100% PaaS — Azure gestiona infraestructura, OS, scheduler</li>
+                        <li>Escala horizontalmente sin límites</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 7: Ventajas Clave -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Ventajas de la Nueva Solución</h2>
+            
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <h4>📈 Escalabilidad Real</h4>
+                    <p>Workers escalan de 0 a 50 automáticamente con KEDA. CosmosDB y SQL manejan millones de docs/mes sin problemas.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>💰 Costos Optimizados</h4>
+                    <p>Container Apps Jobs solo pagan por ejecución (segundos). Workers en 0 replicas = $0. Sin infraestructura always-on.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>🔍 Visibilidad Total</h4>
+                    <p>Dashboard operacional con métricas en tiempo real: comunicaciones procesadas, estados, errores, DLQ, workers activos.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>🛡️ Resiliente</h4>
+                    <p>Dead Letter Queues automáticas, retry policies, Change Feed garantiza sincronización, ARM API para gestionar jobs.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>🗑️ Depuración Automática</h4>
+                    <p>TTL 45 días en CosmosDB. Eventos crudos en Blob: Hot 30d → Cold 180d → Archive 4 años → Delete. Particiones por año en SQL con retención de 4 años.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>🔐 Seguridad</h4>
+                    <p>Managed Identity en todo (sin secrets), Key Vault para configuración, Private Endpoints, Easy Auth con Entra ID.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>⚡ Event-Driven</h4>
+                    <p>Change Feed sincroniza automáticamente. Service Bus desacopla componentes. No hay polling ni queries pesados.</p>
+                </div>
+                <div class="benefit-card">
+                    <h4>🎯 Separación por Vertical</h4>
+                    <p>Genéricos, Negocio y Campañas son verticales independientes: cada una con su modelo estrella, queues, workers y config. Escalan por separado.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 8: POC Validado -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>POC: Patrones Validados</h2>
+            
+            <div class="grid">
+                <div class="card">
+                    <h4>✅ Easy Auth + Entra ID</h4>
+                    <p>Platform-managed auth. Frontend y backend con SSO. Token store habilitado. Cross-tenant validado.</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Workers + KEDA</h4>
+                    <p>WeatherWorker y DashboardWorker escalan con Service Bus queue depth. Graceful shutdown implementado.</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Change Feed → SQL</h4>
+                    <p>Sincronización automática CosmosDB → SQL Server. Idempotencia con timestamps. Lease-based scaling.</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Container Jobs (Scheduled)</h4>
+                    <p>WeatherEnqueuer ejecuta cada 5 min vía CRON. Ephemeral execution. Logs en Log Analytics.</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Dashboard Operacional</h4>
+                    <p>React + shadcn/ui. Infrastructure Health API. Gestión de jobs (trigger, stop, schedule). Métricas en tiempo real.</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Managed Identity Everywhere</h4>
+                    <p>Backend, frontend, workers y jobs con MI. RBAC en Bicep. SQL con Active Directory Default. Sin secrets en código.</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Key Vault References</h4>
+                    <p>App Insights connection string, auth client secrets. Auto-seeded en Bicep. RBAC-enabled (no access policies).</p>
+                </div>
+                <div class="card">
+                    <h4>✅ Dead Letter Queue</h4>
+                    <p>DLQ Manager UI: peek, re-queue, discard. Logs con DeadLetterReason. Azure SDK con Moq (sin wrappers).</p>
+                </div>
+            </div>
+
+            <div class="highlight" style="margin-top: 2rem;">
+                <p style="font-size: 1.1rem; margin-bottom: 0;">
+                    <strong>Documentación completa:</strong> <code>README.md</code> (arquitectura), <code>DEPLOYMENT.md</code> (instrucciones paso a paso), <code>LESSONS-LEARNED.md</code> (35+ patrones validados).
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 9: Observabilidad -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Observabilidad Nativa</h2>
+            
+            <h3 style="text-align: center; margin-bottom: 2rem;">Sabemos en todo momento qué está pasando</h3>
+
+            <div class="grid">
+                <div class="card">
+                    <h4>📊 App Insights</h4>
+                    <p>Telemetría automática en .NET 10. Traces, metrics, dependencies. OpenTelemetry-compatible.</p>
+                </div>
+                <div class="card">
+                    <h4>📝 Log Analytics</h4>
+                    <p>Workspace central. KQL queries documentadas. Service Bus diagnostics enabled (AllMetrics + OperationalLogs).</p>
+                </div>
+                <div class="card">
+                    <h4>🏥 Infrastructure Health</h4>
+                    <p>Endpoint custom que consulta ARM API: status de Container Apps, jobs, workers, SQL, Service Bus, Cosmos.</p>
+                </div>
+                <div class="card">
+                    <h4>⚠️ Dead Letter Monitoring</h4>
+                    <p>Dashboard muestra contadores de DLQ en tiempo real. Alertas configurables. Logs con DeadLetterReason.</p>
+                </div>
+            </div>
+
+            <p style="text-align: center; margin-top: 2rem; font-size: 1.1rem; color: #555;">
+                <strong>No más debugging a ciegas.</strong> Logs estructurados, traces distribuidos, métricas en tiempo real.
+            </p>
+        </div>
+    </div>
+
+    <!-- Slide 10: Siguiente Paso -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>¿Hacia Dónde Vamos?</h2>
+            
+            <div class="highlight">
+                <h3 style="color: #667eea; text-align: center;">Plan de Ejecución</h3>
+            </div>
+
+            <div style="background: #e3f2fd; border: 2px solid #2196f3; padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
+                <h4 style="color: #1565c0; margin-bottom: 1rem; text-align: center;">🔄 Común a las 3 Verticales</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
+                        <p style="margin: 0; font-weight: 600; color: #1565c0;">📊 Service Bus + Workers</p>
+                        <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Queues · Workers enviadores · Worker eventos</p>
+                    </div>
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
+                        <p style="margin: 0; font-weight: 600; color: #1565c0;">🔄 Change Feed</p>
+                        <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Cosmos → SQL modelo estrella automático</p>
+                    </div>
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
+                        <p style="margin: 0; font-weight: 600; color: #1565c0;">📈 Dashboard</p>
+                        <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Gestión centralizada · Métricas · DLQ</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="card">
+                    <h4>Fase 1: Genéricos</h4>
+                    <ul style="padding-left: 0;">
+                        <li>ND API (encola directo)</li>
+                        <li>CosmosDB (TTL 45d)</li>
+                        <li>SQL modelo estrella Genéricos</li>
+                        <li>Workers envío + eventos</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.85rem; color: #666; font-style: italic;">Sin CRON jobs — API encola directo</p>
+                </div>
+                <div class="card">
+                    <h4>Fase 2: Negocio</h4>
+                    <ul style="padding-left: 0;">
+                        <li>Container Jobs (CRON)</li>
+                        <li>Workers generadores</li>
+                        <li>SQL modelo estrella Negocio</li>
+                        <li>Particionado por dígito</li>
+                        <li>Integración DB2</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.85rem; color: #666; font-style: italic;">CRON desperta Workers generadores</p>
+                </div>
+                <div class="card">
+                    <h4>Fase 3: Campañas</h4>
+                    <ul style="padding-left: 0;">
+                        <li>Container Jobs (CRON)</li>
+                        <li>Workers generadores</li>
+                        <li>CSV upload + Blob</li>
+                        <li>Segmentación dinámica (DB2)</li>
+                        <li>SQL modelo estrella Campañas</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.85rem; color: #666; font-style: italic;">CRON desperta Workers generadores</p>
+                </div>
+            </div>
+
+            <div class="highlight" style="margin-top: 3rem; background: #e6f7ff; border-left-color: #667eea;">
+                <p style="font-size: 1.3rem; color: #667eea; font-weight: 600; margin-bottom: 0.5rem; text-align: center;">
+                    De 7M comunicaciones/mes a capacidad ilimitada
+                </p>
+                <p style="margin-bottom: 0; text-align: center;">
+                    Con costos predecibles, depuración automática, y visibilidad total.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 11: Cierre -->
+    <div class="slide">
+        <div class="slide-content" style="text-align: center;">
+            <h1 style="font-size: 3.5rem; margin-bottom: 2rem;">NDv2</h1>
+            <p class="subtitle" style="font-size: 1.8rem; margin-bottom: 3rem;">
+                Cloud-Native · Escalable · Observable
+            </p>
+
+            <div style="margin: 3rem 0;">
+                <div class="tech-badge" style="font-size: 1.3rem; padding: 1.2rem 2.5rem; display: inline-block;">
+                    ✅ POC Validada
+                </div>
+            </div>
+
+            <p style="font-size: 1rem; color: #888; margin-top: 4rem;">
+                Documentación completa en repo POC: <code>README.md</code> · <code>DEPLOYMENT.md</code> · <code>LESSONS-LEARNED.md</code> · <code>docs/arquitectura-ndv2.md</code>
+            </p>
+        </div>
+    </div>
+
+    <div class="scroll-hint">Scroll para continuar ↓</div>
+
+</body>
+</html>
