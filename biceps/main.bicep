@@ -115,7 +115,7 @@ param deployJob bool = false
 param jobImageName string = 'weather-enqueuer'
 
 @description('Number of messages to enqueue per job execution')
-param jobMessageCount string = '50'
+param jobMessageCount string = '1000'
 
 @description('Job CRON expression (default: every 5 minutes)')
 param jobCronExpression string = '*/5 * * * *'

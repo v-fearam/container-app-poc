@@ -16,9 +16,9 @@ public class EnqueuerService(
         
         var queueName = configuration["WEATHER_QUEUE_NAME"] ?? "weather-jobs";
         var topicName = configuration["DASHBOARD_TOPIC_NAME"] ?? "nd-dashboard-events";
-        var messageCountStr = configuration["MESSAGE_COUNT"] ?? "50";
+        var messageCountStr = configuration["MESSAGE_COUNT"] ?? "1000";
         var jobName = configuration["JOB_NAME"] ?? "weather-enqueuer";
-        var vertical = configuration["VERTICAL"] ?? "Vertical1";
+        var vertical = configuration["VERTICAL"] ?? "Negocio";
 
         Console.WriteLine($"Config - Queue: {queueName}, Topic: {topicName}, Count: {messageCountStr}, Vertical: {vertical}");
 
@@ -40,93 +40,108 @@ public class EnqueuerService(
         await using var topicSender = serviceBusClient.CreateSender(topicName);
         Console.WriteLine("Topic sender created");
 
-        // Send messages to weather-jobs queue (same format as ServiceBusEnqueuer)
-        logger.LogInformation("Sending {MessageCount} messages to {QueueName}...", messageCount, queueName);
-        
         var sent = 0;
-        for (int i = 1; i <= messageCount; i++)
+        
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Random processType (weather1 or weather2) - same as ServiceBusEnqueuer
-            var processType = Random.Shared.Next(0, 2) == 0 ? "weather1" : "weather2";
-
-            var payload = JsonSerializer.Serialize(new
+            // Send messages to weather-jobs queue (same format as ServiceBusEnqueuer)
+            logger.LogInformation("Sending {MessageCount} messages to {QueueName}...", messageCount, queueName);
+            
+            for (int i = 1; i <= messageCount; i++)
             {
-                number = i,
-                timestamp = DateTime.UtcNow.ToString("O"),
-                processType,
-                vertical
-            });
+                cancellationToken.ThrowIfCancellationRequested();
 
-            var message = new ServiceBusMessage(payload)
-            {
-                ContentType = "application/json",
-                Subject = $"job-{i}",
-                MessageId = Guid.NewGuid().ToString()
-            };
+                // Random processType: "Aviso de Deuda" o "Aviso de Corte"
+                var processType = Random.Shared.Next(0, 2) == 0 ? "Aviso de Deuda" : "Aviso de Corte";
 
-            // Send to queue (work)
-            await queueSender.SendMessageAsync(message, cancellationToken);
-            sent++;
-
-            // Publish MessageEnqueued event to topic (fire-and-forget)
-            try
-            {
-                var eventPayload = JsonSerializer.Serialize(new
+                var payload = JsonSerializer.Serialize(new
                 {
-                    eventType = "MessageEnqueued",
-                    vertical,
-                    queueName,
+                    number = i,
+                    timestamp = DateTime.UtcNow.ToString("O"),
                     processType,
-                    timestamp = DateTime.UtcNow,
-                    messageId = message.MessageId
+                    vertical
                 });
 
-                await topicSender.SendMessageAsync(new ServiceBusMessage(eventPayload)
+                var message = new ServiceBusMessage(payload)
                 {
                     ContentType = "application/json",
-                    Subject = "MessageEnqueued",
-                    ApplicationProperties = { ["eventType"] = "MessageEnqueued", ["vertical"] = vertical }
-                }, cancellationToken);
+                    Subject = $"job-{i}",
+                    MessageId = Guid.NewGuid().ToString()
+                };
+
+                // Send to queue (work)
+                await queueSender.SendMessageAsync(message, cancellationToken);
+                sent++;
+
+                // Publish MessageEnqueued event to topic (fire-and-forget)
+                try
+                {
+                    var eventPayload = JsonSerializer.Serialize(new
+                    {
+                        eventType = "MessageEnqueued",
+                        vertical,
+                        queueName,
+                        processType,
+                        timestamp = DateTime.UtcNow,
+                        messageId = message.MessageId
+                    });
+
+                    await topicSender.SendMessageAsync(new ServiceBusMessage(eventPayload)
+                    {
+                        ContentType = "application/json",
+                        Subject = "MessageEnqueued",
+                        ApplicationProperties = { ["eventType"] = "MessageEnqueued", ["vertical"] = vertical }
+                    }, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to publish event for message {Number}", i);
+                }
+
+                // Sleep random 1-10s every 10 messages (simulate slow batch processing)
+                if (i % 10 == 0)
+                {
+                    var sleepMs = Random.Shared.Next(1000, 10001); // 1000-10000ms
+                    logger.LogInformation("Sent {Current}/{Total} messages. Sleeping {SleepMs}ms...", 
+                        i, messageCount, sleepMs);
+                    await Task.Delay(sleepMs, cancellationToken);
+                }
+                else if (i == messageCount)
+                {
+                    logger.LogInformation("Sent {Current}/{Total} messages (final)", i, messageCount);
+                }
+            }
+
+            logger.LogInformation("Successfully sent {MessageCount} messages to {QueueName}", messageCount, queueName);
+        }
+        finally
+        {
+            // Send JobExecuted event to topic (for dashboard tracking) — always send, even if cancelled
+            try
+            {
+                var jobEventPayload = JsonSerializer.Serialize(new
+                {
+                    eventType = "JobExecuted",
+                    jobName,
+                    executedAt = DateTime.UtcNow,
+                    messagesSent = sent,
+                    timestamp = DateTime.UtcNow
+                });
+
+                await topicSender.SendMessageAsync(new ServiceBusMessage(jobEventPayload)
+                {
+                    ContentType = "application/json",
+                    Subject = "JobExecuted",
+                    ApplicationProperties = { ["eventType"] = "JobExecuted", ["jobName"] = jobName }
+                });
+
+                logger.LogInformation("Published JobExecuted event for job {JobName} ({MessagesSent} messages sent)", 
+                    jobName, sent);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to publish event for message {Number}", i);
+                logger.LogError(ex, "Failed to publish JobExecuted event for job {JobName}", jobName);
             }
-
-            if (i % 10 == 0 || i == messageCount)
-            {
-                logger.LogInformation("Sent {Current}/{Total} messages", i, messageCount);
-            }
-        }
-
-        logger.LogInformation("Successfully sent {MessageCount} messages to {QueueName}", messageCount, queueName);
-
-        // Send JobExecuted event to topic (for dashboard tracking)
-        try
-        {
-            var jobEventPayload = JsonSerializer.Serialize(new
-            {
-                eventType = "JobExecuted",
-                jobName,
-                executedAt = DateTime.UtcNow,
-                messagesSent = sent,
-                timestamp = DateTime.UtcNow
-            });
-
-            await topicSender.SendMessageAsync(new ServiceBusMessage(jobEventPayload)
-            {
-                ContentType = "application/json",
-                Subject = "JobExecuted",
-                ApplicationProperties = { ["eventType"] = "JobExecuted", ["jobName"] = jobName }
-            }, cancellationToken);
-
-            logger.LogInformation("Published JobExecuted event for job {JobName}", jobName);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to publish JobExecuted event for job {JobName}", jobName);
         }
 
         logger.LogInformation("Job completed successfully");

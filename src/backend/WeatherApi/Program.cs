@@ -98,13 +98,11 @@ builder.Services.AddSingleton<Azure.ResourceManager.ArmClient>(sp =>
     return new Azure.ResourceManager.ArmClient(credential);
 });
 
-// Infrastructure Health Service (ARM API + Service Bus metrics)
-builder.Services.AddHttpClient("arm");
+// Infrastructure Health Service (ARM SDK + Service Bus metrics)
 builder.Services.AddSingleton<TokenCredential>(new DefaultAzureCredential());
 builder.Services.AddSingleton<IInfrastructureHealthService>(sp =>
     new InfrastructureHealthService(
-        sp.GetRequiredService<IHttpClientFactory>(),
-        sp.GetRequiredService<TokenCredential>(),
+        sp.GetRequiredService<Azure.ResourceManager.ArmClient>(),
         sp.GetRequiredService<IMemoryCache>(),
         sp.GetRequiredService<IConfiguration>(),
         sp.GetService<ServiceBusAdministrationClient>(),

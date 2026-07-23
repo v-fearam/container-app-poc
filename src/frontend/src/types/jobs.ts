@@ -11,7 +11,7 @@ export interface ContainerJobDto {
 
 export interface JobExecutionDto {
   name: string;
-  status: 'Pending' | 'Running' | 'Succeeded' | 'Failed';
+  status: 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Unknown';
   startTime?: string;
   endTime?: string;
 }
@@ -23,6 +23,12 @@ export interface UpdateJobScheduleRequest {
 export interface TriggerJobResponse {
   executionName: string;
   message: string;
+}
+
+export interface StopExecutionResponse {
+  jobName: string;
+  executionName: string;
+  status: string;
 }
 
 export interface JobExecutionCounter {

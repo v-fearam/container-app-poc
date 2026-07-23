@@ -4,6 +4,8 @@ import type {
   ContainerJobDto,
   UpdateJobScheduleRequest,
   TriggerJobResponse,
+  StopExecutionResponse,
+  JobExecutionDto,
   JobExecutionCounter
 } from '../types/jobs';
 
@@ -56,6 +58,36 @@ export function useJobsApi() {
     }
   };
 
+  const listExecutions = async (
+    jobName: string,
+    status?: string
+  ): Promise<JobExecutionDto[]> => {
+    setIsLoading(true);
+    try {
+      const params = status ? `?status=${encodeURIComponent(status)}` : '';
+      return await get<JobExecutionDto[]>(
+        `/api/jobs/${encodeURIComponent(jobName)}/executions${params}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const stopExecution = async (
+    jobName: string,
+    executionName: string
+  ): Promise<StopExecutionResponse> => {
+    setIsLoading(true);
+    try {
+      return await post<StopExecutionResponse>(
+        `/api/jobs/${encodeURIComponent(jobName)}/executions/${encodeURIComponent(executionName)}/stop`,
+        {}
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getJobExecutionCounters = async (): Promise<JobExecutionCounter[]> => {
     setIsLoading(true);
     try {
@@ -71,6 +103,8 @@ export function useJobsApi() {
     getJob,
     updateJobSchedule,
     triggerJob,
+    listExecutions,
+    stopExecution,
     getJobExecutionCounters
   };
 }

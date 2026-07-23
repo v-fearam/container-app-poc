@@ -128,6 +128,8 @@ public class CosmosPersonasController : ControllerBase
             Edad = request.Edad,
             Ciudad = request.Ciudad,
             Activo = request.Activo,
+            // CRITICAL: Cosmos SDK does NOT auto-update custom timestamp fields.
+            // Always set UpdatedAt manually on create/update so Change Feed can detect newer versions.
             UpdatedAt = DateTime.UtcNow,
             Ttl = request.Ttl
         };
@@ -180,6 +182,8 @@ public class CosmosPersonasController : ControllerBase
             updated.Edad = request.Edad;
             updated.Ciudad = request.Ciudad;
             updated.Ttl = request.Ttl;
+            // CRITICAL: Cosmos SDK does NOT auto-update custom timestamp fields.
+            // Always set UpdatedAt manually on create/update so Change Feed can detect newer versions.
             updated.UpdatedAt = DateTime.UtcNow;
 
             var response = await container.ReplaceItemAsync(

@@ -1,7 +1,6 @@
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Azure.Core;
-using Azure.Identity;
+using Azure.ResourceManager;
+using Azure.ResourceManager.AppContainers;
 using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.Caching.Memory;
 using WeatherApi.Models;
@@ -14,12 +13,11 @@ public interface IInfrastructureHealthService
 }
 
 /// <summary>
-/// Queries Azure ARM API for Container Apps status/replicas and Service Bus for queue depths.
+/// Queries Azure ARM API (via SDK) for Container Apps status/replicas and Service Bus for queue depths.
 /// Results are cached in IMemoryCache to avoid hitting ARM rate limits.
 /// </summary>
 public class InfrastructureHealthService(
-    IHttpClientFactory httpClientFactory,
-    TokenCredential credential,
+    ArmClient armClient,
     IMemoryCache cache,
     IConfiguration configuration,
     ServiceBusAdministrationClient? sbAdminClient,
@@ -27,7 +25,6 @@ public class InfrastructureHealthService(
 {
     private const string CacheKey = "infra-health";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(25);
-    private static readonly string[] ArmScopes = ["https://management.azure.com/.default"];
 
     public async Task<InfrastructureHealthResponse> GetInfrastructureHealthAsync(CancellationToken ct = default)
     {
@@ -65,53 +62,26 @@ public class InfrastructureHealthService(
 
         try
         {
-            var token = await credential.GetTokenAsync(
-                new TokenRequestContext(ArmScopes), ct);
-
-            var client = httpClientFactory.CreateClient("arm");
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", token.Token);
-
-            // List all container apps in the resource group
-            var listUrl = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                          $"/resourceGroups/{resourceGroup}/providers/Microsoft.App/containerApps" +
-                          "?api-version=2024-03-01";
-
-            var listResponse = await client.GetAsync(listUrl, ct);
-            if (!listResponse.IsSuccessStatusCode)
-            {
-                logger.LogWarning("ARM API returned {StatusCode} listing container apps",
-                    listResponse.StatusCode);
-                return [];
-            }
-
-            var json = await listResponse.Content.ReadAsStringAsync(ct);
-            var doc = JsonDocument.Parse(json);
+            var subscription = armClient.GetSubscriptionResource(
+                new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+            
+            var rg = await subscription.GetResourceGroupAsync(resourceGroup, ct);
             var apps = new List<ContainerAppStatusDto>();
 
-            foreach (var app in doc.RootElement.GetProperty("value").EnumerateArray())
+            await foreach (var app in rg.Value.GetContainerApps().GetAllAsync(cancellationToken: ct))
             {
-                var name = app.GetProperty("name").GetString() ?? "";
-                var props = app.GetProperty("properties");
-                var template = props.GetProperty("template");
-
+                var name = app.Data.Name;
                 var status = "Unknown";
-                if (props.TryGetProperty("runningStatus", out var rs))
-                    status = rs.GetString() ?? "Unknown";
-                else if (props.TryGetProperty("provisioningState", out var ps))
-                    status = ps.GetString() ?? "Unknown";
+                
+                // SDK only has ProvisioningState (no RunningStatus)
+                if (app.Data.ProvisioningState.HasValue)
+                    status = app.Data.ProvisioningState.Value.ToString();
 
-                var maxReplicas = 1;
-                if (template.TryGetProperty("scale", out var scale) &&
-                    scale.TryGetProperty("maxReplicas", out var mr))
-                    maxReplicas = mr.GetInt32();
-
-                var latestRevision = props.TryGetProperty("latestRevisionName", out var lr)
-                    ? lr.GetString() : null;
+                var maxReplicas = app.Data.Template?.Scale?.MaxReplicas ?? 1;
+                var latestRevision = app.Data.LatestRevisionName;
 
                 // Get replica count
-                var replicas = await GetReplicaCountAsync(
-                    client, subscriptionId, resourceGroup, name, latestRevision, ct);
+                var replicas = await GetReplicaCountAsync(app, latestRevision, ct);
 
                 apps.Add(new ContainerAppStatusDto
                 {
@@ -127,34 +97,30 @@ public class InfrastructureHealthService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error querying Container Apps status via ARM API");
+            logger.LogError(ex, "Error querying Container Apps status via SDK");
             return [];
         }
     }
 
     private async Task<int> GetReplicaCountAsync(
-        HttpClient client, string subscriptionId, string resourceGroup,
-        string appName, string? revisionName, CancellationToken ct)
+        ContainerAppResource app, string? revisionName, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(revisionName)) return 0;
 
         try
         {
-            var url = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                      $"/resourceGroups/{resourceGroup}/providers/Microsoft.App" +
-                      $"/containerApps/{appName}/revisions/{revisionName}/replicas" +
-                      "?api-version=2024-03-01";
+            var revision = await app.GetContainerAppRevisionAsync(revisionName, ct);
+            if (revision == null || revision.Value == null) return 0;
 
-            var response = await client.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode) return 0;
+            var replicas = await revision.Value.GetContainerAppReplicas()
+                .GetAllAsync(cancellationToken: ct)
+                .ToListAsync(ct);
 
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("value").GetArrayLength();
+            return replicas.Count;
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Could not get replicas for {App}/{Revision}", appName, revisionName);
+            logger.LogDebug(ex, "Could not get replicas for {App}/{Revision}", app.Data.Name, revisionName);
             return 0;
         }
     }
@@ -172,52 +138,28 @@ public class InfrastructureHealthService(
 
         try
         {
-            var token = await credential.GetTokenAsync(
-                new TokenRequestContext(ArmScopes), ct);
-
-            var client = httpClientFactory.CreateClient("arm");
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", token.Token);
-
-            // List all container app jobs in the resource group
-            var listUrl = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                          $"/resourceGroups/{resourceGroup}/providers/Microsoft.App/jobs" +
-                          "?api-version=2024-03-01";
-
-            var listResponse = await client.GetAsync(listUrl, ct);
-            if (!listResponse.IsSuccessStatusCode)
-            {
-                logger.LogWarning("ARM API returned {StatusCode} listing container app jobs",
-                    listResponse.StatusCode);
-                return [];
-            }
-
-            var json = await listResponse.Content.ReadAsStringAsync(ct);
-            var doc = JsonDocument.Parse(json);
+            var subscription = armClient.GetSubscriptionResource(
+                new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+            
+            var rg = await subscription.GetResourceGroupAsync(resourceGroup, ct);
             var jobs = new List<ContainerAppJobStatusDto>();
 
-            foreach (var job in doc.RootElement.GetProperty("value").EnumerateArray())
+            await foreach (var job in rg.Value.GetContainerAppJobs().GetAllAsync(cancellationToken: ct))
             {
-                var name = job.GetProperty("name").GetString() ?? "";
-                var props = job.GetProperty("properties");
-                var config = props.GetProperty("configuration");
-
-                var triggerType = config.GetProperty("triggerType").GetString() ?? "Unknown";
-                
+                var name = job.Data.Name;
+                var triggerType = job.Data.Configuration?.TriggerType.ToString() ?? "Unknown";
                 string? cronExpression = null;
-                if (config.TryGetProperty("scheduleTriggerConfig", out var scheduleTrigger) &&
-                    scheduleTrigger.TryGetProperty("cronExpression", out var cronProp))
+
+                if (job.Data.Configuration?.ScheduleTriggerConfig != null)
                 {
-                    cronExpression = cronProp.GetString();
+                    cronExpression = job.Data.Configuration.ScheduleTriggerConfig.CronExpression;
                 }
 
                 // Get running executions count
-                var runningExecutions = await GetRunningExecutionsCountAsync(
-                    client, subscriptionId, resourceGroup, name, ct);
+                var runningExecutions = await GetRunningExecutionsCountAsync(job, ct);
 
                 // Get last execution info
-                var (lastStatus, lastTime) = await GetLastExecutionInfoAsync(
-                    client, subscriptionId, resourceGroup, name, ct);
+                var (lastStatus, lastTime) = await GetLastExecutionInfoAsync(job, ct);
 
                 jobs.Add(new ContainerAppJobStatusDto
                 {
@@ -234,31 +176,20 @@ public class InfrastructureHealthService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error querying Container App Jobs status via ARM API");
+            logger.LogError(ex, "Error querying Container App Jobs status via SDK");
             return [];
         }
     }
 
-    private async Task<int> GetRunningExecutionsCountAsync(
-        HttpClient client, string subscriptionId, string resourceGroup,
-        string jobName, CancellationToken ct)
+    private async Task<int> GetRunningExecutionsCountAsync(ContainerAppJobResource job, CancellationToken ct)
     {
         try
         {
-            var url = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                      $"/resourceGroups/{resourceGroup}/providers/Microsoft.App" +
-                      $"/jobs/{jobName}/executions?api-version=2024-03-01";
-
-            var response = await client.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode) return 0;
-
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var doc = JsonDocument.Parse(json);
-            
             int runningCount = 0;
-            foreach (var exec in doc.RootElement.GetProperty("value").EnumerateArray())
+            
+            await foreach (var exec in job.GetContainerAppJobExecutions().GetAllAsync(cancellationToken: ct))
             {
-                var status = exec.GetProperty("properties").GetProperty("status").GetString();
+                var status = exec.Data.Status?.ToString();
                 if (status == "Running" || status == "Pending")
                     runningCount++;
             }
@@ -267,49 +198,32 @@ public class InfrastructureHealthService(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Could not get executions for job {JobName}", jobName);
+            logger.LogDebug(ex, "Could not get executions for job {JobName}", job.Data.Name);
             return 0;
         }
     }
 
-    private async Task<(string? status, DateTime? time)> GetLastExecutionInfoAsync(
-        HttpClient client, string subscriptionId, string resourceGroup,
-        string jobName, CancellationToken ct)
+    private async Task<(string? status, DateTimeOffset? time)> GetLastExecutionInfoAsync(
+        ContainerAppJobResource job, CancellationToken ct)
     {
         try
         {
-            var url = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                      $"/resourceGroups/{resourceGroup}/providers/Microsoft.App" +
-                      $"/jobs/{jobName}/executions?api-version=2024-03-01";
+            var executions = await job.GetContainerAppJobExecutions()
+                .GetAllAsync(cancellationToken: ct)
+                .ToListAsync(ct);
 
-            var response = await client.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode) return (null, null);
-
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var doc = JsonDocument.Parse(json);
-            
-            var executions = doc.RootElement.GetProperty("value").EnumerateArray().ToList();
             if (executions.Count == 0) return (null, null);
 
             // First execution is the latest
             var lastExec = executions[0];
-            var props = lastExec.GetProperty("properties");
-            
-            var status = props.GetProperty("status").GetString();
-            DateTime? startTime = null;
-            
-            if (props.TryGetProperty("startTime", out var startProp) &&
-                startProp.ValueKind == JsonValueKind.String)
-            {
-                DateTime.TryParse(startProp.GetString(), out var parsed);
-                startTime = parsed;
-            }
+            var status = lastExec.Data.Status?.ToString();
+            var startTime = lastExec.Data.StartOn;
 
             return (status, startTime);
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Could not get last execution info for job {JobName}", jobName);
+            logger.LogDebug(ex, "Could not get last execution info for job {JobName}", job.Data.Name);
             return (null, null);
         }
     }

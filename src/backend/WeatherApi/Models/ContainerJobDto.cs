@@ -88,3 +88,50 @@ public class TriggerJobResponse
     /// </summary>
     public required string Status { get; set; }
 }
+
+/// <summary>
+/// Job execution details.
+/// </summary>
+public class JobExecutionDto
+{
+    /// <summary>
+    /// Execution name (unique identifier).
+    /// </summary>
+    public required string Name { get; set; }
+
+    /// <summary>
+    /// Execution status (Running, Succeeded, Failed, etc.).
+    /// </summary>
+    public required string Status { get; set; }
+
+    /// <summary>
+    /// When the execution started (UTC).
+    /// </summary>
+    public DateTimeOffset? StartTime { get; set; }
+
+    /// <summary>
+    /// When the execution ended (UTC). Null if still running.
+    /// </summary>
+    public DateTimeOffset? EndTime { get; set; }
+}
+
+/// <summary>
+/// Response from stopping a job execution.
+/// </summary>
+public class StopExecutionResponse
+{
+    /// <summary>
+    /// Job name.
+    /// </summary>
+    public required string JobName { get; set; }
+
+    /// <summary>
+    /// Execution name that was stopped.
+    /// </summary>
+    public required string ExecutionName { get; set; }
+
+    /// <summary>
+    /// Status after stop request (Stopping, Stopped, etc.).
+    /// </summary>
+    public required string Status { get; set; }
+}

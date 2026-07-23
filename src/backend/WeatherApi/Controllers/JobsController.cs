@@ -313,6 +313,154 @@ public class JobsController(
     }
 
     /// <summary>
+    /// Lists executions for a specific job, optionally filtered by status.
+    /// </summary>
+    /// <param name="jobName">Name of the job</param>
+    /// <param name="status">Optional status filter (Running, Succeeded, Failed)</param>
+    [HttpGet("{jobName}/executions")]
+    [ProducesResponseType(typeof(List<JobExecutionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ListExecutions(
+        string jobName,
+        [FromQuery] string? status,
+        CancellationToken ct)
+    {
+        var subscriptionId = configuration["AZURE_SUBSCRIPTION_ID"];
+        var resourceGroup = configuration["AZURE_RESOURCE_GROUP"];
+
+        if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroup))
+        {
+            return NotFound("Azure subscription or resource group not configured");
+        }
+
+        try
+        {
+            var subscription = armClient.GetSubscriptionResource(
+                new Azure.Core.ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+            
+            var rg = await subscription.GetResourceGroupAsync(resourceGroup, ct);
+            var job = await rg.Value.GetContainerAppJobAsync(jobName, ct);
+
+            if (job == null)
+            {
+                return NotFound($"Job '{jobName}' not found");
+            }
+
+            var executions = new List<JobExecutionDto>();
+            
+            await foreach (var exec in job.Value.GetContainerAppJobExecutions().GetAllAsync(cancellationToken: ct))
+            {
+                var execStatus = exec.Data.Status?.ToString() ?? "Unknown";
+                
+                // Apply status filter if provided
+                if (!string.IsNullOrEmpty(status) && 
+                    !execStatus.Equals(status, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                executions.Add(new JobExecutionDto
+                {
+                    Name = exec.Data.Name,
+                    Status = execStatus,
+                    StartTime = exec.Data.StartOn,
+                    EndTime = exec.Data.EndOn
+                });
+            }
+
+            return Ok(executions);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error listing executions for job {JobName}", jobName);
+            return StatusCode(500, $"Error listing executions: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Stops a running job execution.
+    /// </summary>
+    /// <param name="jobName">Name of the job</param>
+    /// <param name="executionName">Name of the execution to stop</param>
+    [HttpPost("{jobName}/executions/{executionName}/stop")]
+    [ProducesResponseType(typeof(StopExecutionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> StopExecution(
+        string jobName,
+        string executionName,
+        CancellationToken ct)
+    {
+        var subscriptionId = configuration["AZURE_SUBSCRIPTION_ID"];
+        var resourceGroup = configuration["AZURE_RESOURCE_GROUP"];
+
+        if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroup))
+        {
+            return NotFound("Azure subscription or resource group not configured");
+        }
+
+        try
+        {
+            var subscription = armClient.GetSubscriptionResource(
+                new Azure.Core.ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+            
+            var rg = await subscription.GetResourceGroupAsync(resourceGroup, ct);
+            var job = await rg.Value.GetContainerAppJobAsync(jobName, ct);
+
+            if (job == null)
+            {
+                return NotFound($"Job '{jobName}' not found");
+            }
+
+            // Get the execution
+            var execution = await job.Value.GetContainerAppJobExecutionAsync(executionName, ct);
+            
+            if (execution == null)
+            {
+                return NotFound($"Execution '{executionName}' not found");
+            }
+
+            var currentStatus = execution.Value.Data.Status?.ToString() ?? "Unknown";
+            
+            // Check if execution is running
+            if (!currentStatus.Equals("Running", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest($"Execution is not running (current status: {currentStatus})");
+            }
+
+            // Stop the execution (fire-and-forget, don't wait for completion)
+            await execution.Value.StopExecutionJobAsync(Azure.WaitUntil.Started, ct);
+
+            logger.LogInformation("Stopped execution {ExecutionName} for job {JobName}", executionName, jobName);
+
+            return Ok(new StopExecutionResponse
+            {
+                JobName = jobName,
+                ExecutionName = executionName,
+                Status = "Stopping"
+            });
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 409)
+        {
+            // 409 Conflict: execution already terminated or is terminating
+            logger.LogWarning(ex, "Execution {ExecutionName} already terminated or terminating", executionName);
+            
+            return Ok(new StopExecutionResponse
+            {
+                JobName = jobName,
+                ExecutionName = executionName,
+                Status = "AlreadyStopped"
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error stopping execution {ExecutionName} for job {JobName}", 
+                executionName, jobName);
+            return StatusCode(500, $"Error stopping execution: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Extracts MESSAGE_COUNT from job environment variables.
     /// </summary>
     private static int? GetMessageCountFromEnv(ContainerAppJobData data)

@@ -80,9 +80,9 @@ public class ChangeFeedHandler(
             await dbContext.SaveChangesAsync(cancellationToken);
             logger.LogDebug("Inserted new Persona {Id} to SQL", persona.Id);
         }
-        else if (persona.UpdatedAt > existing.CosmosUpdatedAt)
+        else if (persona.UpdatedAt >= existing.CosmosUpdatedAt)
         {
-            // Update only if Cosmos document is newer
+            // Update if Cosmos document is newer or same timestamp (allows manual edits without timestamp change)
             existing.Nombre = persona.Nombre;
             existing.Apellido = persona.Apellido;
             existing.Email = persona.Email;
@@ -97,7 +97,8 @@ public class ChangeFeedHandler(
         }
         else
         {
-            logger.LogDebug("Skipped Persona {Id} — SQL already has newer/same version", persona.Id);
+            logger.LogDebug("Skipped Persona {Id} — SQL has newer version (Cosmos: {CosmosTime}, SQL: {SqlTime})", 
+                persona.Id, persona.UpdatedAt, existing.CosmosUpdatedAt);
         }
     }
 

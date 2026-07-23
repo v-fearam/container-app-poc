@@ -49,17 +49,27 @@ using (var scope = host.Services.CreateScope())
     Console.WriteLine("Creating scope and resolving services...");
     var enqueuerService = scope.ServiceProvider.GetRequiredService<IEnqueuerService>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var lifetime = scope.ServiceProvider.GetRequiredService<IHostApplicationLifetime>();
 
     Console.WriteLine("Services resolved, starting execution...");
     try
     {
-        await enqueuerService.ExecuteAsync(CancellationToken.None);
+        // Use ApplicationStopping token (NOT CancellationToken.None) for graceful shutdown
+        await enqueuerService.ExecuteAsync(lifetime.ApplicationStopping);
         logger.LogInformation("Job execution completed successfully. Exiting with code 0.");
         Console.WriteLine("SUCCESS - Exiting with code 0");
         Environment.Exit(0);
     }
+    catch (OperationCanceledException)
+    {
+        // Graceful shutdown via SIGTERM
+        logger.LogInformation("Job execution cancelled (SIGTERM received). Exiting with code 0.");
+        Console.WriteLine("CANCELLED (graceful) - Exiting with code 0");
+        Environment.Exit(0);
+    }
     catch (Exception ex)
     {
+        // Real error
         logger.LogError(ex, "Job execution failed. Exiting with code 1.");
         Console.WriteLine($"ERROR - {ex.Message}");
         Console.WriteLine($"Stack: {ex.StackTrace}");

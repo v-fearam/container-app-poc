@@ -26,7 +26,7 @@ public class ContainerAppJobStatusDto
     public string TriggerType { get; set; } = "Unknown";
     public string? CronExpression { get; set; }
     public string? LastExecutionStatus { get; set; }
-    public DateTime? LastExecutionTime { get; set; }
+    public DateTimeOffset? LastExecutionTime { get; set; }
     public int RunningExecutions { get; set; }
 }
 

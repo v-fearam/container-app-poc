@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useJobsApi } from '../hooks/useJobsApi';
-import type { ContainerJobDto } from '../types/jobs';
+import type { ContainerJobDto, JobExecutionDto } from '../types/jobs';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import {
@@ -11,23 +11,53 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { Badge } from '../components/ui/badge';
-import { Calendar, Clock, Play, RefreshCw, Settings } from 'lucide-react';
+import { Calendar, Clock, Play, RefreshCw, Settings, StopCircle } from 'lucide-react';
 import { CronEditorDialog } from '../components/CronEditorDialog';
 
 export function SchedulerPage() {
-  const { listJobs, triggerJob, isLoading } = useJobsApi();
+  const { listJobs, triggerJob, listExecutions, stopExecution, isLoading } = useJobsApi();
   const [jobs, setJobs] = useState<ContainerJobDto[]>([]);
   const [selectedJob, setSelectedJob] = useState<ContainerJobDto | null>(null);
   const [isCronDialogOpen, setIsCronDialogOpen] = useState(false);
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null);
+  const [stoppingExecution, setStoppingExecution] = useState<{ jobName: string; executionName: string } | null>(null);
+  const [runningExecutions, setRunningExecutions] = useState<Map<string, JobExecutionDto>>(new Map());
 
   const loadJobs = async () => {
     try {
       const data = await listJobs();
       setJobs(data);
+      
+      // Para cada job con status Running, obtener el executionName
+      for (const job of data) {
+        if (job.lastExecutionStatus === 'Running') {
+          await loadRunningExecution(job.name);
+        }
+      }
     } catch (error) {
       console.error('Failed to load jobs:', error);
+    }
+  };
+
+  const loadRunningExecution = async (jobName: string) => {
+    try {
+      const executions = await listExecutions(jobName, 'Running');
+      if (executions.length > 0) {
+        setRunningExecutions(prev => new Map(prev).set(jobName, executions[0]));
+      }
+    } catch (error) {
+      console.error(`Failed to load running execution for ${jobName}:`, error);
     }
   };
 
@@ -44,12 +74,32 @@ export function SchedulerPage() {
     setTriggeringJob(jobName);
     try {
       await triggerJob(jobName);
-      // Reload jobs to show latest execution
       await loadJobs();
     } catch (error) {
       console.error('Failed to trigger job:', error);
     } finally {
       setTriggeringJob(null);
+    }
+  };
+
+  const handleStopExecutionClick = (jobName: string) => {
+    const execution = runningExecutions.get(jobName);
+    if (execution) {
+      setStoppingExecution({ jobName, executionName: execution.name });
+    }
+  };
+
+  const confirmStopExecution = async () => {
+    if (!stoppingExecution) return;
+
+    try {
+      await stopExecution(stoppingExecution.jobName, stoppingExecution.executionName);
+      // Reload jobs to show updated status
+      await loadJobs();
+    } catch (error) {
+      console.error('Failed to stop execution:', error);
+    } finally {
+      setStoppingExecution(null);
     }
   };
 
@@ -165,6 +215,16 @@ export function SchedulerPage() {
                             <Settings className="w-4 h-4" />
                           </Button>
                         )}
+                        {job.lastExecutionStatus === 'Running' && runningExecutions.has(job.name) && (
+                          <Button
+                            onClick={() => handleStopExecutionClick(job.name)}
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <StopCircle className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           onClick={() => handleTriggerJob(job.name)}
                           disabled={triggeringJob === job.name}
@@ -198,6 +258,24 @@ export function SchedulerPage() {
           onScheduleUpdated={loadJobs}
         />
       )}
+
+      <AlertDialog open={!!stoppingExecution} onOpenChange={() => setStoppingExecution(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Detener ejecución?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción enviará SIGTERM al job en ejecución. El job puede tardar
+              hasta 30 segundos en detenerse completamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStopExecution}>
+              Detener
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
