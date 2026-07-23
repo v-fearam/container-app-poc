@@ -1,6 +1,25 @@
 # Container App POC — Easy Auth + Full-Stack
 
-POC de Azure Container Apps con Easy Auth (Entra ID), React + .NET 10, telemetría con Application Insights.
+POC de Azure Container Apps con Easy Auth (Entra ID), React + .NET 10, Cosmos DB Change Feed, Container Jobs, y telemetría con Application Insights.
+
+## Qué prueba esta POC
+
+Esta POC valida que se puede construir **una solución distribuida que se opera como una sola aplicación**. Cada componente corre como pod independiente en Azure, pero el dashboard los unifica dando visibilidad de negocio sobre qué está pasando.
+
+| # | Prueba | Qué demuestra |
+|---|--------|---------------|
+| 1 | **Autenticación y Autorización (Easy Auth)** | Una SPA y una API pueden estar protegidas por Entra ID sin escribir código de auth. La app reconoce quién está logueado, sus roles (User/Admin), obtiene access tokens para llamar a la API, y la API valida identidad + controla autorización. Platform-managed, zero-code auth. |
+| 2 | **Mensajería (Service Bus)** | Comunicación entre componentes distribuidos via queue (point-to-point) y topic/subscription (pub-sub). Peek-lock para procesamiento seguro. Dead-Letter Queue para mensajes fallidos con UI de gestión (peek, editar, reencolar, descartar). |
+| 3 | **Container App Environment** | Funciona como un cluster Kubernetes managed que contiene dentro todos los workloads de la solución: apps web, APIs, workers de negocio, workers internos, y jobs programados — cada uno escalando independientemente. |
+| 4 | **├─ Apps Web (Frontend + API)** | La cara visible: SPA React + API .NET 10 que representan el dashboard operativo. Muestran que todo lo distribuido se puede operar desde un solo lugar. |
+| 5 | **├─ Worker de Negocio** | Un proceso que despierta cuando hay mensajes en la queue (KEDA scale 0→N), procesa lógica de negocio, y vuelve a escalar a cero. Reemplaza Windows Services / Hangfire consumers. |
+| 6 | **├─ Workers Internos** | Procesos que mantienen la solución operativa: (a) el que procesa eventos para informar al dashboard qué está pasando en el sistema distribuido, (b) el que implementa Change Feed Processor para detectar cambios en Cosmos DB. |
+| 7 | **├─ Container Job (CRON)** | Algo que despierta, ejecuta y termina — por definición no es una app. Reemplaza tareas croneadas de Hangfire. Sirve para despertar generadores, ejecutar batch, y morir. Schedule editable desde UI. |
+| 8 | **Cosmos DB** | Base NoSQL con TTL para que los documentos desaparezcan automáticamente (ej: 45 días). Change Feed para detectar solo inserts y modificaciones en tiempo real — patrón que servirá para popular el modelo estrella desde eventos de cambio. |
+| 9 | **Dashboard Operativo Unificado** | Que en un contexto de muchos recursos Azure con cada componente corriendo como pod independiente, el dashboard da la noción de que es **un todo, una sola aplicación**. Se puede construir algo orientado al negocio para saber qué está pasando y poder operar la solución distribuida desde un solo lugar. |
+| 10 | **Managed Identity (Zero Secrets)** | Todos los componentes se autentican entre sí sin connection strings ni passwords. Service Bus, Cosmos DB, SQL, Key Vault, ACR — todo via RBAC + User Assigned Managed Identity. |
+| 11 | **Infrastructure as Code** | Todo reproducible desde Bicep modular con feature flags. Se puede borrar y recrear el ambiente completo, o deployar incrementalmente solo lo que cambió (`deployCosmosDB=true`, `deployJob=true`, etc.). |
+| 12 | **Observabilidad E2E** | Distributed tracing desde que un mensaje se encola hasta que se refleja en el dashboard. OpenTelemetry + App Insights + KQL. Cada componente distribuido reporta telemetría que se correlaciona en un solo lugar. |
 
 ## Tags de referencia
 
@@ -25,37 +44,43 @@ graph TB
         end
         
         subgraph "Backend"
-            BE[.NET 10 API<br/>Weather/Dashboard/DLQ/Health<br/>Easy Auth]
+            BE[.NET 10 API<br/>Weather/Dashboard/DLQ/Health/Cosmos<br/>Easy Auth]
         end
         
         subgraph "Workers"
             WW[WeatherWorker<br/>.NET 10<br/>KEDA Queue Scaler]
             DW[DashboardWorker<br/>.NET 10<br/>KEDA Topic Scaler]
+            CFW[ChangeFeedWorker<br/>.NET 10<br/>Fixed Replicas]
+        end
+
+        subgraph "Jobs"
+            JOB[WeatherEnqueuer<br/>.NET 10<br/>CRON Schedule]
         end
     end
 
     subgraph "Azure Services"
-        ACR[Container Registry<br/>ACR]
+        ACR[Container Registry]
         SB[Service Bus<br/>Standard]
         SQL[SQL Database<br/>Basic 5 DTUs]
+        COSMOS[Cosmos DB<br/>Serverless + TTL]
         AI[Application Insights<br/>OpenTelemetry]
-        ENTRA[Entra ID<br/>App Registrations<br/>Custom OIDC]
+        ENTRA[Entra ID<br/>Custom OIDC]
         KV[Key Vault<br/>Centralized Secrets]
     end
 
     subgraph "Service Bus Resources"
         Q[Queue: weather-jobs<br/>+ DLQ]
         T[Topic: nd-dashboard-events]
-        S[Subscription: counter-updater<br/>+ DLQ]
+        S[Subscription: counter-updater]
     end
 
-    subgraph "SQL Database Tables"
-        QC[QueueCounters<br/>vertical+queue+processType+date]
-        CH[ComponentHealth<br/>worker heartbeats]
+    subgraph "Cosmos DB Containers"
+        PC[personas<br/>TTL enabled]
+        LC[changefeed-leases]
     end
 
     subgraph "Managed Identity"
-        MI[User Assigned MI<br/>Roles:<br/>- SB Data Owner<br/>- AcrPull<br/>- KV Secrets User<br/>- SQL db_reader/writer]
+        MI[User Assigned MI<br/>Roles: SB, ACR, KV,<br/>SQL, Cosmos, RG Contributor]
     end
 
     %% User interactions
@@ -64,47 +89,60 @@ graph TB
     FE -->|API calls| BE
     
     %% Backend interactions
+    BE -->|CRUD personas| COSMOS
     BE -->|Query counters + DLQ| SB
     BE -->|Query SQL| SQL
     BE -->|Telemetry| AI
+    BE -->|Update CRON| JOB
     
+    %% Job flow
+    JOB -->|Enqueue messages| Q
+    JOB -->|Publish MessageEnqueued| T
+
     %% Worker flows
     WW -->|Pull messages| Q
     WW -->|Publish MessageProcessed| T
     DW -->|Consume events| S
-    DW -->|UPSERT counters| QC
-    DW -->|Heartbeat| CH
+    DW -->|UPSERT counters| SQL
+
+    %% Change Feed flow
+    COSMOS -.->|Change Feed| CFW
+    CFW -->|Sync personas| SQL
+    CFW -->|Publish ChangeFeedProcessed| T
     
+    %% Cosmos topology
+    COSMOS -.->|Contains| PC
+    COSMOS -.->|Contains| LC
+
     %% Service Bus topology
     SB -.->|Contains| Q
     SB -.->|Contains| T
     T -.->|Routes to| S
-    
-    %% SQL topology
-    SQL -.->|Contains| QC
-    SQL -.->|Contains| CH
     
     %% ACR
     ACR -->|Pull images| FE
     ACR -->|Pull images| BE
     ACR -->|Pull images| WW
     ACR -->|Pull images| DW
+    ACR -->|Pull images| CFW
+    ACR -->|Pull images| JOB
     
     %% Managed Identity auth
+    MI -->|Authenticate| BE
     MI -->|Authenticate| WW
     MI -->|Authenticate| DW
-    MI -->|Authenticate| BE
+    MI -->|Authenticate| CFW
+    MI -->|Authenticate| JOB
     
     %% Key Vault secrets
     KV -->|Secrets via refs| FE
     KV -->|Secrets via refs| BE
-    KV -->|Secrets via refs| WW
-    KV -->|Secrets via refs| DW
     
     %% Telemetry
     FE -->|Page views| AI
     WW -->|Traces| AI
     DW -->|Traces| AI
+    CFW -->|Traces| AI
 
     %% Styling
     classDef azure fill:#0078D4,stroke:#fff,stroke-width:2px,color:#fff
@@ -112,32 +150,43 @@ graph TB
     classDef worker fill:#68217A,stroke:#fff,stroke-width:2px,color:#fff
     classDef database fill:#E81123,stroke:#fff,stroke-width:2px,color:#fff
     classDef frontend fill:#00BCF2,stroke:#fff,stroke-width:2px,color:#fff
+    classDef cosmos fill:#2E7D32,stroke:#fff,stroke-width:2px,color:#fff
+    classDef job fill:#FF6F00,stroke:#fff,stroke-width:2px,color:#fff
     
     class ACR,AI,ENTRA,SB,KV azure
     class Q,T,S servicebus
-    class WW,DW worker
-    class SQL,QC,CH database
+    class WW,DW,CFW worker
+    class SQL database
     class FE,BE frontend
+    class COSMOS,PC,LC cosmos
+    class JOB job
 ```
 
-**Flujo end-to-end:**
-1. `ServiceBusEnqueuer` → envía mensaje a `weather-jobs` + publica `MessageEnqueued` a `nd-dashboard-events`
-2. `WeatherWorker` (KEDA queue scaler 0→10) → procesa mensaje → publica `MessageProcessed` a topic
-3. `DashboardWorker` (KEDA topic scaler 0→10) → consume eventos → UPSERT en SQL `QueueCounters`
-4. Frontend `/dashboard` → GET `/api/dashboard/kpi` → muestra contadores + DLQ counts en tiempo real (refresh 5s)
+**Flujos end-to-end:**
+
+1. **Queue Processing:** `WeatherEnqueuer Job` (CRON) → encola N mensajes a `weather-jobs` + publica `MessageEnqueued` a topic
+2. **Worker Processing:** `WeatherWorker` (KEDA 0→10) → procesa mensaje → publica `MessageProcessed` a topic
+3. **Dashboard Counters:** `DashboardWorker` (KEDA 0→10) → consume eventos → UPSERT en SQL `QueueCounters`
+4. **Change Feed Sync:** UI crea/edita persona en Cosmos → `ChangeFeedWorker` detecta cambio → sync a SQL + publica `ChangeFeedProcessed`
+5. **TTL Auto-Delete:** Documento con `ttl: N` → Cosmos lo borra después de N segundos → Change Feed captura el delete
+6. **Dashboard UI:** Frontend → GET `/api/dashboard/kpi` → muestra contadores + DLQ + job executions en tiempo real
 
 ## Stack
 
 | Capa | Tecnología |
 |------|-----------|
 | Frontend | React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Nginx |
-| Backend | .NET 10 API (Controllers + Easy Auth service + Dashboard APIs) |
+| Backend | .NET 10 API (Controllers + Easy Auth + Dashboard + Cosmos CRUD + Jobs API) |
 | Workers | .NET 10 Worker Service + Service Bus + KEDA (scale 0→10) |
-| Database | Azure SQL Database (Basic 5 DTUs) |
+| Change Feed | .NET 10 Worker Service + Cosmos Change Feed Processor (fixed replicas) |
+| Container Jobs | .NET 10 Generic Host + Schedule Trigger (CRON) + Managed Identity |
+| Database | Azure SQL Database (Basic 5 DTUs) — counters, personas sync, job executions |
+| NoSQL | Azure Cosmos DB (Serverless) — personas, leases, per-document TTL |
 | Auth | Easy Auth (Custom OIDC) + App Roles (User/Admin) |
+| Messaging | Azure Service Bus Standard — queue + topic/subscription + DLQ |
 | Secrets | Azure Key Vault (references desde Container Apps) |
-| Infra | Azure Container Apps + ACR + Service Bus + SQL + App Insights + Key Vault |
-| IaC | Bicep (main.bicep + easyauth.bicep + módulos) |
+| Infra | Azure Container Apps + ACR + App Insights + Log Analytics |
+| IaC | Bicep modular + feature flags (deploy incremental) |
 
 ## Estructura
 
@@ -146,15 +195,15 @@ container-app-poc/
 ├── src/
 │   ├── frontend/                       # React SPA + nginx
 │   │   ├── src/context/                # AuthContext (Easy Auth)
-│   │   ├── src/hooks/                  # useApi (get + post)
-│   │   ├── src/pages/                  # HomePage, AdminPage, DashboardPage, DlqManagerPage, HealthPage
+│   │   ├── src/hooks/                  # useApi, useJobsApi
+│   │   ├── src/pages/                  # Home, Admin, Dashboard, DlqManager, Health, Scheduler, ChangeFeed
 │   │   ├── nginx.conf                  # /_authinfo endpoint
 │   │   └── Dockerfile
 │   ├── backend/WeatherApi/             # .NET 10 API
-│   │   ├── Controllers/                # Weather, Auth, Dashboard, DlqManager, Health
-│   │   ├── Models/                     # DashboardModels (DTOs)
+│   │   ├── Controllers/                # Weather, Auth, Dashboard, DlqManager, Health, CosmosPersonas, Sync, Jobs
+│   │   ├── Models/                     # PersonaDto (TTL), DashboardModels
 │   │   ├── Attributes/                 # RequireAuth, RequireRole
-│   │   ├── Services/                   # EasyAuthService
+│   │   ├── Services/                   # EasyAuthService, CosmosSystemTextJsonSerializer, InfrastructureHealthService
 │   │   └── Dockerfile
 │   ├── worker/
 │   │   ├── WeatherWorker/              # .NET 10 Worker Service (Service Bus queue + KEDA)
@@ -176,7 +225,12 @@ container-app-poc/
 │   │       ├── Configuration/          # CosmosOptions
 │   │       ├── Program.cs              # DI + OpenTelemetry + Cosmos Client + Service Bus
 │   │       └── Dockerfile
-│   └── tools/ServiceBusEnqueuer/       # Console app — encola mensajes + publica eventos
+│   ├── jobs/
+│   │   └── WeatherEnqueuer/            # Container App Job (CRON schedule trigger)
+│   │       ├── Services/               # EnqueuerService (queue + topic sender)
+│   │       ├── Program.cs              # DI + AddAzureClients + Managed Identity
+│   │       └── Dockerfile              # Debian base (.NET 10 + Alpine = SIGSEGV)
+│   └── tools/ServiceBusEnqueuer/       # Console app — encola mensajes + publica eventos (dev/test local)
 │       └── Program.cs
 ├── biceps/
 │   ├── main.bicep                      # Orquestador principal (Worker + Dashboard + Cosmos opcionales)
@@ -187,12 +241,16 @@ container-app-poc/
 │       ├── worker-container-app.bicep  # WeatherWorker + KEDA queue scaler
 │       ├── dashboard-worker-container-app.bicep  # DashboardWorker + KEDA topic scaler
 │       ├── changefeed-worker-container-app.bicep  # ChangeFeedWorker (fixed replicas, no KEDA)
+│       ├── container-app-job.bicep     # Container App Job (WeatherEnqueuer CRON)
 │       ├── service-bus.bicep           # Service Bus + Queue (weather-jobs) + Topic (nd-dashboard-events) + Subscription
 │       ├── sql-database.bicep          # SQL Server + Database (Entra ID admin)
 │       ├── cosmos-db.bicep             # Cosmos DB + Containers (personas, leases, errors) + role assignment
 │       └── managed-identity.bicep      # User Assigned MI + roles (SB, ACR, SQL, Cosmos, KV)
 ├── sql/
-│   └── 001-dashboard-schema.sql        # QueueCounters + ComponentHealth tables
+│   ├── 001-dashboard-schema.sql        # QueueCounters + ComponentHealth tables
+│   ├── 002-add-discarded-count.sql     # Add discardedCount column
+│   ├── 003-changefeed-tables.sql       # PersonasSync + ChangeFeedCounters
+│   └── 003_JobExecutions.sql           # JobExecutions tracking table
 └── docs/
     ├── EASY-AUTH-TUTORIAL.md           # Guía completa de Easy Auth
     ├── WORKER-KEDA-DESIGN.md           # Diseño Worker + KEDA + Service Bus
