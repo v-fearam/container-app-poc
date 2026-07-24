@@ -310,7 +310,7 @@
             <div class="metric">7M</div>
             <p class="metric-label">comunicaciones mensuales</p>
             <p style="text-align: center; font-size: 1.1rem; color: #888;">
-                POC validada · Arquitectura probada · Listo para producción
+                POC validada
             </p>
         </div>
     </div>
@@ -340,7 +340,7 @@
                 </div>
                 <div class="card">
                     <h4>🙈 Sin Visibilidad</h4>
-                    <p>Dashboard de Hangfire muestra jobs, no el estado del negocio. No sabemos qué está fallando.</p>
+                    <p>Dashboard de Hangfire muestra jobs, no el estado del negocio.</p>
                 </div>
                 <div class="card">
                     <h4>💣 Bomba de Tiempo</h4>
@@ -382,7 +382,7 @@
                     <!-- Workers -->
                     <div style="background: white; border: 2px solid #e74c3c; border-radius: 12px; padding: 1.2rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
                         <h4 style="color: #e74c3c; margin-bottom: 0.5rem; font-size: 1.1rem;">⚙️ Workers (Container Apps + KEDA)</h4>
-                        <p style="margin: 0; font-size: 0.9rem; color: #555;">Procesan colas · Escalan 0→50 automático</p>
+                        <p style="margin: 0; font-size: 0.9rem; color: #555;">Procesan colas · Escalan 0→N automático</p>
                     </div>
 
                     <!-- Jobs -->
@@ -436,7 +436,7 @@
                     = NDv2 App
                 </p>
                 <p style="margin-bottom: 0; text-align: center; color: #555; font-size: 1.05rem;">
-                    <strong>Todo esto junto es la aplicación:</strong> un montón de piezas ejecutables que se comunican asincrónicamente a través de queues en la nube.
+                    <strong>Todo esto junto es la aplicación:</strong> un conjunto de micro aplicaciones que interactúan.
                 </p>
             </div>
         </div>
@@ -600,9 +600,9 @@
                     <h4>✅ NDv2 (Nueva Arquitectura)</h4>
                     <ul>
                         <li>Bases separadas: Cosmos (ejecución), SQL (consumo), Dashboard (config)</li>
-                        <li>Container Apps Jobs (efímero, $0 cuando no corre)</li>
+                        <li>Container Apps/Jobs (jobs y algunos workers escalan a cero, $0 cuando no corren)</li>
                         <li>TTL automático en Cosmos (45 días), particiones en SQL (4 años)</li>
-                        <li>KEDA autoscaling (0 → 50 workers dinámico)</li>
+                        <li>KEDA autoscaling (0 → N workers dinámico)</li>
                         <li>Dashboard operacional en tiempo real</li>
                         <li>100% PaaS — Azure gestiona infraestructura, OS, scheduler</li>
                         <li>Escala horizontalmente sin límites</li>
@@ -620,7 +620,7 @@
             <div class="benefits-grid">
                 <div class="benefit-card">
                     <h4>📈 Escalabilidad Real</h4>
-                    <p>Workers escalan de 0 a 50 automáticamente con KEDA. CosmosDB y SQL manejan millones de docs/mes sin problemas.</p>
+                    <p>Workers escalan de 0 a N automáticamente con KEDA. CosmosDB y SQL manejan millones de docs/mes sin problemas.</p>
                 </div>
                 <div class="benefit-card">
                     <h4>💰 Costos Optimizados</h4>
