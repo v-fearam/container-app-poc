@@ -298,6 +298,61 @@
             0%, 100% { transform: translateX(-50%) translateY(0); }
             50% { transform: translateX(-50%) translateY(-10px); }
         }
+
+        /* Navigation controls */
+        .slide {
+            display: none;
+        }
+
+        .slide.active {
+            display: flex;
+        }
+
+        .nav-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .slide-counter {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #667eea;
+            min-width: 80px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -445,107 +500,111 @@
     <!-- Slide 4: Separación Ejecución vs Consumo -->
     <div class="slide">
         <div class="slide-content">
-            <h2>Tres Verticales, Tres Capas de Datos</h2>
+            <h2 style="font-size: 2rem; margin-bottom: 1rem;">Tres Verticales, Tres Capas de Datos</h2>
             
-            <p style="text-align: center; font-size: 1.2rem; color: #555; margin-bottom: 2rem;">
+            <p style="text-align: center; font-size: 1rem; color: #555; margin-bottom: 1.2rem;">
                 <strong>Genéricos · Negocio · Campañas</strong> — cada vertical completamente aislada
             </p>
 
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 2rem 0;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.2rem 0;">
                 <!-- Configuración -->
-                <div style="background: linear-gradient(135deg, #e1bee7 0%, #ba68c8 100%); padding: 1.8rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <h3 style="color: #6a1b9a; text-align: center; margin-bottom: 1.2rem;">⚙️ Configuración</h3>
-                    <div style="background: white; padding: 1.3rem; border-radius: 10px;">
+                <div style="background: linear-gradient(135deg, #e1bee7 0%, #ba68c8 100%); padding: 1.2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h3 style="color: #6a1b9a; text-align: center; margin-bottom: 0.8rem; font-size: 1.1rem;">⚙️ Configuración</h3>
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
                         <ul style="list-style: none; padding: 0; margin: 0;">
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📝 Templates</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">🔧 Parámetros</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">💾 Stored procedures</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📊 Topes y dominios</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">📝 Templates</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">🔧 Parámetros</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">💾 Stored procedures</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">📊 Topes y dominios</li>
                         </ul>
                     </div>
-                    <div style="background: rgba(255,255,255,0.3); padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; text-align: center;">
-                        <p style="margin: 0; color: #2d3436; font-weight: 600; font-size: 0.9rem;">Dashboard DB</p>
-                        <p style="margin: 0.2rem 0 0 0; color: #2d3436; font-size: 0.8rem;">Centralizado (3 verticales)</p>
+                    <div style="background: rgba(255,255,255,0.3); padding: 0.6rem; border-radius: 6px; margin-top: 0.6rem; text-align: center;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; font-size: 0.8rem;">Dashboard DB</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #2d3436; font-size: 0.7rem;">Centralizado (3 verticales)</p>
                     </div>
                 </div>
 
                 <!-- Ejecución -->
-                <div style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); padding: 1.8rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <h3 style="color: #d63031; text-align: center; margin-bottom: 1.2rem;">⚡ Ejecución</h3>
-                    <div style="background: white; padding: 1.3rem; border-radius: 10px;">
+                <div style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); padding: 1.2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h3 style="color: #d63031; text-align: center; margin-bottom: 0.8rem; font-size: 1.1rem;">⚡ Ejecución</h3>
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
                         <ul style="list-style: none; padding: 0; margin: 0;">
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📸 Toma "foto" de datos</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📧 Genera y envía</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📡 Recibe eventos</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">⚡ Ejecuta rápido</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">📸 Toma "foto" de datos</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">📧 Genera y envía</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">📡 Recibe eventos</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">⚡ Ejecuta rápido</li>
                         </ul>
                     </div>
-                    <div style="background: #fff3cd; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 2px solid #d63031;">
-                        <p style="margin: 0; color: #2d3436; font-weight: 600; text-align: center; font-size: 0.9rem;">CosmosDB · TTL 45 días</p>
-                        <p style="margin: 0.2rem 0 0 0; color: #636e72; font-size: 0.85rem; text-align: center;">Datos temporales</p>
+                    <div style="background: #fff3cd; padding: 0.6rem; border-radius: 6px; margin-top: 0.6rem; border: 2px solid #d63031;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; text-align: center; font-size: 0.8rem;">CosmosDB · TTL 45 días</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #636e72; font-size: 0.7rem; text-align: center;">Datos temporales</p>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.3); padding: 0.6rem; border-radius: 6px; margin-top: 0.5rem; text-align: center;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; font-size: 0.8rem;">📦 Blob Storage</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #2d3436; font-size: 0.7rem;">Eventos crudos Mailgun</p>
                     </div>
                 </div>
 
                 <!-- Consumo -->
-                <div style="background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%); padding: 1.8rem; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                    <h3 style="color: white; text-align: center; margin-bottom: 1.2rem;">📊 Consumo</h3>
-                    <div style="background: white; padding: 1.3rem; border-radius: 10px;">
+                <div style="background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%); padding: 1.2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h3 style="color: white; text-align: center; margin-bottom: 0.8rem; font-size: 1.1rem;">📊 Consumo</h3>
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
                         <ul style="list-style: none; padding: 0; margin: 0;">
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">🔍 Consultas OV/PAC</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">📈 Dashboard/reportes</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">⭐ Modelo estrella</li>
-                            <li style="padding: 0.4rem 0; color: #2d3436; font-size: 0.95rem;">🚫 Nunca infinito</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">🔍 Consultas OV/PAC</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">📈 Dashboard/reportes</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">⭐ Modelo estrella</li>
+                            <li style="padding: 0.3rem 0; color: #2d3436; font-size: 0.85rem;">🚫 Nunca infinito</li>
                         </ul>
                     </div>
-                    <div style="background: #e3e1fc; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 2px solid white;">
-                        <p style="margin: 0; color: #2d3436; font-weight: 600; text-align: center; font-size: 0.9rem;">SQL · Particionado por año</p>
-                        <p style="margin: 0.2rem 0 0 0; color: #636e72; font-size: 0.85rem; text-align: center;">Retención 4 años acordada</p>
+                    <div style="background: #e3e1fc; padding: 0.6rem; border-radius: 6px; margin-top: 0.6rem; border: 2px solid white;">
+                        <p style="margin: 0; color: #2d3436; font-weight: 600; text-align: center; font-size: 0.8rem;">SQL · Particionado por año</p>
+                        <p style="margin: 0.2rem 0 0 0; color: #636e72; font-size: 0.7rem; text-align: center;">Retención 4 años acordada</p>
                     </div>
                 </div>
             </div>
 
             <!-- Verticales separadas -->
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 2rem 0;">
-                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 1rem; border-radius: 10px; text-align: center;">
-                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 1.1rem;">Genéricos</p>
-                    <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Collection + DB SQL + Config aislados</p>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin: 1.2rem 0;">
+                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 0.8rem; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 0.95rem;">Genéricos</p>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 0.75rem; color: #555;">Collection + DB SQL + Config aislados</p>
                 </div>
-                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 1rem; border-radius: 10px; text-align: center;">
-                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 1.1rem;">Negocio</p>
-                    <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Collection + DB SQL + Config aislados</p>
+                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 0.8rem; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 0.95rem;">Negocio</p>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 0.75rem; color: #555;">Collection + DB SQL + Config aislados</p>
                 </div>
-                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 1rem; border-radius: 10px; text-align: center;">
-                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 1.1rem;">Campañas</p>
-                    <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; color: #555;">Collection + DB SQL + Config aislados</p>
+                <div style="background: #ffe0e0; border: 2px solid #e74c3c; padding: 0.8rem; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600; color: #c0392b; font-size: 0.95rem;">Campañas</p>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 0.75rem; color: #555;">Collection + DB SQL + Config aislados</p>
                 </div>
             </div>
 
-            <p style="text-align: center; font-size: 0.95rem; color: #666; margin: 1rem 0;">
+            <p style="text-align: center; font-size: 0.85rem; color: #666; margin: 0.8rem 0;">
                 <em>Infraestructura compartida: 1 CosmosDB (3 collections), 1 SQL Server (3 databases), 1 Dashboard centralizado</em>
             </p>
 
             <!-- Change Feed -->
-            <div class="architecture-diagram" style="margin-top: 2rem;">
-                <div style="display: flex; justify-content: center; align-items: center; gap: 2rem; flex-wrap: wrap;">
-                    <div style="background: #fdcb6e; padding: 1.2rem 1.8rem; border-radius: 10px; font-weight: bold; color: #2d3436; font-size: 0.95rem;">
+            <div class="architecture-diagram" style="margin-top: 1.2rem; padding: 1.5rem;">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                    <div style="background: #fdcb6e; padding: 1rem 1.5rem; border-radius: 8px; font-weight: bold; color: #2d3436; font-size: 0.85rem;">
                         Ejecución<br>(Cosmos 45d)
                     </div>
-                    <div style="font-size: 1.5rem; color: #764ba2;">
+                    <div style="font-size: 1.3rem; color: #764ba2;">
                         → Change Feed →
                     </div>
-                    <div style="background: #6c5ce7; padding: 1.2rem 1.8rem; border-radius: 10px; font-weight: bold; color: white; font-size: 0.95rem;">
+                    <div style="background: #6c5ce7; padding: 1rem 1.5rem; border-radius: 8px; font-weight: bold; color: white; font-size: 0.85rem;">
                         Consumo<br>(SQL 4 años)
                     </div>
                 </div>
-                <p style="margin-top: 1rem; font-size: 1rem; color: #555; text-align: center;">
+                <p style="margin-top: 0.8rem; font-size: 0.85rem; color: #555; text-align: center;">
                     Sincronización automática · Sin polling · Sin batch
                 </p>
             </div>
 
             <!-- Base de Negocio -->
-            <div style="background: #d4edda; border: 2px solid #28a745; padding: 1.5rem; border-radius: 15px; margin-top: 2rem; text-align: center;">
-                <h4 style="color: #155724; margin-bottom: 0.5rem; font-size: 1.2rem;">📦 Base de Negocio</h4>
-                <p style="margin: 0; color: #155724; font-size: 1rem;">Datos del AS/400 (Read-Only) · Réplica para no consumir recursos del mainframe</p>
+            <div style="background: #d4edda; border: 2px solid #28a745; padding: 1rem; border-radius: 12px; margin-top: 1rem; text-align: center;">
+                <h4 style="color: #155724; margin-bottom: 0.3rem; font-size: 1rem;">📦 Base de Negocio</h4>
+                <p style="margin: 0; color: #155724; font-size: 0.85rem;">Datos del AS/400 (Read-Only) · Réplica para no consumir recursos del mainframe</p>
             </div>
         </div>
     </div>
@@ -555,7 +614,7 @@
         <div class="slide-content">
             <h2>Infraestructura por Vertical</h2>
             <p style="text-align: center; font-size: 1.1rem; color: #555; margin-bottom: 2rem;">
-                Mismo código, misma imagen Docker — solo cambia la configuración
+                Cada vertical con su flujo completo: Collection → Worker → Database
             </p>
 
             <!-- Diagram: Cosmos → Workers → SQL -->
@@ -638,12 +697,7 @@
             </div>
 
             <!-- Key points -->
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                <div class="highlight" style="text-align: center; padding: 1rem;">
-                    <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">🐳</p>
-                    <p style="margin: 0; font-weight: 600; font-size: 0.95rem;">1 Imagen Docker</p>
-                    <p style="margin: 0.3rem 0 0 0; font-size: 0.85rem; color: #555;">Misma para los 3 workers</p>
-                </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
                 <div class="highlight" style="text-align: center; padding: 1rem;">
                     <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">📐</p>
                     <p style="margin: 0; font-weight: 600; font-size: 0.95rem;">Escalado Independiente</p>
@@ -713,7 +767,6 @@
                         <li>KEDA autoscaling (0 → N workers dinámico)</li>
                         <li>Dashboard operacional en tiempo real</li>
                         <li>100% PaaS — Azure gestiona infraestructura, OS, scheduler</li>
-                        <li>Escala horizontalmente sin límites</li>
                     </ul>
                 </div>
             </div>
@@ -732,7 +785,7 @@
                 </div>
                 <div class="benefit-card">
                     <h4>💰 Costos Optimizados</h4>
-                    <p>Container Apps Jobs solo pagan por ejecución (segundos). Workers en 0 replicas = $0. Sin infraestructura always-on.</p>
+                    <p>Container Jobs solo pagan por ejecución (segundos). Workers con KEDA escalan a cero cuando no hay trabajo. Costos proporcionales al uso real.</p>
                 </div>
                 <div class="benefit-card">
                     <h4>🔍 Visibilidad Total</h4>
@@ -835,10 +888,6 @@
                     <p>Dashboard muestra contadores de DLQ en tiempo real. Alertas configurables. Logs con DeadLetterReason.</p>
                 </div>
             </div>
-
-            <p style="text-align: center; margin-top: 2rem; font-size: 1.1rem; color: #555;">
-                <strong>No más debugging a ciegas.</strong> Logs estructurados, traces distribuidos, métricas en tiempo real.
-            </p>
         </div>
     </div>
 
@@ -935,7 +984,57 @@
         </div>
     </div>
 
-    <div class="scroll-hint">Scroll para continuar ↓</div>
+    <!-- Navigation Controls -->
+    <div class="nav-controls">
+        <button class="nav-btn" id="prevBtn" onclick="changeSlide(-1)">← Anterior</button>
+        <span class="slide-counter" id="slideCounter">1 / 11</span>
+        <button class="nav-btn" id="nextBtn" onclick="changeSlide(1)">Siguiente →</button>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 11;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            
+            if (n > totalSlides) currentSlide = totalSlides;
+            if (n < 1) currentSlide = 1;
+            else currentSlide = n;
+
+            // Hide all slides
+            slides.forEach(slide => slide.classList.remove('active'));
+            
+            // Show current slide
+            slides[currentSlide - 1].classList.add('active');
+
+            // Update counter
+            document.getElementById('slideCounter').textContent = `${currentSlide} / ${totalSlides}`;
+
+            // Update button states
+            document.getElementById('prevBtn').disabled = currentSlide === 1;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides;
+
+            // Scroll to top
+            window.scrollTo(0, 0);
+        }
+
+        function changeSlide(direction) {
+            showSlide(currentSlide + direction);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowLeft') {
+                changeSlide(-1);
+            } else if (event.key === 'ArrowRight') {
+                changeSlide(1);
+            }
+        });
+
+        // Initialize - show first slide
+        showSlide(1);
+    </script>
 
 </body>
 </html>
