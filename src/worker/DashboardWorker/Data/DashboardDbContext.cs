@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DashboardWorker.Data;
 
 /// <summary>
-/// DbContext for Dashboard data (queue counters).
+/// DbContext for Dashboard data (queue counters, Change Feed counters, job executions).
+/// PersonasSync removed — star model uses SP directly.
 /// </summary>
 public class DashboardDbContext : DbContext
 {
@@ -13,7 +14,6 @@ public class DashboardDbContext : DbContext
     }
 
     public DbSet<QueueCounter> QueueCounters => Set<QueueCounter>();
-    public DbSet<PersonaSync> PersonasSync => Set<PersonaSync>();
     public DbSet<ChangeFeedCounter> ChangeFeedCounters => Set<ChangeFeedCounter>();
     public DbSet<JobExecution> JobExecutions => Set<JobExecution>();
 

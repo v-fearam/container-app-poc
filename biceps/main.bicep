@@ -99,14 +99,14 @@ param deployChangeFeedWorker bool = false
 @description('Change Feed Worker image name in ACR')
 param changeFeedWorkerImageName string = 'changefeed-worker'
 
-@description('Cosmos collection to monitor (POC: personas, PROD: configurable per vertical)')
-param cosmosCollection string = 'personas'
+@description('Cosmos collection to monitor (POC: comunicaciones, PROD: configurable per vertical)')
+param cosmosCollection string = 'comunicaciones'
 
 @description('Change Feed Processor name (unique per vertical)')
-param processorName string = 'cfp-personas'
+param processorName string = 'cfp-comunicaciones'
 
 @description('Vertical name for telemetry')
-param verticalName string = 'personas'
+param verticalName string = 'comunicaciones'
 
 @description('Deploy Container Apps Jobs infrastructure and WeatherEnqueuer job')
 param deployJob bool = false
@@ -119,6 +119,9 @@ param jobMessageCount string = '1000'
 
 @description('Job CRON expression (default: every 5 minutes)')
 param jobCronExpression string = '*/5 * * * *'
+
+@description('Enable Token Store SAS secret reference in frontend (requires token-store-sas in Key Vault)')
+param enableTokenStore bool = false
 
 // Log Analytics Workspace for Container App Environment
 module logAnalytics 'modules/log-analytics.bicep' = {
@@ -221,7 +224,7 @@ module frontendApp 'modules/frontend-container-app.bicep' = if (deployContainerA
     cpu: '0.25'
     memory: '0.5Gi'
     enableAuth: true
-    enableTokenStore: true
+    enableTokenStore: enableTokenStore
   }
 }
 

@@ -42,8 +42,8 @@ param keyVaultUri string = ''
 @description('KEDA: messages per replica')
 param kedaMessageCount string = '15'
 
-@description('Minimum replicas (0 = scale to zero)')
-param minReplicas int = 0
+@description('Minimum replicas (1 = always-on consumer)')
+param minReplicas int = 1
 
 @description('Maximum replicas')
 param maxReplicas int = 10

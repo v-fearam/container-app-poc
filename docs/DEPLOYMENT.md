@@ -284,13 +284,13 @@ az containerapp show -n ca-weather-be-dev -g $RG \
   --query "properties.template.containers[0].env[?contains(name, 'Cosmos') || contains(name, 'SQL')].{name:name, value:value, secretRef:secretRef}" \
   -o table
 
-# 3. Secrets en Key Vault (deberían ser solo 4: appinsights + 2 auth secrets + token-store-sas)
+# 3. Secrets en Key Vault (deberían ser solo 3: appinsights + 2 auth secrets )
 echo ""
 echo "Secrets en Key Vault (esperado: 4):"
 az keyvault secret list --vault-name $KV_NAME --query "[].name" -o tsv
 
 echo ""
-echo "✅ Si hay más de 2 secrets en backend O más de 4 en Key Vault, ver sección Troubleshooting"
+echo "✅ Si hay más de 2 secrets en backend O más de 3 en Key Vault, ver sección Troubleshooting"
 ```
 
 **Configuración esperada después del deploy:**
@@ -299,7 +299,7 @@ echo "✅ Si hay más de 2 secrets en backend O más de 4 en Key Vault, ver secc
 |------------|---------------|----------|
 | **Backend secrets** | `appinsights-connection-string`, `microsoft-provider-authentication-secret` | ✅ 2 secrets |
 | **Backend env vars** | `Cosmos__Endpoint` (value), `SQL_CONNECTION_STRING` (value), `ServiceBus__Namespace` (value) | ✅ env vars con valor directo |
-| **Key Vault secrets** | `appinsights-connection-string`, `auth-client-secret-backend`, `auth-client-secret-frontend`, `token-store-sas` | ✅ 4 secrets |
+| **Key Vault secrets** | `appinsights-connection-string`, `auth-client-secret-backend`, `auth-client-secret-frontend` | ✅ 3 secrets |
 
 **⚠️ ANTI-PATTERNS (si ves esto, el deploy está mal):**
 - ❌ `cosmos-connection-string` o `sql-connection-string` en Key Vault
@@ -377,11 +377,13 @@ echo "-- 1. Crear usuario para WORKER identity (DashboardWorker, WeatherWorker, 
 echo "CREATE USER [$WORKER_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
 echo "ALTER ROLE db_datareader ADD MEMBER [$WORKER_IDENTITY_NAME];"
 echo "ALTER ROLE db_datawriter ADD MEMBER [$WORKER_IDENTITY_NAME];"
+echo "GRANT EXECUTE ON SCHEMA::dbo TO [$WORKER_IDENTITY_NAME];"
 echo ""
 echo "-- 2. Crear usuario para BACKEND identity (ca-weather-be-dev):"
 echo "CREATE USER [$BACKEND_IDENTITY_NAME] FROM EXTERNAL PROVIDER;"
 echo "ALTER ROLE db_datareader ADD MEMBER [$BACKEND_IDENTITY_NAME];"
 echo "ALTER ROLE db_datawriter ADD MEMBER [$BACKEND_IDENTITY_NAME];"
+echo "GRANT EXECUTE ON SCHEMA::dbo TO [$BACKEND_IDENTITY_NAME];"
 echo ""
 echo "================================================================================"
 ```
@@ -403,6 +405,9 @@ En el mismo **Query editor** del portal (ya tenés la sesión abierta del paso a
    - `sql/002-add-discarded-count.sql`
    - `sql/003-changefeed-tables.sql`
    - `sql/003_JobExecutions.sql`
+   - `sql/004-star-model.sql` — Modelo estrella: particiones, dimensiones, facts, índices, View
+   - `sql/005-usp-upsert-comunicacion.sql` — SP transaccional: Change Feed → star model
+   - `sql/006-usp-depurar-dias.sql` — SP de depuración de particiones viejas
 
 2. Ejecutar cada uno (Run)
 
@@ -411,7 +416,15 @@ En el mismo **Query editor** del portal (ya tenés la sesión abierta del paso a
 SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';
 ```
 
-Tablas esperadas: `QueueCounters`, `ComponentHealth`, `JobExecutions`, `PersonasSync`, `ChangeFeedCounters`
+Tablas esperadas: `QueueCounters`, `ComponentHealth`, `JobExecutions`, `PersonasSync`, `ChangeFeedCounters`, `DimTipos`, `DimFechas`, `DimCanales`, `DimContactos`, `DimEstadio`, `FactComunicacionesGenericas`, `FactEventosGenericas`
+
+**Verificar SPs y View:**
+```sql
+SELECT name, type_desc FROM sys.objects WHERE type IN ('P', 'V') ORDER BY type_desc, name;
+```
+
+SPs esperados: `usp_UpsertComunicacionGenerica`, `usp_DepurarDiasViejos`  
+View esperada: `vw_ComunicacionesConDims`
 
 ---
 
@@ -442,14 +455,19 @@ echo "Frontend: https://$FRONTEND_URL"
 ### 7.2 Deploy Easy Auth config
 
 ```bash
+# Get your tenant ID
+export CIAM_TENANT_ID=0a3af0e3-416b-4a6b-97e9-cb3a9a094449
+echo "CIAM_TENANT_ID: $CIAM_TENANT_ID"
+
 # OIDC Well-Known URL según el tipo de tenant:
 #   Entra External ID (CIAM):    https://<subdomain>.ciamlogin.com/$TENANT_ID/v2.0/.well-known/openid-configuration
 #   Entra ID normal (workforce): https://login.microsoftonline.com/$TENANT_ID/v2.0/.well-known/openid-configuration
 #
 # Este proyecto usa CIAM (cognitomigration):
-export OIDC_WELL_KNOWN_URL="https://cognitomigration.ciamlogin.com/$TENANT_ID/v2.0/.well-known/openid-configuration"
+export OIDC_WELL_KNOWN_URL="https://cognitomigration.ciamlogin.com/$CIAM_TENANT_ID/v2.0/.well-known/openid-configuration"
+echo $OIDC_WELL_KNOWN_URL
 
-# Deploy Easy Auth (nombre fijo "easyauth" para poder leer outputs después)
+# Deploy Easy Auth SIN token store (fase 1: crea storage + SAS, configura auth)
 az deployment group create \
   --resource-group $RG \
   --template-file biceps/easyauth.bicep \
@@ -460,8 +478,10 @@ az deployment group create \
     backendClientId=$BACKEND_CLIENT_ID \
     oidcWellKnownUrl="$OIDC_WELL_KNOWN_URL" \
     providerName="entraid" \
+    enableTokenStore=false \
   --name "easyauth"
 
+# Guardar SAS URL en Key Vault
 export TOKEN_STORE_SAS=$(az deployment group show -g $RG \
   --name "easyauth" \
   --query 'properties.outputs.tokenStoreSasUrl.value' -o tsv)
@@ -469,17 +489,39 @@ export TOKEN_STORE_SAS=$(az deployment group show -g $RG \
 az keyvault secret set --vault-name $KV_NAME \
   --name token-store-sas \
   --file <(echo -n "$TOKEN_STORE_SAS")
-# Reiniciar frontend para que lea la nueva configuración de auth
 
-REVISION=$(az containerapp revision list \
-  --name ca-weather-fe-dev \
+# Redeploy frontend con enableTokenStore=true (agrega secret KV ref al Container App)
+az deployment group create \
   --resource-group $RG \
-  --query "[?properties.active].name" -o tsv)
+  --template-file biceps/main.bicep \
+  --parameters \
+    deployContainerApps=true \
+    deployWorker=true \
+    deployWorkerApp=true \
+    deployDashboard=true \
+    deployDashboardWorkerApp=true \
+    deployCosmosDB=true \
+    deployChangeFeedWorker=true \
+    deployJob=true \
+    enableTokenStore=true \
+    sqlLocation=centralus \
+    sqlAdminLogin=$SQL_ADMIN_LOGIN \
+    sqlAdminObjectId=$SQL_ADMIN_OBJECT_ID \
+  --name "main"
 
-az containerapp revision restart \
-  --name ca-weather-fe-dev \
+# Redeploy Easy Auth CON token store (fase 2: ahora el secret existe en el Container App)
+az deployment group create \
   --resource-group $RG \
-  --revision "$REVISION"
+  --template-file biceps/easyauth.bicep \
+  --parameters \
+    backendAppName="ca-weather-be-dev" \
+    frontendAppName="ca-weather-fe-dev" \
+    frontendClientId=$FRONTEND_CLIENT_ID \
+    backendClientId=$BACKEND_CLIENT_ID \
+    oidcWellKnownUrl="$OIDC_WELL_KNOWN_URL" \
+    providerName="entraid" \
+    enableTokenStore=true \
+  --name "easyauth"
 
 echo "✅ Easy Auth configurado"
 echo "Callback URL para App Registration:"
@@ -516,7 +558,7 @@ echo "✅ Rol asignado"
 
 ```bash
 # Abrir en browser
-open https://$FRONTEND_URL
+echo  $FRONTEND_URL
 
 # Debería redirigir a login de Microsoft
 # Después de login: ver dashboard, DLQ manager, health page

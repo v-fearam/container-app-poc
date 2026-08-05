@@ -1,19 +1,24 @@
 namespace WeatherApi.Models;
 
 /// <summary>
-/// DTO for synced Persona from SQL (read from PersonasSync table).
+/// DTO for comunicación from SQL star model View (vw_ComunicacionesConDims).
+/// Property names MUST match View column aliases exactly (case-insensitive).
 /// </summary>
-public record PersonaSyncDto
+public record ComunicacionSyncDto
 {
-    public string Id { get; init; } = string.Empty;
-    public string Nombre { get; init; } = string.Empty;
-    public string Apellido { get; init; } = string.Empty;
-    public string? Email { get; init; }
-    public int? Edad { get; init; }
-    public string? Ciudad { get; init; }
-    public DateTime CosmosUpdatedAt { get; init; }
-    public DateTime SyncedAt { get; init; }
-    public int SyncVersion { get; init; }
+    public long Id { get; init; }
+    public string CosmosId { get; init; } = string.Empty;
+    public DateTime FechaCreacion { get; init; }
+    public DateTime FechaUltimaModif { get; init; }
+    public string? Parametros { get; init; }
+    public int DiaCreacion { get; init; }
+    public string TipoProceso { get; init; } = string.Empty;
+    public string Canal { get; init; } = string.Empty;
+    public string Contacto { get; init; } = string.Empty;
+    public string TipoContacto { get; init; } = string.Empty;
+    public string Estado { get; init; } = string.Empty;
+    public DateTime FechaDate { get; init; }
+    public int CantEventos { get; init; }
 }
 
 /// <summary>

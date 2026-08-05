@@ -550,7 +550,115 @@
         </div>
     </div>
 
-    <!-- Slide 5: Tecnologías -->
+    <!-- Slide 5: Infraestructura por Vertical -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Infraestructura por Vertical</h2>
+            <p style="text-align: center; font-size: 1.1rem; color: #555; margin-bottom: 2rem;">
+                Mismo código, misma imagen Docker — solo cambia la configuración
+            </p>
+
+            <!-- Diagram: Cosmos → Workers → SQL -->
+            <div style="display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 0.5rem; margin-bottom: 2rem;">
+                
+                <!-- Cosmos Column -->
+                <div>
+                    <div style="background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%); padding: 1rem; border-radius: 12px; text-align: center; margin-bottom: 0.5rem;">
+                        <p style="margin: 0; color: white; font-weight: 700; font-size: 1rem;">☁️ Cosmos DB</p>
+                        <p style="margin: 0.3rem 0 0 0; color: rgba(255,255,255,0.8); font-size: 0.75rem;">1 Account · 3 Collections</p>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <div style="background: #e8f4fd; border: 2px solid #0078d4; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #0078d4; font-size: 0.85rem;">comunicaciones-campana</p>
+                        </div>
+                        <div style="background: #e8f4fd; border: 2px solid #0078d4; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #0078d4; font-size: 0.85rem;">comunicaciones-genericos</p>
+                        </div>
+                        <div style="background: #e8f4fd; border: 2px solid #0078d4; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #0078d4; font-size: 0.85rem;">comunicaciones-negocio</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow 1 -->
+                <div style="text-align: center;">
+                    <p style="font-size: 1.5rem; color: #764ba2; margin: 0;">→</p>
+                    <p style="font-size: 0.7rem; color: #888; margin: 0;">Change<br>Feed</p>
+                </div>
+
+                <!-- Workers Column -->
+                <div>
+                    <div style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); padding: 1rem; border-radius: 12px; text-align: center; margin-bottom: 0.5rem;">
+                        <p style="margin: 0; color: white; font-weight: 700; font-size: 1rem;">⚡ Workers</p>
+                        <p style="margin: 0.3rem 0 0 0; color: rgba(255,255,255,0.8); font-size: 0.75rem;">Container Apps · Escalado independiente</p>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <div style="background: #d4edda; border: 2px solid #28a745; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #155724; font-size: 0.85rem;">cfp-campana</p>
+                            <p style="margin: 0; color: #555; font-size: 0.7rem;">replicas: 4-8</p>
+                        </div>
+                        <div style="background: #d4edda; border: 2px solid #28a745; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #155724; font-size: 0.85rem;">cfp-genericos</p>
+                            <p style="margin: 0; color: #555; font-size: 0.7rem;">replicas: 2-4</p>
+                        </div>
+                        <div style="background: #d4edda; border: 2px solid #28a745; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #155724; font-size: 0.85rem;">cfp-negocio</p>
+                            <p style="margin: 0; color: #555; font-size: 0.7rem;">replicas: 2</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow 2 -->
+                <div style="text-align: center;">
+                    <p style="font-size: 1.5rem; color: #764ba2; margin: 0;">→</p>
+                    <p style="font-size: 0.7rem; color: #888; margin: 0;">SP<br>Upsert</p>
+                </div>
+
+                <!-- SQL Column -->
+                <div>
+                    <div style="background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%); padding: 1rem; border-radius: 12px; text-align: center; margin-bottom: 0.5rem;">
+                        <p style="margin: 0; color: white; font-weight: 700; font-size: 1rem;">🗄️ Azure SQL</p>
+                        <p style="margin: 0.3rem 0 0 0; color: rgba(255,255,255,0.8); font-size: 0.75rem;">1 Server · 3 Databases</p>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <div style="background: #e3e1fc; border: 2px solid #6c5ce7; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #6c5ce7; font-size: 0.85rem;">db-campana ⭐</p>
+                            <p style="margin: 0; color: #555; font-size: 0.7rem;">Modelo Estrella</p>
+                        </div>
+                        <div style="background: #e3e1fc; border: 2px solid #6c5ce7; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #6c5ce7; font-size: 0.85rem;">db-genericos ⭐</p>
+                            <p style="margin: 0; color: #555; font-size: 0.7rem;">Modelo Estrella</p>
+                        </div>
+                        <div style="background: #e3e1fc; border: 2px solid #6c5ce7; padding: 0.6rem; border-radius: 8px; text-align: center;">
+                            <p style="margin: 0; font-weight: 600; color: #6c5ce7; font-size: 0.85rem;">db-negocio ⭐</p>
+                            <p style="margin: 0; color: #555; font-size: 0.7rem;">Modelo Estrella</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key points -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                <div class="highlight" style="text-align: center; padding: 1rem;">
+                    <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">🐳</p>
+                    <p style="margin: 0; font-weight: 600; font-size: 0.95rem;">1 Imagen Docker</p>
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.85rem; color: #555;">Misma para los 3 workers</p>
+                </div>
+                <div class="highlight" style="text-align: center; padding: 1rem;">
+                    <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">📐</p>
+                    <p style="margin: 0; font-weight: 600; font-size: 0.95rem;">Escalado Independiente</p>
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.85rem; color: #555;">Cada vertical según su volumen</p>
+                </div>
+                <div class="highlight" style="text-align: center; padding: 1rem;">
+                    <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">🔒</p>
+                    <p style="margin: 0; font-weight: 600; font-size: 0.95rem;">Aislamiento Total</p>
+                    <p style="margin: 0.3rem 0 0 0; font-size: 0.85rem; color: #555;">Purga, backup, permisos por vertical</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 6: Tecnologías -->
     <div class="slide">
         <div class="slide-content">
             <h2>Stack Tecnológico</h2>

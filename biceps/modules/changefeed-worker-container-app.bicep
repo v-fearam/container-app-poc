@@ -28,13 +28,13 @@ param cosmosEndpoint string
 param cosmosDatabase string = 'change-feed-poc'
 
 @description('Cosmos DB collection to monitor (configurable per vertical in production)')
-param cosmosCollection string = 'personas'
+param cosmosCollection string = 'comunicaciones'
 
 @description('Change Feed Processor name (unique per vertical)')
-param processorName string = 'cfp-personas'
+param processorName string = 'cfp-comunicaciones'
 
 @description('Vertical name for telemetry and events')
-param verticalName string = 'personas'
+param verticalName string = 'comunicaciones'
 
 @description('Service Bus namespace FQDN (e.g., myns.servicebus.windows.net)')
 param serviceBusNamespaceFqdn string
@@ -54,8 +54,8 @@ param keyVaultUri string = ''
 @description('Minimum replicas (1 = no scale to zero, recommended for Change Feed to avoid rebalancing lag)')
 param minReplicas int = 1
 
-@description('Maximum replicas (should match number of physical partitions in Cosmos)')
-param maxReplicas int = 1
+@description('Maximum replicas (should match number of physical partitions in Cosmos). POC: 2 to validate concurrent lease distribution.')
+param maxReplicas int = 2
 
 @description('CPU cores')
 param cpu string = '0.5'

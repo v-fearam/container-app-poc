@@ -64,13 +64,13 @@ resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05-15
   }
 }
 
-// Container: personas (monitored container)
-resource personasContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+// Container: comunicaciones (monitored container)
+resource comunicacionesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: database
-  name: 'personas'
+  name: 'comunicaciones'
   properties: {
     resource: {
-      id: 'personas'
+      id: 'comunicaciones'
       partitionKey: {
         paths: [
           '/id'

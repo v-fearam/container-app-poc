@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace WeatherApi.Data;
 
 /// <summary>
-/// DbContext for Dashboard data (queue counters and Change Feed sync).
+/// DbContext for Dashboard data (queue counters, Change Feed counters, job executions).
+/// PersonasSync removed — star model is queried via raw SQL View.
 /// </summary>
 public class DashboardDbContext : DbContext
 {
@@ -13,7 +14,6 @@ public class DashboardDbContext : DbContext
     }
 
     public DbSet<QueueCounter> QueueCounters => Set<QueueCounter>();
-    public DbSet<PersonaSync> PersonasSync => Set<PersonaSync>();
     public DbSet<ChangeFeedCounter> ChangeFeedCounters => Set<ChangeFeedCounter>();
     public DbSet<JobExecution> JobExecutions => Set<JobExecution>();
 

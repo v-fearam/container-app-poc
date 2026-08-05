@@ -25,7 +25,7 @@ public sealed class DefaultMessageHandler(
         logger.LogInformation("Mensaje #{Number} completado exitosamente", message.Number);
 
         await dashboardPublisher.PublishMessageProcessedAsync(
-            message.Vertical, "weather-jobs", message.ProcessType, args.Message.MessageId, cancellationToken);
+            message.Vertical, "weather-jobs", message.ProcessType, args.Message.MessageId, message.Number, cancellationToken);
 
         return true;
     }

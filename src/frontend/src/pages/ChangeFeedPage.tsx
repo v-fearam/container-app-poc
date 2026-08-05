@@ -7,44 +7,55 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Database, RefreshCw, Plus, Pencil, Trash2, CheckCircle, AlertCircle, BarChart3, Timer } from 'lucide-react';
+import { Database, RefreshCw, Plus, Pencil, Trash2, CheckCircle, AlertCircle, BarChart3, Timer, ChevronDown, ChevronRight } from 'lucide-react';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface Persona {
+interface Evento {
+  tipo: string;
+  fecha: string;
+}
+
+interface Comunicacion {
   id: string;
-  nombre: string;
-  apellido: string;
-  email: string;
-  edad: number;
-  ciudad: string;
-  activo: boolean;
-  updatedAt?: string;
+  tipoProceso: string;
+  canal: string;
+  contacto: string;
+  parametros?: Record<string, unknown> | null;
+  template?: string | null;
+  estado: string;
+  fechaCreacion: string;
+  fechaUltimaModif: string;
+  eventos: Evento[];
   ttl?: number | null;
 }
 
-interface PersonasResponse {
-  items: Persona[];
+interface ComunicacionesResponse {
+  items: Comunicacion[];
   continuationToken: string | null;
   count: number;
 }
 
-interface PersonaSync {
-  id: string;
-  nombre: string;
-  apellido: string;
-  email: string;
-  edad: number;
-  ciudad: string;
-  cosmosUpdatedAt: string;
-  syncedAt: string;
-  syncVersion: number;
+interface ComunicacionSync {
+  id: number;
+  cosmosId: string;
+  fechaCreacion: string;
+  fechaUltimaModif: string;
+  parametros: string | null;
+  diaCreacion: number;
+  tipoProceso: string;
+  canal: string;
+  contacto: string;
+  tipoContacto: string;
+  estado: string;
+  fechaDate: string;
+  cantEventos: number;
 }
 
-interface PersonaSyncResponse {
-  items: PersonaSync[];
+interface ComunicacionSyncResponse {
+  items: ComunicacionSync[];
   continuationToken: string | null;
   count: number;
 }
@@ -56,6 +67,20 @@ interface ChangeFeedCounter {
   errorCount: number;
 }
 
+const ESTADO_COLORS: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-700',
+  accepted: 'bg-blue-100 text-blue-700',
+  delivered: 'bg-green-100 text-green-700',
+  opened: 'bg-emerald-100 text-emerald-700',
+  bounced: 'bg-red-100 text-red-700',
+  complained: 'bg-orange-100 text-orange-700',
+  unsubscribed: 'bg-yellow-100 text-yellow-700',
+};
+
+const TIPO_PROCESO_OPTIONS = ['recupero-clave', 'validacion-email', 'aviso-generico', 'tramite'];
+const CANAL_OPTIONS = ['email', 'sms'];
+const EVENTO_TIPOS = ['accepted', 'delivered', 'opened', 'bounced', 'complained', 'unsubscribed'];
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -66,7 +91,7 @@ export function ChangeFeedPage() {
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Change Feed POC</h1>
         <p className="text-muted-foreground">
-          CosmosDB → Change Feed → SQL Server sync con telemetría en tiempo real
+          CosmosDB → Change Feed → SQL Server (Modelo Estrella) con telemetría en tiempo real
         </p>
       </div>
 
@@ -78,7 +103,7 @@ export function ChangeFeedPage() {
           </TabsTrigger>
           <TabsTrigger value="sql" className="gap-2">
             <CheckCircle className="h-4 w-4" />
-            SQL Sync
+            SQL Estrella
           </TabsTrigger>
           <TabsTrigger value="dashboard" className="gap-2">
             <BarChart3 className="h-4 w-4" />
@@ -91,7 +116,7 @@ export function ChangeFeedPage() {
         </TabsContent>
 
         <TabsContent value="sql" className="space-y-6">
-          <SqlSyncTab />
+          <SqlStarTab />
         </TabsContent>
 
         <TabsContent value="dashboard" className="space-y-6">
@@ -103,33 +128,35 @@ export function ChangeFeedPage() {
 }
 
 // ============================================================================
-// Tab 1: Cosmos Editor (CRUD)
+// Tab 1: Cosmos Editor (CRUD Comunicaciones + Agregar Eventos)
 // ============================================================================
 
 function CosmosEditorTab() {
   const { get, post, put, del } = useApi();
-  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [comunicaciones, setComunicaciones] = useState<Comunicacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [addingEventoId, setAddingEventoId] = useState<string | null>(null);
+  const [eventoForm, setEventoForm] = useState({ tipo: 'accepted', fecha: '' });
+
   // Form state
-  const [formData, setFormData] = useState<Omit<Persona, 'id' | 'updatedAt'>>({
-    nombre: '',
-    apellido: '',
-    email: '',
-    edad: 0,
-    ciudad: '',
-    activo: true,
-    ttl: null,
+  const [formData, setFormData] = useState({
+    tipoProceso: 'recupero-clave',
+    canal: 'email',
+    contacto: '',
+    template: '',
+    parametros: '{}',
+    ttl: null as number | null,
   });
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const fetchPersonas = async () => {
+  const fetchComunicaciones = async () => {
     try {
       setLoading(true);
-      const result = await get<PersonasResponse>('/api/cosmos/personas');
-      setPersonas(result.items);
+      const result = await get<ComunicacionesResponse>('/api/cosmos/comunicaciones');
+      setComunicaciones(result.items);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -139,7 +166,7 @@ function CosmosEditorTab() {
   };
 
   useEffect(() => {
-    fetchPersonas();
+    fetchComunicaciones();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -147,21 +174,33 @@ function CosmosEditorTab() {
     try {
       setSubmitting(true);
       setError(null);
-      
-      if (editingId) {
-        // Update existing persona
-        await put(`/api/cosmos/personas/${editingId}`, formData);
-      } else {
-        // Create new persona
-        await post('/api/cosmos/personas', formData);
+
+      let parsedParams: Record<string, unknown> | undefined;
+      try {
+        parsedParams = formData.parametros ? JSON.parse(formData.parametros) : undefined;
+      } catch {
+        setError('Parámetros debe ser JSON válido');
+        setSubmitting(false);
+        return;
       }
-      
-      // Reset form
-      setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true, ttl: null });
-      setEditingId(null);
-      
-      // Refresh list
-      await fetchPersonas();
+
+      const body = {
+        tipoProceso: formData.tipoProceso,
+        canal: formData.canal,
+        contacto: formData.contacto,
+        template: formData.template || null,
+        parametros: parsedParams,
+        ttl: formData.ttl,
+      };
+
+      if (editingId) {
+        await put(`/api/cosmos/comunicaciones/${editingId}`, body);
+      } else {
+        await post('/api/cosmos/comunicaciones', body);
+      }
+
+      resetForm();
+      await fetchComunicaciones();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -170,31 +209,47 @@ function CosmosEditorTab() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta persona?')) return;
-    
+    if (!confirm('¿Eliminar esta comunicación?')) return;
     try {
-      await del(`/api/cosmos/personas/${id}`);
-      await fetchPersonas();
+      await del(`/api/cosmos/comunicaciones/${id}`);
+      await fetchComunicaciones();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al eliminar');
     }
   };
 
-  const handleEdit = (persona: Persona) => {
+  const handleEdit = (c: Comunicacion) => {
     setFormData({
-      nombre: persona.nombre,
-      apellido: persona.apellido,
-      email: persona.email,
-      edad: persona.edad,
-      ciudad: persona.ciudad,
-      activo: persona.activo,
-      ttl: persona.ttl ?? null,
+      tipoProceso: c.tipoProceso,
+      canal: c.canal,
+      contacto: c.contacto,
+      template: c.template ?? '',
+      parametros: c.parametros ? JSON.stringify(c.parametros, null, 2) : '{}',
+      ttl: c.ttl ?? null,
     });
-    setEditingId(persona.id);
+    setEditingId(c.id);
+  };
+
+  const handleAddEvento = async (comunicacionId: string) => {
+    try {
+      setSubmitting(true);
+      setError(null);
+      await post(`/api/cosmos/comunicaciones/${comunicacionId}/eventos`, {
+        tipo: eventoForm.tipo,
+        fecha: eventoForm.fecha || undefined,
+      });
+      setAddingEventoId(null);
+      setEventoForm({ tipo: 'accepted', fecha: '' });
+      await fetchComunicaciones();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al agregar evento');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resetForm = () => {
-    setFormData({ nombre: '', apellido: '', email: '', edad: 0, ciudad: '', activo: true, ttl: null });
+    setFormData({ tipoProceso: 'recupero-clave', canal: 'email', contacto: '', template: '', parametros: '{}', ttl: null });
     setEditingId(null);
   };
 
@@ -205,66 +260,71 @@ function CosmosEditorTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {editingId ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-            {editingId ? 'Editar Persona' : 'Nueva Persona'}
+            {editingId ? 'Editar Comunicación' : 'Nueva Comunicación'}
           </CardTitle>
           <CardDescription>
-            Los cambios se sincronizan automáticamente a SQL Server vía Change Feed
+            Los cambios se sincronizan automáticamente al modelo estrella vía Change Feed
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre *</Label>
-                <Input
-                  id="nombre"
+                <Label htmlFor="tipoProceso">Tipo de Proceso *</Label>
+                <select
+                  id="tipoProceso"
                   required
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  placeholder="Juan"
+                  value={formData.tipoProceso}
+                  onChange={(e) => setFormData({ ...formData, tipoProceso: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  {TIPO_PROCESO_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="canal">Canal *</Label>
+                <select
+                  id="canal"
+                  required
+                  value={formData.canal}
+                  onChange={(e) => setFormData({ ...formData, canal: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  {CANAL_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contacto">Contacto *</Label>
+                <Input
+                  id="contacto"
+                  required
+                  value={formData.contacto}
+                  onChange={(e) => setFormData({ ...formData, contacto: e.target.value })}
+                  placeholder="usuario@mail.com o +5411..."
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="apellido">Apellido *</Label>
+                <Label htmlFor="template">Template</Label>
                 <Input
-                  id="apellido"
-                  required
-                  value={formData.apellido}
-                  onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-                  placeholder="Pérez"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="juan@example.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edad">Edad *</Label>
-                <Input
-                  id="edad"
-                  type="number"
-                  required
-                  min="0"
-                  max="150"
-                  value={formData.edad}
-                  onChange={(e) => setFormData({ ...formData, edad: parseInt(e.target.value) })}
+                  id="template"
+                  value={formData.template}
+                  onChange={(e) => setFormData({ ...formData, template: e.target.value })}
+                  placeholder="recupero-clave-v2"
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="ciudad">Ciudad *</Label>
-                <Input
-                  id="ciudad"
-                  required
-                  value={formData.ciudad}
-                  onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
-                  placeholder="Buenos Aires"
+                <Label htmlFor="parametros">Parámetros (JSON)</Label>
+                <textarea
+                  id="parametros"
+                  value={formData.parametros}
+                  onChange={(e) => setFormData({ ...formData, parametros: e.target.value })}
+                  placeholder='{"nombre": "Juan", "token": "abc123"}'
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                  rows={3}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -276,22 +336,16 @@ function CosmosEditorTab() {
                     min="1"
                     value={formData.ttl ?? ''}
                     onChange={(e) => setFormData({ ...formData, ttl: e.target.value ? parseInt(e.target.value) : null })}
-                    placeholder="Sin expiración"
-                    className="max-w-[200px]"
+                    placeholder="Sin expiración (default 45 días)"
+                    className="max-w-[300px]"
                   />
                   {formData.ttl && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setFormData({ ...formData, ttl: null })}
-                      className="cursor-pointer text-muted-foreground"
-                    >
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setFormData({ ...formData, ttl: null })} className="cursor-pointer text-muted-foreground">
                       Quitar TTL
                     </Button>
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {formData.ttl ? `Expira en ${formData.ttl >= 3600 ? `${Math.floor(formData.ttl / 3600)}h ${Math.floor((formData.ttl % 3600) / 60)}m` : formData.ttl >= 60 ? `${Math.floor(formData.ttl / 60)}m ${formData.ttl % 60}s` : `${formData.ttl}s`}` : 'El documento no expira'}
+                    {formData.ttl ? `Expira en ${formatTtl(formData.ttl)}` : 'El documento no expira'}
                   </span>
                 </div>
               </div>
@@ -306,7 +360,7 @@ function CosmosEditorTab() {
 
             <div className="flex gap-2">
               <Button type="submit" disabled={submitting} className="cursor-pointer">
-                {submitting ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Persona'}
+                {submitting ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Comunicación'}
               </Button>
               {editingId && (
                 <Button type="button" variant="outline" onClick={resetForm} className="cursor-pointer">
@@ -323,81 +377,149 @@ function CosmosEditorTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Personas en CosmosDB</CardTitle>
-              <CardDescription>
-                Documentos en el container "personas"
-              </CardDescription>
+              <CardTitle>Comunicaciones en CosmosDB</CardTitle>
+              <CardDescription>Container "comunicaciones" — click en eventos para expandir</CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchPersonas}
-              disabled={loading}
-              className="cursor-pointer"
-            >
+            <Button variant="outline" size="sm" onClick={fetchComunicaciones} disabled={loading} className="cursor-pointer">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {loading && personas.length === 0 ? (
+          {loading && comunicaciones.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-          ) : personas.length === 0 ? (
+          ) : comunicaciones.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No hay personas. Creá la primera arriba.
+              No hay comunicaciones. Creá la primera arriba.
             </div>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Edad</TableHead>
-                    <TableHead>Ciudad</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Contacto</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Eventos</TableHead>
                     <TableHead>TTL</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {personas.map((persona) => (
-                    <TableRow key={persona.id}>
-                      <TableCell className="font-medium">
-                        {persona.nombre} {persona.apellido}
-                      </TableCell>
-                      <TableCell>{persona.email}</TableCell>
-                      <TableCell>{persona.edad}</TableCell>
-                      <TableCell>{persona.ciudad}</TableCell>
-                      <TableCell>
-                        {persona.ttl ? (
-                          <Badge variant="outline" className="gap-1 text-orange-600 border-orange-300">
-                            <Timer className="h-3 w-3" />
-                            {persona.ttl >= 3600 ? `${Math.floor(persona.ttl / 3600)}h` : persona.ttl >= 60 ? `${Math.floor(persona.ttl / 60)}m` : `${persona.ttl}s`}
+                  {comunicaciones.map((c) => (
+                    <>
+                      <TableRow key={c.id}>
+                        <TableCell className="font-mono text-xs max-w-[120px] truncate" title={c.id}>
+                          {c.id.substring(0, 12)}...
+                        </TableCell>
+                        <TableCell>{c.tipoProceso}</TableCell>
+                        <TableCell><Badge variant="outline">{c.canal}</Badge></TableCell>
+                        <TableCell className="max-w-[200px] truncate">{c.contacto}</TableCell>
+                        <TableCell>
+                          <Badge className={ESTADO_COLORS[c.estado] || 'bg-gray-100 text-gray-700'}>
+                            {c.estado}
                           </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">∞</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(persona)}
-                          className="cursor-pointer"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(persona.id)}
-                          className="cursor-pointer text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                            className="cursor-pointer gap-1"
+                          >
+                            {expandedId === c.id ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {c.eventos.length}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          {c.ttl ? (
+                            <Badge variant="outline" className="gap-1 text-orange-600 border-orange-300">
+                              <Timer className="h-3 w-3" />
+                              {formatTtl(c.ttl)}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">∞</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right space-x-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(c)} className="cursor-pointer" title="Editar">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setAddingEventoId(addingEventoId === c.id ? null : c.id); setEventoForm({ tipo: 'accepted', fecha: '' }); }}
+                            className="cursor-pointer"
+                            title="Agregar Evento"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)} className="cursor-pointer text-destructive hover:text-destructive" title="Eliminar">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Add Event Form (inline) */}
+                      {addingEventoId === c.id && (
+                        <TableRow key={`${c.id}-add-event`}>
+                          <TableCell colSpan={8} className="bg-muted/30">
+                            <div className="flex items-center gap-3 py-2">
+                              <span className="text-sm font-medium">Agregar Evento:</span>
+                              <select
+                                value={eventoForm.tipo}
+                                onChange={(e) => setEventoForm({ ...eventoForm, tipo: e.target.value })}
+                                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                              >
+                                {EVENTO_TIPOS.map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                              <Input
+                                type="datetime-local"
+                                value={eventoForm.fecha}
+                                onChange={(e) => setEventoForm({ ...eventoForm, fecha: e.target.value })}
+                                className="h-8 w-[220px]"
+                                placeholder="Ahora"
+                              />
+                              <Button size="sm" onClick={() => handleAddEvento(c.id)} disabled={submitting} className="cursor-pointer">
+                                Agregar
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setAddingEventoId(null)} className="cursor-pointer">
+                                Cancelar
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {/* Expanded Events */}
+                      {expandedId === c.id && c.eventos.length > 0 && (
+                        <TableRow key={`${c.id}-events`}>
+                          <TableCell colSpan={8} className="bg-muted/20">
+                            <div className="py-2 px-4">
+                              <div className="text-xs font-medium text-muted-foreground mb-2">Eventos de {c.id.substring(0, 12)}...</div>
+                              <div className="space-y-1">
+                                {c.eventos.map((ev, i) => (
+                                  <div key={i} className="flex items-center gap-3 text-sm">
+                                    <CheckCircle className="h-3 w-3 text-green-600" />
+                                    <Badge className={ESTADO_COLORS[ev.tipo] || 'bg-gray-100 text-gray-700'} variant="secondary">
+                                      {ev.tipo}
+                                    </Badge>
+                                    <span className="text-muted-foreground">
+                                      {new Date(ev.fecha).toLocaleString()}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   ))}
                 </TableBody>
               </Table>
@@ -410,21 +532,21 @@ function CosmosEditorTab() {
 }
 
 // ============================================================================
-// Tab 2: SQL Sync Viewer (Read-only)
+// Tab 2: SQL Star Model Viewer
 // ============================================================================
 
-function SqlSyncTab() {
+function SqlStarTab() {
   const { get } = useApi();
-  const [personas, setPersonas] = useState<PersonaSync[]>([]);
+  const [comunicaciones, setComunicaciones] = useState<ComunicacionSync[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  const fetchSyncedPersonas = async () => {
+  const fetchSynced = async () => {
     try {
       setLoading(true);
-      const result = await get<PersonaSyncResponse>('/api/sync/personas');
-      setPersonas(result.items);
+      const result = await get<ComunicacionSyncResponse>('/api/sync/comunicaciones');
+      setComunicaciones(result.items);
       setLastRefresh(new Date());
       setError(null);
     } catch (err) {
@@ -435,7 +557,7 @@ function SqlSyncTab() {
   };
 
   useEffect(() => {
-    fetchSyncedPersonas();
+    fetchSynced();
   }, []);
 
   return (
@@ -445,10 +567,10 @@ function SqlSyncTab() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-600" />
-              Personas Sincronizadas (SQL Server)
+              Modelo Estrella (SQL Server)
             </CardTitle>
             <CardDescription>
-              Datos replicados desde CosmosDB vía Change Feed Processor
+              FactComunicaciones + Dimensiones resueltas — particionado por día
               {lastRefresh && (
                 <span className="ml-2 text-xs">
                   • Última actualización: {lastRefresh.toLocaleTimeString()}
@@ -456,13 +578,7 @@ function SqlSyncTab() {
               )}
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchSyncedPersonas}
-            disabled={loading}
-            className="cursor-pointer"
-          >
+          <Button variant="outline" size="sm" onClick={fetchSynced} disabled={loading} className="cursor-pointer">
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -475,40 +591,50 @@ function SqlSyncTab() {
             {error}
           </div>
         )}
-        
-        {loading && personas.length === 0 ? (
+
+        {loading && comunicaciones.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-        ) : personas.length === 0 ? (
+        ) : comunicaciones.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            No hay datos sincronizados aún. Creá una persona en la tab "Cosmos Editor".
+            No hay datos en el modelo estrella. Creá una comunicación en "Cosmos Editor" y esperá al Change Feed.
           </div>
         ) : (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Edad</TableHead>
-                  <TableHead>Ciudad</TableHead>
-                  <TableHead>Synced At</TableHead>
-                  <TableHead className="text-right">Versión</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Canal</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
+                  <TableHead>Eventos</TableHead>
+                  <TableHead>Día</TableHead>
+                  <TableHead>Últ. Modif</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {personas.map((persona) => (
-                  <TableRow key={persona.id}>
-                    <TableCell className="font-medium">
-                      {persona.nombre} {persona.apellido}
+                {comunicaciones.map((c) => (
+                  <TableRow key={`${c.id}-${c.diaCreacion}`}>
+                    <TableCell className="font-medium">{c.tipoProceso}</TableCell>
+                    <TableCell><Badge variant="outline">{c.canal}</Badge></TableCell>
+                    <TableCell className="max-w-[200px] truncate">{c.contacto}</TableCell>
+                    <TableCell>
+                      <Badge className={ESTADO_COLORS[c.estado] || 'bg-gray-100 text-gray-700'}>
+                        {c.estado}
+                      </Badge>
                     </TableCell>
-                    <TableCell>{persona.email}</TableCell>
-                    <TableCell>{persona.edad}</TableCell>
-                    <TableCell>{persona.ciudad}</TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(c.fechaDate).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{c.cantEventos}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono">{c.diaCreacion}</Badge>
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {new Date(persona.syncedAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="secondary">v{persona.syncVersion}</Badge>
+                      {new Date(c.fechaUltimaModif).toLocaleTimeString()}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -522,7 +648,7 @@ function SqlSyncTab() {
 }
 
 // ============================================================================
-// Tab 3: Dashboard (Counters)
+// Tab 3: Dashboard (Counters) — sin cambios
 // ============================================================================
 
 function DashboardTab() {
@@ -549,7 +675,6 @@ function DashboardTab() {
     fetchCounters();
   }, [days]);
 
-  // Aggregate today's counters
   const today = new Date().toISOString().split('T')[0];
   const todayCounters = counters.filter(c => c.date.split('T')[0] === today);
   const totalSuccess = todayCounters.reduce((sum, c) => sum + c.successCount, 0);
@@ -557,7 +682,6 @@ function DashboardTab() {
 
   return (
     <div className="space-y-6">
-      {/* Today's Summary Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -565,12 +689,11 @@ function DashboardTab() {
             Change Feed — Procesados Hoy
           </CardTitle>
           <CardDescription>
-            Documentos sincronizados desde CosmosDB a SQL Server
+            Documentos sincronizados desde CosmosDB al modelo estrella
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Success Count */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -580,8 +703,6 @@ function DashboardTab() {
                 {totalSuccess.toLocaleString()}
               </div>
             </div>
-
-            {/* Error Count */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <AlertCircle className="h-4 w-4 text-destructive" />
@@ -591,13 +712,10 @@ function DashboardTab() {
                 <div className="text-4xl font-bold text-destructive">
                   {totalErrors.toLocaleString()}
                 </div>
-                {totalErrors > 0 && (
+                {totalErrors > 0 ? (
                   <Badge variant="destructive">Requiere atención</Badge>
-                )}
-                {totalErrors === 0 && (
-                  <Badge variant="secondary" className="text-green-600 bg-green-50">
-                    ✓ Cero errores
-                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-green-600 bg-green-50">✓ Cero errores</Badge>
                 )}
               </div>
             </div>
@@ -605,20 +723,15 @@ function DashboardTab() {
         </CardContent>
       </Card>
 
-      {/* Historical Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Histórico de Sincronización</CardTitle>
-              <CardDescription>
-                Contadores diarios por collection
-              </CardDescription>
+              <CardDescription>Contadores diarios por collection</CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Label htmlFor="days" className="text-sm text-muted-foreground">
-                Días:
-              </Label>
+              <Label htmlFor="days" className="text-sm text-muted-foreground">Días:</Label>
               <Input
                 id="days"
                 type="number"
@@ -628,13 +741,7 @@ function DashboardTab() {
                 onChange={(e) => setDays(parseInt(e.target.value) || 7)}
                 className="w-20"
               />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchCounters}
-                disabled={loading}
-                className="cursor-pointer"
-              >
+              <Button variant="outline" size="sm" onClick={fetchCounters} disabled={loading} className="cursor-pointer">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
@@ -705,4 +812,15 @@ function DashboardTab() {
       </Card>
     </div>
   );
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function formatTtl(seconds: number): string {
+  if (seconds >= 86400) return `${Math.floor(seconds / 86400)}d`;
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  if (seconds >= 60) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  return `${seconds}s`;
 }

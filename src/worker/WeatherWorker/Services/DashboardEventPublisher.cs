@@ -8,21 +8,21 @@ namespace WeatherWorker.Services;
 /// </summary>
 public interface IDashboardEventPublisher
 {
-    Task PublishMessageProcessedAsync(string vertical, string queueName, string processType, string messageId, CancellationToken cancellationToken = default);
-    Task PublishMessageEnqueuedAsync(string vertical, string queueName, string processType, string messageId, CancellationToken cancellationToken = default);
+    Task PublishMessageProcessedAsync(string vertical, string queueName, string processType, string messageId, int? number = null, CancellationToken cancellationToken = default);
+    Task PublishMessageEnqueuedAsync(string vertical, string queueName, string processType, string messageId, int? number = null, CancellationToken cancellationToken = default);
 }
 
 public sealed class DashboardEventPublisher(
     ServiceBusSender topicSender,
     ILogger<DashboardEventPublisher> logger) : IDashboardEventPublisher
 {
-    public Task PublishMessageProcessedAsync(string vertical, string queueName, string processType, string messageId, CancellationToken cancellationToken = default)
-        => PublishEventAsync("MessageProcessed", vertical, queueName, processType, messageId, cancellationToken);
+    public Task PublishMessageProcessedAsync(string vertical, string queueName, string processType, string messageId, int? number = null, CancellationToken cancellationToken = default)
+        => PublishEventAsync("MessageProcessed", vertical, queueName, processType, messageId, number, cancellationToken);
 
-    public Task PublishMessageEnqueuedAsync(string vertical, string queueName, string processType, string messageId, CancellationToken cancellationToken = default)
-        => PublishEventAsync("MessageEnqueued", vertical, queueName, processType, messageId, cancellationToken);
+    public Task PublishMessageEnqueuedAsync(string vertical, string queueName, string processType, string messageId, int? number = null, CancellationToken cancellationToken = default)
+        => PublishEventAsync("MessageEnqueued", vertical, queueName, processType, messageId, number, cancellationToken);
 
-    private async Task PublishEventAsync(string eventType, string vertical, string queueName, string processType, string messageId, CancellationToken cancellationToken)
+    private async Task PublishEventAsync(string eventType, string vertical, string queueName, string processType, string messageId, int? number, CancellationToken cancellationToken)
     {
         try
         {
@@ -32,6 +32,7 @@ public sealed class DashboardEventPublisher(
                 vertical,
                 queueName,
                 processType,
+                number,
                 timestamp = DateTime.UtcNow,
                 messageId
             });

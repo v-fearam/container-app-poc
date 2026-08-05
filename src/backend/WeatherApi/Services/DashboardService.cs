@@ -51,7 +51,8 @@ public class DashboardService(
     {
         var counts = new Dictionary<string, (int Count, string Path)>();
 
-        // Get DLQ count for weather-jobs queue (if it exists as a standalone queue)
+        // Only count DLQ from the work queue (actual failed messages)
+        // Topic subscription DLQ is separate (dashboard event delivery failures, not work items)
         try
         {
             var queueProps = await sbAdminClient.GetQueueRuntimePropertiesAsync("weather-jobs", cancellationToken);
@@ -61,26 +62,7 @@ public class DashboardService(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Queue weather-jobs not found, checking topic subscription instead");
-        }
-
-        // Get DLQ count from the topic subscription (this is where messages actually go)
-        try
-        {
-            var subProps = await sbAdminClient.GetSubscriptionRuntimePropertiesAsync("nd-dashboard-events", "counter-updater", cancellationToken);
-            var subDlqCount = (int)subProps.Value.DeadLetterMessageCount;
-            
-            if (subDlqCount > 0)
-            {
-                if (counts.ContainsKey("weather-jobs"))
-                    counts["weather-jobs"] = (counts["weather-jobs"].Count + subDlqCount, "nd-dashboard-events/counter-updater");
-                else
-                    counts["weather-jobs"] = (subDlqCount, "nd-dashboard-events/counter-updater");
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to get DLQ count for subscription counter-updater");
+            logger.LogDebug(ex, "Queue weather-jobs not found");
         }
 
         return counts;

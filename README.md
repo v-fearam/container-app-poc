@@ -554,4 +554,5 @@ Crear un workbook con estos paneles:
 | [docs/WORKER-KEDA-DESIGN.md](docs/WORKER-KEDA-DESIGN.md) | Diseño Worker + KEDA + Service Bus: arquitectura, DLQ, scaling |
 | [docs/dashboard-poc.md](docs/dashboard-poc.md) | Dashboard POC: diseño completo, arquitectura, implementación |
 | [docs/change-feed-poc.md](docs/change-feed-poc.md) | Change Feed POC: Cosmos → SQL sync, eventos, TTL |
+| [docs/ARQUITECTURA-VERTICALES.md](docs/ARQUITECTURA-VERTICALES.md) | Arquitectura de producción: 3 verticales (Campaña, Genéricos, Negocio), infra compartida vs aislada |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Desarrollo local |

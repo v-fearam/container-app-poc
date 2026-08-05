@@ -35,7 +35,7 @@ public class ChangeFeedWorkerService(
         var leaseContainer = database.GetContainer("changefeed-leases");
 
         _processor = monitoredContainer
-            .GetChangeFeedProcessorBuilder<Persona>(
+            .GetChangeFeedProcessorBuilder<Comunicacion>(
                 processorName: _cosmosOptions.ProcessorName,
                 onChangesDelegate: HandleChangesAsync)
             .WithInstanceName($"{Environment.MachineName}-{Guid.NewGuid():N}") // Unique instance per pod
@@ -75,7 +75,7 @@ public class ChangeFeedWorkerService(
     /// </summary>
     private async Task HandleChangesAsync(
         ChangeFeedProcessorContext context,
-        IReadOnlyCollection<Persona> changes,
+        IReadOnlyCollection<Comunicacion> changes,
         CancellationToken cancellationToken)
     {
         logger.LogInformation(

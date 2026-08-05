@@ -46,6 +46,9 @@ param oidcWellKnownUrl string
 param providerName string = 'entraid'
 
 // --- Token Store ---
+@description('Enable Token Store in auth config (requires token-store-sas secret in Container App)')
+param enableTokenStore bool = true
+
 @description('Storage account name for Token Store')
 param tokenStoreStorageAccountName string = 'st${take(replace(toLower('weather'), '-', ''), 8)}tokens${take(uniqueString(resourceGroup().id), 4)}'
 
@@ -105,11 +108,13 @@ resource frontendAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01'
     }
     login: {
       preserveUrlFragmentsForLogins: false
-      tokenStore: {
+      tokenStore: enableTokenStore ? {
         enabled: true
         azureBlobStorage: {
           sasUrlSettingName: 'token-store-sas'
         }
+      } : {
+        enabled: false
       }
     }
   }

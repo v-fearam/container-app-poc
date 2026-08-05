@@ -1,23 +1,18 @@
-using System.Text.Json;
+using System.Data;
 using Azure.Messaging.ServiceBus;
 using ChangeFeedWorker.Configuration;
 using ChangeFeedWorker.Data;
-using ChangeFeedWorker.Data.Entities;
 using ChangeFeedWorker.Models;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ChangeFeedWorker.Services;
 
 /// <summary>
-/// Handles Change Feed events: syncs Personas to SQL and publishes dashboard events.
-/// Follows the same pattern as DashboardEventHandler (self-documenting methods, idempotent writes).
-/// 
-/// ARCHITECTURE NOTE: This worker is an EVENT PRODUCER only.
-/// - Processes Cosmos documents → Syncs to SQL → Publishes events to Service Bus topic → FIN
-/// - DashboardWorker (consumer) receives events and updates aggregated counters in SQL
-/// - This separation ensures single responsibility and event-driven architecture
+/// Handles Change Feed events: calls SP to upsert into star model, publishes dashboard events.
+/// Uses ADO.NET for SP call (not EF Core) since star model uses raw SQL.
 /// </summary>
 public class ChangeFeedHandler(
     IDbContextFactory<DashboardDbContext> dbContextFactory,
@@ -28,22 +23,22 @@ public class ChangeFeedHandler(
 {
     private readonly CosmosOptions _cosmosOptions = cosmosOptions.Value;
 
-    public async Task ProcessBatchAsync(IReadOnlyCollection<Persona> personas, CancellationToken cancellationToken)
+    public async Task ProcessBatchAsync(IReadOnlyCollection<Comunicacion> comunicaciones, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Processing {Count} personas from Change Feed", personas.Count);
+        logger.LogInformation("Processing {Count} comunicaciones from Change Feed", comunicaciones.Count);
 
-        foreach (var persona in personas)
+        foreach (var comunicacion in comunicaciones)
         {
             try
             {
-                await UpsertPersonaToSql(persona, cancellationToken);
-                await PublishSuccessEvent(persona, cancellationToken);
+                await UpsertComunicacionToSql(comunicacion, cancellationToken);
+                await PublishSuccessEvent(comunicacion, cancellationToken);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to process Persona {Id}. Writing to error container.", persona.Id);
-                await WriteToErrorContainer(persona, ex, cancellationToken);
-                await PublishErrorEvent(persona, ex, cancellationToken);
+                logger.LogError(ex, "Failed to process Comunicación {Id}. Writing to error container.", comunicacion.Id);
+                await WriteToErrorContainer(comunicacion, ex, cancellationToken);
+                await PublishErrorEvent(comunicacion, ex, cancellationToken);
             }
         }
 
@@ -51,61 +46,40 @@ public class ChangeFeedHandler(
     }
 
     /// <summary>
-    /// Upserts a Persona to SQL only if CosmosUpdatedAt is newer (idempotency).
-    /// Increments SyncVersion on each update.
+    /// Calls usp_UpsertComunicacionGenerica to upsert into star model (transactional, idempotent).
     /// </summary>
-    private async Task UpsertPersonaToSql(Persona persona, CancellationToken cancellationToken)
+    private async Task UpsertComunicacionToSql(Comunicacion comunicacion, CancellationToken cancellationToken)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync(cancellationToken);
 
-        var existing = await dbContext.PersonasSync
-            .FirstOrDefaultAsync(p => p.Id == persona.Id, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "usp_UpsertComunicacionGenerica";
+        command.CommandType = CommandType.StoredProcedure;
 
-        if (existing == null)
-        {
-            // Insert new
-            var newSync = new PersonaSync
-            {
-                Id = persona.Id!,
-                Nombre = persona.Nombre,
-                Apellido = persona.Apellido,
-                Email = persona.Email,
-                Edad = persona.Edad,
-                Ciudad = persona.Ciudad,
-                CosmosUpdatedAt = persona.UpdatedAt,
-                SyncVersion = 1,
-                SyncedAt = DateTime.UtcNow
-            };
-            dbContext.PersonasSync.Add(newSync);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            logger.LogDebug("Inserted new Persona {Id} to SQL", persona.Id);
-        }
-        else if (persona.UpdatedAt >= existing.CosmosUpdatedAt)
-        {
-            // Update if Cosmos document is newer or same timestamp (allows manual edits without timestamp change)
-            existing.Nombre = persona.Nombre;
-            existing.Apellido = persona.Apellido;
-            existing.Email = persona.Email;
-            existing.Edad = persona.Edad;
-            existing.Ciudad = persona.Ciudad;
-            existing.CosmosUpdatedAt = persona.UpdatedAt;
-            existing.SyncVersion++;
-            existing.SyncedAt = DateTime.UtcNow;
+        command.Parameters.Add(CreateParam("@cosmosId", comunicacion.Id));
+        command.Parameters.Add(CreateParam("@fechaCreacion", comunicacion.FechaCreacion));
+        command.Parameters.Add(CreateParam("@fechaUltimaModif", comunicacion.FechaUltimaModif));
+        command.Parameters.Add(CreateParam("@estado", comunicacion.Estado));
+        command.Parameters.Add(CreateParam("@tipoProceso", comunicacion.TipoProceso));
+        command.Parameters.Add(CreateParam("@canal", comunicacion.Canal));
+        command.Parameters.Add(CreateParam("@contacto", comunicacion.Contacto));
+        // tipoContacto derived from canal (email → email, sms → sms)
+        command.Parameters.Add(CreateParam("@tipoContacto", comunicacion.Canal));
+        command.Parameters.Add(CreateParam("@parametros",
+            comunicacion.Parametros != null ? Newtonsoft.Json.JsonConvert.SerializeObject(comunicacion.Parametros) : (object)DBNull.Value));
+        command.Parameters.Add(CreateParam("@eventosJson",
+            comunicacion.Eventos?.Count > 0 ? Newtonsoft.Json.JsonConvert.SerializeObject(comunicacion.Eventos) : (object)DBNull.Value));
 
-            await dbContext.SaveChangesAsync(cancellationToken);
-            logger.LogDebug("Updated Persona {Id} in SQL (v{Version})", persona.Id, existing.SyncVersion);
-        }
-        else
-        {
-            logger.LogDebug("Skipped Persona {Id} — SQL has newer version (Cosmos: {CosmosTime}, SQL: {SqlTime})", 
-                persona.Id, persona.UpdatedAt, existing.CosmosUpdatedAt);
-        }
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        logger.LogDebug("Upserted comunicación {Id} to star model", comunicacion.Id);
     }
 
-    /// <summary>
-    /// Publishes ChangeFeedProcessed event to Service Bus dashboard topic.
-    /// </summary>
-    private async Task PublishSuccessEvent(Persona persona, CancellationToken cancellationToken)
+    private static SqlParameter CreateParam(string name, object value)
+        => new(name, value);
+
+    private async Task PublishSuccessEvent(Comunicacion comunicacion, CancellationToken cancellationToken)
     {
         var evt = new
         {
@@ -113,17 +87,14 @@ public class ChangeFeedHandler(
             Timestamp = DateTime.UtcNow,
             Vertical = _cosmosOptions.VerticalName,
             Collection = _cosmosOptions.Collection,
-            DocumentId = persona.Id,
+            DocumentId = comunicacion.Id,
             ProcessedBy = _cosmosOptions.ProcessorName
         };
 
         await SendEventToServiceBus(evt, cancellationToken);
     }
 
-    /// <summary>
-    /// Publishes ChangeFeedError event to Service Bus dashboard topic.
-    /// </summary>
-    private async Task PublishErrorEvent(Persona persona, Exception ex, CancellationToken cancellationToken)
+    private async Task PublishErrorEvent(Comunicacion comunicacion, Exception ex, CancellationToken cancellationToken)
     {
         var evt = new
         {
@@ -131,7 +102,7 @@ public class ChangeFeedHandler(
             Timestamp = DateTime.UtcNow,
             Vertical = _cosmosOptions.VerticalName,
             Collection = _cosmosOptions.Collection,
-            DocumentId = persona.Id,
+            DocumentId = comunicacion.Id,
             ErrorMessage = ex.Message,
             ProcessedBy = _cosmosOptions.ProcessorName
         };
@@ -141,10 +112,10 @@ public class ChangeFeedHandler(
 
     private async Task SendEventToServiceBus(object evt, CancellationToken cancellationToken)
     {
-        var topicName = "nd-dashboard-events"; // TODO: make configurable from appsettings
+        var topicName = "nd-dashboard-events";
         var sender = serviceBusClient.CreateSender(topicName);
 
-        var messageBody = JsonSerializer.Serialize(evt);
+        var messageBody = Newtonsoft.Json.JsonConvert.SerializeObject(evt);
         var message = new ServiceBusMessage(messageBody)
         {
             ContentType = "application/json"
@@ -153,20 +124,16 @@ public class ChangeFeedHandler(
         await sender.SendMessageAsync(message, cancellationToken);
     }
 
-    /// <summary>
-    /// Writes the failed Persona to the error container for manual reprocessing.
-    /// POC uses a simple error container as DLQ; production should add retry policies.
-    /// </summary>
-    private async Task WriteToErrorContainer(Persona persona, Exception ex, CancellationToken cancellationToken)
+    private async Task WriteToErrorContainer(Comunicacion comunicacion, Exception ex, CancellationToken cancellationToken)
     {
         var database = cosmosClient.GetDatabase(_cosmosOptions.Database);
         var errorContainer = database.GetContainer("changefeed-errors");
 
         var errorDoc = new
         {
-            id = Guid.NewGuid().ToString(), // New ID for error record
-            OriginalId = persona.Id,
-            OriginalDocument = persona,
+            id = Guid.NewGuid().ToString(),
+            OriginalId = comunicacion.Id,
+            OriginalDocument = comunicacion,
             ErrorMessage = ex.Message,
             ErrorStackTrace = ex.StackTrace,
             FailedAt = DateTime.UtcNow,

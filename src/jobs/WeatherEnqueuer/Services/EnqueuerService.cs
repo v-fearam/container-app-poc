@@ -82,6 +82,7 @@ public class EnqueuerService(
                         vertical,
                         queueName,
                         processType,
+                        number = i,
                         timestamp = DateTime.UtcNow,
                         messageId = message.MessageId
                     });
