@@ -363,7 +363,7 @@ module weatherEnqueuerJob 'modules/container-app-job.bicep' = if (deployJob && d
     messageCount: jobMessageCount
     keyVaultUri: deployKeyVault ? keyVault!.outputs.keyVaultUri : ''
     cronExpression: jobCronExpression
-    replicaTimeout: 300    // 5 minutes max execution time
+    replicaTimeout: 1200   // 20 minutes max execution time
     replicaRetryLimit: 2   // Retry up to 2 times on failure
     triggerType: 'Schedule'
     cpu: '0.5'

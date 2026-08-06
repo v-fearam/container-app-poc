@@ -43,7 +43,7 @@ param keyVaultUri string = ''
 param cronExpression string = '*/5 * * * *'
 
 @description('Replica timeout in seconds (job execution timeout)')
-param replicaTimeout int = 300
+param replicaTimeout int = 1200
 
 @description('Number of retries on failure')
 param replicaRetryLimit int = 2
