@@ -405,7 +405,63 @@
         </div>
     </div>
 
-    <!-- Slide 3: La Solución -->
+    <!-- Slide 3: Stack Tecnológico y Principios -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Stack Tecnológico y Principios de Diseño</h2>
+            
+            <!-- Tech Stack -->
+            <h3 style="text-align: center; color: #764ba2; margin-bottom: 1rem; font-size: 1.3rem;">Tecnologías</h3>
+            <div class="tech-stack" style="margin-bottom: 2.5rem;">
+                <div class="tech-badge">Azure Container Apps</div>
+                <div class="tech-badge">CosmosDB (NoSQL)</div>
+                <div class="tech-badge">Azure SQL (Modelo Estrella)</div>
+                <div class="tech-badge">Service Bus (Standard)</div>
+                <div class="tech-badge">KEDA Autoscaling</div>
+                <div class="tech-badge">.NET 10</div>
+                <div class="tech-badge">Easy Auth (Entra ID)</div>
+                <div class="tech-badge">App Insights</div>
+                <div class="tech-badge">Key Vault</div>
+                <div class="tech-badge">Managed Identity</div>
+                <div class="tech-badge">Blob Storage</div>
+                <div class="tech-badge">Change Feed Processor</div>
+            </div>
+
+            <!-- Principios de Diseño -->
+            <h3 style="text-align: center; color: #764ba2; margin-bottom: 1rem; font-size: 1.3rem;">Principios de Diseño</h3>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin-bottom: 1.5rem;">
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>📊 Separación de almacenamiento:</strong> No puede existir una sola base de datos para todo.</p>
+                </div>
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>🗑️ Depuración desde el día cero:</strong> TTL, particiones, lifecycle management acordados desde el inicio.</p>
+                </div>
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>📈 Escalabilidad horizontal:</strong> El sistema debe crecer con la demanda sin intervención manual.</p>
+                </div>
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>🎯 Separación por vertical:</strong> Genéricos, Negocio y Campañas — similar código, diferente ejecución y config.</p>
+                </div>
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>⚡ Event-driven sobre batch:</strong> Los eventos impulsan el flujo; no se hacen polls ni queries pesados.</p>
+                </div>
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>☁️ Cloud-native Azure:</strong> Managed Identity, Private Endpoints, Container Apps, servicios PaaS.</p>
+                </div>
+                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 0.8rem; border-radius: 8px; grid-column: 1 / -1;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #333;"><strong>🔍 Visibilidad operacional:</strong> Saber en todo momento qué está pasando, qué falló, qué está pendiente.</p>
+                </div>
+            </div>
+
+            <div class="highlight" style="margin-top: 1rem;">
+                <p style="font-size: 1rem; margin-bottom: 0; text-align: center;">
+                    <strong>✅ Todo validado en POC:</strong> Container Apps con Easy Auth, workers con KEDA, Change Feed hacia SQL, Container Jobs programados, dashboard operacional con métricas en tiempo real.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 4: La Solución -->
     <div class="slide">
         <div class="slide-content">
             <h2>NDv2 App: Container Apps + Recursos PaaS</h2>
@@ -497,7 +553,7 @@
         </div>
     </div>
 
-    <!-- Slide 4: Separación Ejecución vs Consumo -->
+    <!-- Slide 5: Tres Verticales, Tres Capas de Datos -->
     <div class="slide">
         <div class="slide-content">
             <h2 style="font-size: 2rem; margin-bottom: 1rem;">Tres Verticales, Tres Capas de Datos</h2>
@@ -609,7 +665,7 @@
         </div>
     </div>
 
-    <!-- Slide 5: Infraestructura por Vertical -->
+    <!-- Slide 6: Infraestructura por Vertical -->
     <div class="slide">
         <div class="slide-content">
             <h2>Infraestructura por Vertical</h2>
@@ -712,35 +768,7 @@
         </div>
     </div>
 
-    <!-- Slide 6: Tecnologías -->
-    <div class="slide">
-        <div class="slide-content">
-            <h2>Stack Tecnológico</h2>
-            
-            <div class="tech-stack">
-                <div class="tech-badge">Azure Container Apps</div>
-                <div class="tech-badge">CosmosDB (NoSQL)</div>
-                <div class="tech-badge">Azure SQL (Modelo Estrella)</div>
-                <div class="tech-badge">Service Bus (Standard)</div>
-                <div class="tech-badge">KEDA Autoscaling</div>
-                <div class="tech-badge">.NET 10</div>
-                <div class="tech-badge">Easy Auth (Entra ID)</div>
-                <div class="tech-badge">App Insights</div>
-                <div class="tech-badge">Key Vault</div>
-                <div class="tech-badge">Managed Identity</div>
-                <div class="tech-badge">Blob Storage</div>
-                <div class="tech-badge">Change Feed Processor</div>
-            </div>
-
-            <div class="highlight" style="margin-top: 3rem;">
-                <p style="font-size: 1.2rem; margin-bottom: 0;">
-                    <strong>✅ Todo validado en POC:</strong> Container Apps con Easy Auth, workers con KEDA, Change Feed hacia SQL, Container Jobs programados, dashboard operacional con métricas en tiempo real.
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Slide 6: Antes vs Después -->
+    <!-- Slide 7: Antes vs Después -->
     <div class="slide">
         <div class="slide-content">
             <h2>Antes vs Después</h2>
@@ -773,7 +801,7 @@
         </div>
     </div>
 
-    <!-- Slide 7: Ventajas Clave -->
+    <!-- Slide 8: Ventajas de la Nueva Solución -->
     <div class="slide">
         <div class="slide-content">
             <h2>Ventajas de la Nueva Solución</h2>
@@ -815,7 +843,7 @@
         </div>
     </div>
 
-    <!-- Slide 8: POC Validado -->
+    <!-- Slide 9: POC Validado -->
     <div class="slide">
         <div class="slide-content">
             <h2>POC: Patrones Validados</h2>
@@ -863,7 +891,7 @@
         </div>
     </div>
 
-    <!-- Slide 9: Observabilidad -->
+    <!-- Slide 10: Observabilidad -->
     <div class="slide">
         <div class="slide-content">
             <h2>Observabilidad Nativa</h2>
@@ -891,7 +919,7 @@
         </div>
     </div>
 
-    <!-- Slide 10: Siguiente Paso -->
+    <!-- Slide 11: Plan de Ejecución -->
     <div class="slide">
         <div class="slide-content">
             <h2>¿Hacia Dónde Vamos?</h2>
@@ -964,7 +992,7 @@
         </div>
     </div>
 
-    <!-- Slide 11: Cierre -->
+    <!-- Slide 12: Cierre -->
     <div class="slide">
         <div class="slide-content" style="text-align: center;">
             <h1 style="font-size: 3.5rem; margin-bottom: 2rem;">NDv2</h1>
@@ -993,7 +1021,7 @@
 
     <script>
         let currentSlide = 1;
-        const totalSlides = 11;
+        const totalSlides = 12;
 
         function showSlide(n) {
             const slides = document.querySelectorAll('.slide');
