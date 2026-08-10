@@ -286,7 +286,7 @@ az containerapp show -n ca-weather-be-dev -g $RG \
 
 # 3. Secrets en Key Vault (deberían ser solo 3: appinsights + 2 auth secrets )
 echo ""
-echo "Secrets en Key Vault (esperado: 4):"
+echo "Secrets en Key Vault (esperado: 3):"
 az keyvault secret list --vault-name $KV_NAME --query "[].name" -o tsv
 
 echo ""
@@ -455,8 +455,8 @@ echo "Frontend: https://$FRONTEND_URL"
 ### 7.2 Deploy Easy Auth config
 
 ```bash
-# Get your tenant ID
-export CIAM_TENANT_ID=0a3af0e3-416b-4a6b-97e9-cb3a9a094449
+# Get your tenant ID (CIAM)
+export CIAM_TENANT_ID="<your-tenant-id>"
 echo "CIAM_TENANT_ID: $CIAM_TENANT_ID"
 
 # OIDC Well-Known URL según el tipo de tenant:

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useApi } from '../hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -410,7 +410,7 @@ function CosmosEditorTab() {
                 </TableHeader>
                 <TableBody>
                   {comunicaciones.map((c) => (
-                    <>
+                    <Fragment key={c.id}>
                       <TableRow key={c.id}>
                         <TableCell className="font-mono text-xs max-w-[120px] truncate" title={c.id}>
                           {c.id.substring(0, 12)}...
@@ -519,7 +519,7 @@ function CosmosEditorTab() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>

@@ -184,6 +184,9 @@ public class CosmosComunicacionesController(
         if (container == null)
             return StatusCode(503, new { error = "Cosmos DB not configured" });
 
+        if (string.IsNullOrWhiteSpace(request.Tipo))
+            return BadRequest(new { error = "Tipo de evento es requerido" });
+
         try
         {
             var existing = await container.ReadItemAsync<ComunicacionDto>(
