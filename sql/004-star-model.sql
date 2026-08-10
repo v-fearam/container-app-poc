@@ -125,6 +125,9 @@ GO
 
 -- ============================================================
 -- Índices (todos alineados con partición para TRUNCATE PARTITION)
+-- IMPORTANTE: todo índice nuevo en tablas con ps_Diaria DEBE incluir
+-- dia_creacion en la clave del índice (no solo en INCLUDE), de lo
+-- contrario TRUNCATE TABLE ... WITH (PARTITIONS) falla en runtime.
 -- ============================================================
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FactComm_CosmosId')
@@ -135,14 +138,14 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FactComm_Contacto_Fecha')
 CREATE NONCLUSTERED INDEX IX_FactComm_Contacto_Fecha
-ON FactComunicacionesGenericas(idContacto, idFecha)
+ON FactComunicacionesGenericas(idContacto, idFecha, dia_creacion)
 INCLUDE (idTipo, idCanal, idEstadio, nroComprobante)
 ON ps_Diaria(dia_creacion);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_FactEventos_Comunicacion')
 CREATE NONCLUSTERED INDEX IX_FactEventos_Comunicacion
-ON FactEventosGenericas(idFactComunicacion)
+ON FactEventosGenericas(idFactComunicacion, dia_creacion)
 INCLUDE (idFecha, idEstadio)
 ON ps_Diaria(dia_creacion);
 GO
