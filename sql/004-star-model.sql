@@ -172,14 +172,18 @@ SELECT
     dco.tipo           AS tipoContacto,
     de.Nombre          AS estado,
     df.[Date]          AS fechaDate,
-    (SELECT COUNT(*) FROM FactEventosGenericas fe 
-     WHERE fe.idFactComunicacion = f.id AND fe.dia_creacion = f.dia_creacion) AS cantEventos
+    COALESCE(fe.cantEventos, 0) AS cantEventos
 FROM FactComunicacionesGenericas f
 INNER JOIN DimTipos dt ON f.idTipo = dt.id
 INNER JOIN DimCanales dc ON f.idCanal = dc.id
 INNER JOIN DimContactos dco ON f.idContacto = dco.id
 INNER JOIN DimEstadio de ON f.idEstadio = de.id
-INNER JOIN DimFechas df ON f.idFecha = df.id;
+INNER JOIN DimFechas df ON f.idFecha = df.id
+LEFT JOIN (
+    SELECT idFactComunicacion, dia_creacion, COUNT(*) AS cantEventos
+    FROM FactEventosGenericas
+    GROUP BY idFactComunicacion, dia_creacion
+) fe ON fe.idFactComunicacion = f.id AND fe.dia_creacion = f.dia_creacion;
 GO
 
 PRINT '004-star-model.sql completed successfully';
