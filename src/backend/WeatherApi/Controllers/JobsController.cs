@@ -2,6 +2,7 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.AppContainers;
 using Azure.ResourceManager.Resources;
 using Microsoft.AspNetCore.Mvc;
+using WeatherApi.Helpers;
 using WeatherApi.Models;
 
 namespace WeatherApi.Controllers;
@@ -63,7 +64,7 @@ public class JobsController(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogDebug(ex, "Could not retrieve executions for job {JobName}", name);
+                    logger.LogDebug(ex, "Could not retrieve executions for job {JobName}", LogSanitizer.Sanitize(name));
                 }
 
                 jobs.Add(new ContainerJobDto
@@ -138,7 +139,7 @@ public class JobsController(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Could not retrieve executions for job {JobName}", jobName);
+                logger.LogDebug(ex, "Could not retrieve executions for job {JobName}", LogSanitizer.Sanitize(jobName));
             }
 
             return Ok(new ContainerJobDto
@@ -153,7 +154,7 @@ public class JobsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error getting job {JobName} via ARM SDK", jobName);
+            logger.LogError(ex, "Error getting job {JobName} via ARM SDK", LogSanitizer.Sanitize(jobName));
             return NotFound($"Job '{jobName}' not found");
         }
     }
@@ -261,7 +262,7 @@ public class JobsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error updating schedule for job {JobName}", jobName);
+            logger.LogError(ex, "Error updating schedule for job {JobName}", LogSanitizer.Sanitize(jobName));
             return StatusCode(500, $"Error updating job schedule: {ex.Message}");
         }
     }
@@ -312,7 +313,7 @@ public class JobsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error triggering job {JobName}", jobName);
+            logger.LogError(ex, "Error triggering job {JobName}", LogSanitizer.Sanitize(jobName));
             return StatusCode(500, $"Error triggering job: {ex.Message}");
         }
     }
@@ -377,7 +378,7 @@ public class JobsController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error listing executions for job {JobName}", jobName);
+            logger.LogError(ex, "Error listing executions for job {JobName}", LogSanitizer.Sanitize(jobName));
             return StatusCode(500, $"Error listing executions: {ex.Message}");
         }
     }
@@ -436,7 +437,7 @@ public class JobsController(
             // Stop the execution (fire-and-forget, don't wait for completion)
             await execution.Value.StopExecutionJobAsync(Azure.WaitUntil.Started, ct);
 
-            logger.LogInformation("Stopped execution {ExecutionName} for job {JobName}", executionName, jobName);
+            logger.LogInformation("Stopped execution {ExecutionName} for job {JobName}", LogSanitizer.Sanitize(executionName), LogSanitizer.Sanitize(jobName));
 
             return Ok(new StopExecutionResponse
             {
@@ -448,7 +449,7 @@ public class JobsController(
         catch (Azure.RequestFailedException ex) when (ex.Status == 409)
         {
             // 409 Conflict: execution already terminated or is terminating
-            logger.LogWarning(ex, "Execution {ExecutionName} already terminated or terminating", executionName);
+            logger.LogWarning(ex, "Execution {ExecutionName} already terminated or terminating", LogSanitizer.Sanitize(executionName));
             
             return Ok(new StopExecutionResponse
             {
@@ -460,7 +461,7 @@ public class JobsController(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error stopping execution {ExecutionName} for job {JobName}", 
-                executionName, jobName);
+                LogSanitizer.Sanitize(executionName), LogSanitizer.Sanitize(jobName));
             return StatusCode(500, $"Error stopping execution: {ex.Message}");
         }
     }

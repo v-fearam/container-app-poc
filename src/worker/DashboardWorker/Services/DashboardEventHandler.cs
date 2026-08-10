@@ -1,5 +1,6 @@
 using DashboardWorker.Data;
 using DashboardWorker.Data.Entities;
+using DashboardWorker.Helpers;
 using DashboardWorker.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,7 +55,7 @@ public class DashboardEventHandler(
 
     private MessageHandleResult RejectUnknownEventType(DashboardEvent evt)
     {
-        logger.LogWarning("Unknown EventType={EventType}. Sending to dead-letter.", evt.EventType);
+        logger.LogWarning("Unknown EventType={EventType}. Sending to dead-letter.", LogSanitizer.Sanitize(evt.EventType));
         return new MessageHandleResult(
             MessageSettlement.DeadLetter,
             "UnknownEventType",

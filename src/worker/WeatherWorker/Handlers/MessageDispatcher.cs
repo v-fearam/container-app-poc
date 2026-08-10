@@ -1,4 +1,5 @@
 using Azure.Messaging.ServiceBus;
+using WeatherWorker.Helpers;
 
 namespace WeatherWorker.Handlers;
 
@@ -27,7 +28,7 @@ public sealed class MessageDispatcher(
 
         if (!WeatherJobMessage.TryParse(body, out var message) || message is null)
         {
-            logger.LogWarning("Could not parse message body — completing to avoid poison loop: {Body}", body);
+            logger.LogWarning("Could not parse message body — completing to avoid poison loop: {Body}", LogSanitizer.Sanitize(body));
             await args.CompleteMessageAsync(args.Message, cancellationToken);
             return;
         }

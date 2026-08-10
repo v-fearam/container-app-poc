@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using WeatherApi.Helpers;
 using WeatherApi.Models;
 using WeatherApi.Services;
 
@@ -30,7 +31,7 @@ public class DlqManagerController(
         CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount} from={From} to={To}",
-            queueName, maxCount, fromDate, toDate);
+            LogSanitizer.Sanitize(queueName), maxCount, fromDate, toDate);
 
         var dlqService = GetDlqServiceOrThrow();
         var messages = await dlqService.PeekDlqMessagesAsync(queueName, maxCount, cancellationToken);
@@ -53,7 +54,7 @@ public class DlqManagerController(
         [FromBody] RequeueDlqMessageRequest request,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", request.MessageId, request.QueueName);
+        logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", LogSanitizer.Sanitize(request.MessageId), LogSanitizer.Sanitize(request.QueueName));
 
         var dlqService = GetDlqServiceOrThrow();
         var requeuedCount = await dlqService.RequeueMessagesAsync(
@@ -78,7 +79,7 @@ public class DlqManagerController(
         [FromBody] DiscardDlqMessageRequest request,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", request.MessageId, request.QueueName);
+        logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", LogSanitizer.Sanitize(request.MessageId), LogSanitizer.Sanitize(request.QueueName));
 
         var dlqService = GetDlqServiceOrThrow();
         var discardedCount = await dlqService.DiscardMessagesAsync(

@@ -1,5 +1,6 @@
 using Azure.Messaging.ServiceBus;
 using DashboardWorker.Configuration;
+using DashboardWorker.Helpers;
 using DashboardWorker.Models;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -68,7 +69,7 @@ public class DashboardWorkerService(
         try
         {
             logger.LogInformation("Processing dashboard event. MessageId={MessageId} DeliveryCount={DeliveryCount}",
-                args.Message.MessageId, args.Message.DeliveryCount);
+                LogSanitizer.Sanitize(args.Message.MessageId), args.Message.DeliveryCount);
 
             var jsonOptions = new JsonSerializerOptions
             {
@@ -89,7 +90,7 @@ public class DashboardWorkerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error processing dashboard event. MessageId={MessageId} DeliveryCount={DeliveryCount}",
-                args.Message.MessageId, args.Message.DeliveryCount);
+                LogSanitizer.Sanitize(args.Message.MessageId), args.Message.DeliveryCount);
 
             await args.AbandonMessageAsync(args.Message, cancellationToken: args.CancellationToken);
         }
@@ -102,7 +103,7 @@ public class DashboardWorkerService(
             case MessageSettlement.Complete:
                 await args.CompleteMessageAsync(args.Message, args.CancellationToken);
                 logger.LogInformation("Dashboard event completed. EventType={EventType} Vertical={Vertical} Queue={Queue}",
-                    evt.EventType, evt.Vertical, evt.QueueName);
+                    LogSanitizer.Sanitize(evt.EventType), LogSanitizer.Sanitize(evt.Vertical), LogSanitizer.Sanitize(evt.QueueName));
                 break;
 
             case MessageSettlement.DeadLetter:

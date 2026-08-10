@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
+using WeatherApi.Helpers;
 using WeatherApi.Models;
 
 namespace WeatherApi.Controllers;
@@ -80,7 +81,7 @@ public class CosmosComunicacionesController(
         }
         catch (CosmosException ex)
         {
-            logger.LogError(ex, "Failed to get comunicación {Id} from Cosmos", id);
+            logger.LogError(ex, "Failed to get comunicación {Id} from Cosmos", LogSanitizer.Sanitize(id));
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -154,7 +155,7 @@ public class CosmosComunicacionesController(
             var response = await container.ReplaceItemAsync(
                 updated, id, new PartitionKey(id), cancellationToken: ct);
 
-            logger.LogInformation("Updated comunicación {Id} in Cosmos", id);
+            logger.LogInformation("Updated comunicación {Id} in Cosmos", LogSanitizer.Sanitize(id));
             return Ok(response.Resource);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -163,7 +164,7 @@ public class CosmosComunicacionesController(
         }
         catch (CosmosException ex)
         {
-            logger.LogError(ex, "Failed to update comunicación {Id} in Cosmos", id);
+            logger.LogError(ex, "Failed to update comunicación {Id} in Cosmos", LogSanitizer.Sanitize(id));
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -209,7 +210,7 @@ public class CosmosComunicacionesController(
             var response = await container.ReplaceItemAsync(
                 comunicacion, id, new PartitionKey(id), cancellationToken: ct);
 
-            logger.LogInformation("Added event '{Tipo}' to comunicación {Id}", request.Tipo, id);
+            logger.LogInformation("Added event '{Tipo}' to comunicación {Id}", LogSanitizer.Sanitize(request.Tipo), LogSanitizer.Sanitize(id));
             return Ok(response.Resource);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -218,7 +219,7 @@ public class CosmosComunicacionesController(
         }
         catch (CosmosException ex)
         {
-            logger.LogError(ex, "Failed to add event to comunicación {Id}", id);
+            logger.LogError(ex, "Failed to add event to comunicación {Id}", LogSanitizer.Sanitize(id));
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -235,7 +236,7 @@ public class CosmosComunicacionesController(
             await container.DeleteItemAsync<ComunicacionDto>(
                 id, new PartitionKey(id), cancellationToken: ct);
 
-            logger.LogInformation("Deleted comunicación {Id} from Cosmos", id);
+            logger.LogInformation("Deleted comunicación {Id} from Cosmos", LogSanitizer.Sanitize(id));
             return NoContent();
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -244,7 +245,7 @@ public class CosmosComunicacionesController(
         }
         catch (CosmosException ex)
         {
-            logger.LogError(ex, "Failed to delete comunicación {Id} from Cosmos", id);
+            logger.LogError(ex, "Failed to delete comunicación {Id} from Cosmos", LogSanitizer.Sanitize(id));
             return StatusCode(500, new { error = ex.Message });
         }
     }

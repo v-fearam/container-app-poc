@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.Json;
 using WeatherApi.Data;
+using WeatherApi.Helpers;
 using WeatherApi.Models;
 
 namespace WeatherApi.Services;
@@ -21,7 +22,7 @@ public class DlqService(
         int maxMessages = 10,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", queueName, maxMessages);
+        logger.LogInformation("Peeking DLQ messages for queue={QueueName} maxCount={MaxCount}", LogSanitizer.Sanitize(queueName), maxMessages);
 
         ServiceBusReceiver receiver = CreateDlqReceiver(queueName);
 
@@ -60,7 +61,7 @@ public class DlqService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to requeue message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+                logger.LogError(ex, "Failed to requeue message={MessageId} from queue={QueueName}", LogSanitizer.Sanitize(request.MessageId), LogSanitizer.Sanitize(queueName));
             }
         }
 
@@ -83,7 +84,7 @@ public class DlqService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to discard message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+                logger.LogError(ex, "Failed to discard message={MessageId} from queue={QueueName}", LogSanitizer.Sanitize(request.MessageId), LogSanitizer.Sanitize(queueName));
             }
         }
 
@@ -95,7 +96,7 @@ public class DlqService(
         RequeueDlqMessageRequest request,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+        logger.LogInformation("Requeuing DLQ message={MessageId} from queue={QueueName}", LogSanitizer.Sanitize(request.MessageId), LogSanitizer.Sanitize(queueName));
 
         // 1. Receive (with lock) the message from DLQ
         ServiceBusReceiver dlqReceiver = CreateDlqReceiver(queueName);
@@ -167,7 +168,7 @@ public class DlqService(
         DiscardDlqMessageRequest request,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", request.MessageId, queueName);
+        logger.LogInformation("Discarding DLQ message={MessageId} from queue={QueueName}", LogSanitizer.Sanitize(request.MessageId), LogSanitizer.Sanitize(queueName));
 
         ServiceBusReceiver dlqReceiver = CreateDlqReceiver(queueName);
         string? messageBody = null;
