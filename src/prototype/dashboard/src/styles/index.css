@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@import "./variables.css";
+
+body {
+  font-family: var(--font-family-brand);
+  font-size: var(--font-size-body);
+  color: var(--color-neutral-text);
+  background: var(--color-neutral-background);
+  margin: 0;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4 {
+  color: var(--color-neutral-textStrong);
+  font-weight: var(--font-weight-bold);
+  margin: 0;
+}
+h1 { font-size: var(--font-size-h1); }
+h2 { font-size: var(--font-size-h2); }
+h3 { font-size: var(--font-size-h3); }
+h4 { font-size: var(--font-size-h4); }
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-secondary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
