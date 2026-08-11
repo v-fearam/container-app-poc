@@ -38,12 +38,19 @@ export function EventosPage() {
   const [fecha, setFecha] = useState('2026-08-11')
   const [filterVertical, setFilterVertical] = useState('')
   const [filterProveedor, setFilterProveedor] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 15
 
-  const filtered = mockEventos.filter(e => {
-    if (filterVertical && e.vertical !== filterVertical) return false
-    if (filterProveedor && e.proveedor !== filterProveedor) return false
-    return true
-  })
+  const filtered = mockEventos
+    .filter(e => {
+      if (filterVertical && e.vertical !== filterVertical) return false
+      if (filterProveedor && e.proveedor !== filterProveedor) return false
+      return true
+    })
+    .sort((a, b) => b.hora.localeCompare(a.hora))
+
+  const totalPages = Math.ceil(filtered.length / pageSize)
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   const totals = filtered.reduce((acc, e) => ({
     recolectados: acc.recolectados + e.recolectados,
@@ -123,7 +130,7 @@ export function EventosPage() {
 
       {/* Filters */}
       <div className="flex gap-4 items-center">
-        <select value={filterVertical} onChange={e => setFilterVertical(e.target.value)}
+        <select value={filterVertical} onChange={e => { setFilterVertical(e.target.value); setPage(1) }}
           aria-label="Filtrar por vertical"
           className="px-3 py-2 rounded-lg border text-sm cursor-pointer"
           style={{ borderColor: 'var(--color-neutral-border)' }}>
@@ -132,7 +139,7 @@ export function EventosPage() {
           <option value="Negocio">Negocio</option>
           <option value="Campañas">Campañas</option>
         </select>
-        <select value={filterProveedor} onChange={e => setFilterProveedor(e.target.value)}
+        <select value={filterProveedor} onChange={e => { setFilterProveedor(e.target.value); setPage(1) }}
           aria-label="Filtrar por proveedor"
           className="px-3 py-2 rounded-lg border text-sm cursor-pointer"
           style={{ borderColor: 'var(--color-neutral-border)' }}>
@@ -163,7 +170,7 @@ export function EventosPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((e, i) => (
+            {paginated.map((e, i) => (
               <tr key={`${e.hora}-${e.vertical}-${e.proveedor}`} className={i % 2 === 0 ? '' : 'bg-gray-50/50'}>
                 <td className="px-4 py-3 font-medium">{e.hora}</td>
                 <td className="px-4 py-3">{e.vertical}</td>
@@ -181,6 +188,19 @@ export function EventosPage() {
             ))}
           </tbody>
         </table>
+        <div className="px-4 py-3 text-xs flex justify-between items-center border-t"
+          style={{ borderColor: 'var(--color-neutral-border)', color: 'var(--color-neutral-muted)' }}>
+          <span>Mostrando {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filtered.length)} de {filtered.length}</span>
+          <div className="flex gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              className="px-3 py-1 rounded border text-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ borderColor: 'var(--color-neutral-border)' }}>← Anterior</button>
+            <span className="px-2 py-1">Pág {page}/{totalPages || 1}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+              className="px-3 py-1 rounded border text-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ borderColor: 'var(--color-neutral-border)' }}>Siguiente →</button>
+          </div>
+        </div>
       </div>
 
       <p className="text-xs" style={{ color: 'var(--color-neutral-muted)' }}>

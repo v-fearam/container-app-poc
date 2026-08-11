@@ -14,6 +14,7 @@ export function DlqPage() {
   const [confirmAction, setConfirmAction] = useState<'discard' | 'requeue' | null>(null)
   const [filterCola, setFilterCola] = useState(searchParams.get('cola') || '')
   const [filterReason, setFilterReason] = useState('')
+  const [filterFecha, setFilterFecha] = useState(new Date().toISOString().split('T')[0])
 
   // Sync URL param
   useEffect(() => {
@@ -40,9 +41,10 @@ export function DlqPage() {
   const filtered = useMemo(() => {
     return dlqMessages.filter(m =>
       (!filterCola || m.cola === filterCola) &&
-      (!filterReason || m.deadLetterReason === filterReason)
+      (!filterReason || m.deadLetterReason === filterReason) &&
+      (!filterFecha || m.enqueuedTime.split('T')[0] === filterFecha)
     )
-  }, [filterCola, filterReason])
+  }, [filterCola, filterReason, filterFecha])
 
   const toggle = (id: string) => {
     const next = new Set(selected)
@@ -87,6 +89,10 @@ export function DlqPage() {
 
       {/* Filters */}
       <div className="flex gap-4 items-center">
+        <input type="date" value={filterFecha} onChange={e => setFilterFecha(e.target.value)}
+          aria-label="Filtrar por fecha"
+          className="px-3 py-2 rounded-lg border text-sm cursor-pointer"
+          style={{ borderColor: 'var(--color-neutral-border)' }} />
         <select value={filterCola} onChange={e => setFilterCola(e.target.value)}
           aria-label="Filtrar por cola"
           className="px-3 py-2 rounded-lg border text-sm cursor-pointer"
@@ -101,8 +107,8 @@ export function DlqPage() {
           <option value="">Todas las razones</option>
           {reasonsUnicas.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
-        {(filterCola || filterReason) && (
-          <button onClick={() => { setFilterCola(''); setFilterReason('') }}
+        {(filterCola || filterReason || filterFecha !== new Date().toISOString().split('T')[0]) && (
+          <button onClick={() => { setFilterCola(''); setFilterReason(''); setFilterFecha(new Date().toISOString().split('T')[0]) }}
             className="text-xs cursor-pointer hover:underline"
             style={{ color: 'var(--color-brand-primary)' }}>Limpiar filtros</button>
         )}

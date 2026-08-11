@@ -43,34 +43,32 @@ export function HealthPage() {
           <Activity size={20} style={{ color: 'var(--color-brand-primary)' }} />
           <h4 className="font-semibold">Change Feed Processors</h4>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-2">
           {changeFeedStatus.map(cf => (
-            <div key={cf.vertical} className="border rounded-xl p-4"
+            <div key={cf.vertical} className="border rounded-lg px-4 py-2 flex items-center justify-between"
               style={{ borderColor: 'var(--color-neutral-border)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <h5 className="font-medium">{cf.vertical}</h5>
-                <StatusDot count={cf.erroresHoy} />
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="text-xs" style={{ color: 'var(--color-neutral-muted)' }}>Procesados hoy</p>
-                  <p className="font-bold text-lg">{cf.procesadosHoy.toLocaleString()}</p>
+              <h5 className="font-medium text-sm w-28">{cf.vertical}</h5>
+              <div className="flex items-center gap-6 text-sm">
+                <div className="text-center">
+                  <p className="text-[11px]" style={{ color: 'var(--color-neutral-muted)' }}>Procesados</p>
+                  <p className="font-bold">{cf.procesadosHoy.toLocaleString()}</p>
                 </div>
-                <div>
-                  <p className="text-xs" style={{ color: 'var(--color-neutral-muted)' }}>Errores hoy</p>
-                  <p className="font-bold text-lg" style={{ color: cf.erroresHoy > 0 ? 'var(--color-semantic-error)' : 'var(--color-semantic-success)' }}>
+                <div className="text-center">
+                  <p className="text-[11px]" style={{ color: 'var(--color-neutral-muted)' }}>Errores</p>
+                  <p className="font-bold" style={{ color: cf.erroresHoy > 0 ? 'var(--color-semantic-error)' : 'var(--color-semantic-success)' }}>
                     {cf.erroresHoy}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs" style={{ color: 'var(--color-neutral-muted)' }}>Último procesado</p>
-                  <p className="font-bold">{cf.ultimoProcesado}</p>
+                <div className="text-center">
+                  <p className="text-[11px]" style={{ color: 'var(--color-neutral-muted)' }}>Último</p>
+                  <p className="font-bold text-sm">{cf.ultimoProcesado}</p>
                 </div>
-                <div>
-                  <p className="text-xs" style={{ color: 'var(--color-neutral-muted)' }}>Lag estimado</p>
-                  <p className="font-bold" style={{ color: 'var(--color-semantic-success)' }}>{cf.lagEstimado}</p>
+                <div className="text-center">
+                  <p className="text-[11px]" style={{ color: 'var(--color-neutral-muted)' }}>Lag</p>
+                  <p className="font-bold text-sm" style={{ color: 'var(--color-semantic-success)' }}>{cf.lagEstimado}</p>
                 </div>
               </div>
+              <StatusDot count={cf.erroresHoy} />
             </div>
           ))}
         </div>
