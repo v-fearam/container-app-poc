@@ -50,7 +50,7 @@ export function Sidebar() {
       <div className="h-16 flex items-center justify-between px-3">
         <div className="flex items-center gap-2">
           <CamuzziLogo size={collapsed ? 28 : 32} />
-          {!collapsed && <span className="text-white font-bold text-lg">ND v2</span>}
+          {!collapsed && <span className="text-white font-bold text-sm">Notificaciones Digitales</span>}
         </div>
         <button onClick={() => setCollapsed(!collapsed)}
           className="p-2 hover:bg-white/10 rounded-md cursor-pointer transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
