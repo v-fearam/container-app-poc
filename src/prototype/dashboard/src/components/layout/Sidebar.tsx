@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ListOrdered, AlertTriangle,
-  Mail, Building2, Megaphone,
+  Mail, Building2, Megaphone, Shield,
   HeartPulse, Clock, User, LogOut, ChevronLeft, ChevronRight, Download
 } from 'lucide-react'
 import { useSidebar } from '../../context/SidebarContext'
@@ -31,6 +31,7 @@ const navGroups = [
     items: [
       { to: '/health', icon: HeartPulse, label: 'Health' },
       { to: '/scheduler', icon: Clock, label: 'Scheduler' },
+      { to: '/tratamiento-smtp', icon: Shield, label: 'Tratamiento SMTP' },
     ]
   }
 ]

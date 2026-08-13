@@ -11,6 +11,7 @@ import { EventosPage } from './pages/EventosPage'
 import { GenericosPage } from './pages/GenericosPage'
 import { NegocioPage } from './pages/NegocioPage'
 import { CampanasPage } from './pages/CampanasPage'
+import { TratamientoEventosPage } from './pages/TratamientoEventosPage'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/genericos" element={<GenericosPage />} />
             <Route path="/negocio" element={<NegocioPage />} />
             <Route path="/campanas" element={<CampanasPage />} />
+            <Route path="/tratamiento-smtp" element={<TratamientoEventosPage />} />
             </Route>
           </Routes>
         </ToastProvider>
