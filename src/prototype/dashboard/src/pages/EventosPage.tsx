@@ -111,8 +111,12 @@ export function EventosPage() {
           onClick={() => navigate('/dlq?cola=nd-eventos-recoleccion')}
           role="button"
           tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && navigate('/dlq?cola=nd-eventos-recoleccion')}
-        >
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              navigate('/dlq?cola=nd-eventos-recoleccion')
+            }
+          }}
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-semibold text-sm">DLQ — Recolección</h4>
             <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--color-semantic-error)' }}>
