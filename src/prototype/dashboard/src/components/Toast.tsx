@@ -13,9 +13,13 @@ interface ToastContextValue {
   showToast: (message: string, type?: ToastType) => void
 }
 
-const ToastContext = createContext<ToastContextValue>({ showToast: () => {} })
+const ToastContext = createContext<ToastContextValue | undefined>(undefined)
 
-export function useToast() { return useContext(ToastContext) }
+export function useToast() {
+  const context = useContext(ToastContext)
+  if (!context) throw new Error('useToast must be used within ToastProvider')
+  return context
+}
 
 let nextId = 0
 
