@@ -168,8 +168,7 @@ export function DlqPage() {
           </table>
           <div className="px-4 py-3 text-xs border-t flex justify-between"
             style={{ borderColor: 'var(--color-neutral-border)', color: 'var(--color-neutral-muted)' }}>
-            <span>Mostrando 1-{filtered.length} de {filtered.length}</span>
-            <span>25 por página</span>
+            <span>Mostrando {filtered.length} de {filtered.length} (sin paginación)</span>
           </div>
         </div>
       )}
