@@ -108,7 +108,6 @@ export function Sidebar() {
                 <p className="text-white text-sm font-medium">Usuario Demo</p>
                 <p className="text-white/50 text-xs">Admin</p>
               </div>
-            )
             )}
           </button>
 
