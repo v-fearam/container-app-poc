@@ -843,83 +843,73 @@
         </div>
     </div>
 
-    <!-- Slide 9: POC Validado -->
+    <!-- Slide 9: Gateway Aggregation - Migración por Endpoint -->
     <div class="slide">
         <div class="slide-content">
-            <h2>POC: Patrones Validados</h2>
+            <h2>Gateway Aggregation — Migración Endpoint por Endpoint</h2>
             
-            <div class="grid">
-                <div class="card">
-                    <h4>✅ Easy Auth + Entra ID</h4>
-                    <p>Platform-managed auth. Frontend y backend con SSO. Token store habilitado. Cross-tenant validado.</p>
+            <h3 style="text-align: center; margin-bottom: 1.5rem;">NDv1 y NDv2 conviven — el Gateway decide a dónde va cada request</h3>
+
+            <div style="display: flex; gap: 2rem; margin-bottom: 2rem;">
+                <div style="flex: 1; background: #e3f2fd; border: 2px solid #1976d2; padding: 1.5rem; border-radius: 15px;">
+                    <h4 style="color: #0d47a1; margin-bottom: 1rem;">🔀 Routing por Endpoint</h4>
+                    <div style="background: white; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.85rem; margin-bottom: 1rem;">
+                        <div style="color: #2e7d32;">✓ POST /api/envios-email-genericos</div>
+                        <div style="padding-left: 1rem; color: #666;">tipo: "recupero-clave" → <strong>NDv2</strong></div>
+                        <div style="padding-left: 1rem; color: #666;">tipo: "validacion-email" → <strong>NDv2</strong></div>
+                        <div style="padding-left: 1rem; color: #666;">resto → <strong>NDv1</strong></div>
+                        <div style="color: #d32f2f; margin-top: 0.5rem;">⏳ POST /api/campanias → <strong>NDv1</strong></div>
+                    </div>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                        Cada endpoint puede estar en <strong>NDv1</strong> (aún no migrado), <strong>NDv2</strong> (migrado), o con <strong>reglas por tipo</strong> (migración parcial).
+                    </p>
                 </div>
-                <div class="card">
-                    <h4>✅ Workers + KEDA</h4>
-                    <p>WeatherWorker y DashboardWorker escalan con Service Bus queue depth. Graceful shutdown implementado.</p>
-                </div>
-                <div class="card">
-                    <h4>✅ Change Feed → SQL</h4>
-                    <p>Sincronización automática CosmosDB → SQL Server. Idempotencia con timestamps. Lease-based scaling.</p>
-                </div>
-                <div class="card">
-                    <h4>✅ Container Jobs (Scheduled)</h4>
-                    <p>WeatherEnqueuer ejecuta cada 5 min vía CRON. Ephemeral execution. Logs en Log Analytics.</p>
-                </div>
-                <div class="card">
-                    <h4>✅ Dashboard Operacional</h4>
-                    <p>React + shadcn/ui. Infrastructure Health API. Gestión de jobs (trigger, stop, schedule). Métricas en tiempo real.</p>
-                </div>
-                <div class="card">
-                    <h4>✅ Managed Identity Everywhere</h4>
-                    <p>Backend, frontend, workers y jobs con MI. RBAC en Bicep. SQL con Active Directory Default. Sin secrets en código.</p>
-                </div>
-                <div class="card">
-                    <h4>✅ Key Vault References</h4>
-                    <p>App Insights connection string, auth client secrets. Auto-seeded en Bicep. RBAC-enabled (no access policies).</p>
-                </div>
-                <div class="card">
-                    <h4>✅ Dead Letter Queue</h4>
-                    <p>DLQ Manager UI: peek, re-queue, discard. Logs con DeadLetterReason. Azure SDK con Moq (sin wrappers).</p>
+
+                <div style="flex: 1; background: #fff3e0; border: 2px solid #ff9800; padding: 1.5rem; border-radius: 15px;">
+                    <h4 style="color: #e65100; margin-bottom: 1rem;">🔗 Union Mode (Agregación)</h4>
+                    <div style="background: white; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.85rem; margin-bottom: 1rem;">
+                        <div style="color: #1976d2;">GET /api/comunicacion</div>
+                        <div style="padding-left: 1rem; color: #666;">fecha ≥ 2026-09-01 → <strong>NDv2</strong></div>
+                        <div style="padding-left: 1rem; color: #666;">fecha &lt; 2026-09-01 → <strong>NDv1</strong></div>
+                        <div style="padding-left: 1rem; margin-top: 0.5rem; color: #2e7d32;">= Gateway <strong>agrega ambos</strong> resultados</div>
+                    </div>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                        Para <strong>consultas</strong>, el Gateway llama a ambos sistemas y une los resultados. OV/PAC ven toda la data (histórico + nuevo).
+                    </p>
                 </div>
             </div>
 
-            <div class="highlight" style="margin-top: 2rem;">
-                <p style="font-size: 1.1rem; margin-bottom: 0;">
-                    <strong>Documentación completa:</strong> <code>README.md</code> (arquitectura), <code>DEPLOYMENT.md</code> (instrucciones paso a paso), <code>LESSONS-LEARNED.md</code> (35+ patrones validados).
+            <div style="background: #e8f5e9; border: 2px solid #4caf50; padding: 1.5rem; border-radius: 15px;">
+                <h4 style="color: #2e7d32; margin-bottom: 1rem;">✅ Ventajas del Patrón</h4>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                    <div style="display: flex; align-items: start;">
+                        <span style="margin-right: 0.5rem; font-size: 1.2rem;">🔧</span>
+                        <span style="font-size: 0.95rem;"><strong>Migración granular:</strong> Se migra de a un tipo por vez (ej: primero "recupero-clave", después "validacion-email").</span>
+                    </div>
+                    <div style="display: flex; align-items: start;">
+                        <span style="margin-right: 0.5rem; font-size: 1.2rem;">🛡️</span>
+                        <span style="font-size: 0.95rem;"><strong>Rollback simple:</strong> Si falla, se cambia la regla de routing sin redeploy ni downtime.</span>
+                    </div>
+                    <div style="display: flex; align-items: start;">
+                        <span style="margin-right: 0.5rem; font-size: 1.2rem;">👁️</span>
+                        <span style="font-size: 0.95rem;"><strong>Data completa:</strong> Las apps siempre ven todos los datos (histórico de NDv1 + nuevo de NDv2).</span>
+                    </div>
+                    <div style="display: flex; align-items: start;">
+                        <span style="margin-right: 0.5rem; font-size: 1.2rem;">🔌</span>
+                        <span style="font-size: 0.95rem;"><strong>Zero-touch para OV/PAC:</strong> Las apps no cambian su integración — siguen llamando la misma URL.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 10px;">
+                <p style="margin: 0; font-size: 0.95rem; color: #666;">
+                    <strong>Post-migración:</strong> Cuando todos los endpoints están en NDv2, el Gateway se elimina y OV/PAC hablan directo con la ND API.
                 </p>
             </div>
         </div>
     </div>
 
-    <!-- Slide 10: Observabilidad -->
-    <div class="slide">
-        <div class="slide-content">
-            <h2>Observabilidad Nativa</h2>
-            
-            <h3 style="text-align: center; margin-bottom: 2rem;">Sabemos en todo momento qué está pasando</h3>
-
-            <div class="grid">
-                <div class="card">
-                    <h4>📊 App Insights</h4>
-                    <p>Telemetría automática en .NET 10. Traces, metrics, dependencies. OpenTelemetry-compatible.</p>
-                </div>
-                <div class="card">
-                    <h4>📝 Log Analytics</h4>
-                    <p>Workspace central. KQL queries documentadas. Service Bus diagnostics enabled (AllMetrics + OperationalLogs).</p>
-                </div>
-                <div class="card">
-                    <h4>🏥 Infrastructure Health</h4>
-                    <p>Endpoint custom que consulta ARM API: status de Container Apps, jobs, workers, SQL, Service Bus, Cosmos.</p>
-                </div>
-                <div class="card">
-                    <h4>⚠️ Dead Letter Monitoring</h4>
-                    <p>Dashboard muestra contadores de DLQ en tiempo real. Alertas configurables. Logs con DeadLetterReason.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Slide 11: Plan de Ejecución -->
+    <!-- Slide 10: Plan de Ejecución -->
     <div class="slide">
         <div class="slide-content">
             <h2>¿Hacia Dónde Vamos?</h2>
@@ -992,6 +982,72 @@
         </div>
     </div>
 
+    <!-- Slide 11: Costos Estimados -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2>Costos Mensuales Estimados</h2>
+            
+            <h3 style="text-align: center; margin-bottom: 1.5rem;">Infraestructura PaaS con costos predecibles</h3>
+
+            <div style="background: #fff3e0; border: 2px solid #ff9800; padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
+                <h4 style="color: #e65100; margin-bottom: 1rem;">💡 Service Bus Premium</h4>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    El mayor costo es <strong>Service Bus Premium</strong> (~$700/mes). Es el tier requerido para <strong>Private Endpoints</strong> (seguridad de red). 
+                    Standard tier (~$50/mes, 5 namespaces por límites de capacidad) no soporta Private Endpoints. La diferencia de precio es por aislamiento de red.
+                </p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem;">
+                <div style="background: #e3f2fd; border: 2px solid #2196f3; padding: 2rem; border-radius: 15px;">
+                    <h4 style="color: #1565c0; margin-bottom: 1.5rem; text-align: center;">📊 Año 1</h4>
+                    <div style="background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 1rem;">
+                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Primeros 4 meses (ramp-up):</p>
+                        <p style="font-size: 1.8rem; font-weight: 600; color: #1565c0; margin: 0;">$1,800/mes</p>
+                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">× 4 meses = <strong>$7,200</strong></p>
+                    </div>
+                    <div style="background: white; padding: 1.5rem; border-radius: 10px;">
+                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Siguientes 8 meses (estable):</p>
+                        <p style="font-size: 1.8rem; font-weight: 600; color: #1565c0; margin: 0;">$2,000/mes</p>
+                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">× 8 meses = <strong>$16,000</strong></p>
+                    </div>
+                    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid #2196f3;">
+                        <p style="font-size: 1.1rem; color: #1565c0; margin: 0; text-align: center;">
+                            <strong>Total Año 1: ~$23,200</strong>
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background: #e8f5e9; border: 2px solid #4caf50; padding: 2rem; border-radius: 15px;">
+                    <h4 style="color: #2e7d32; margin-bottom: 1.5rem; text-align: center;">📈 Años Siguientes</h4>
+                    <div style="background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 1rem;">
+                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">Infraestructura estable:</p>
+                        <p style="font-size: 1.8rem; font-weight: 600; color: #2e7d32; margin: 0;">$2,000/mes</p>
+                        <p style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">× 12 meses</p>
+                    </div>
+                    <div style="background: #c8e6c9; padding: 1.5rem; border-radius: 10px;">
+                        <p style="font-size: 0.9rem; color: #2e7d32; margin-bottom: 0.5rem;">Con todas las verticales:</p>
+                        <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.9rem; color: #555;">
+                            <li>Genéricos + Negocio + Campañas</li>
+                            <li>3 verticales activas</li>
+                            <li>Dashboard + Workers + Jobs</li>
+                        </ul>
+                    </div>
+                    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid #4caf50;">
+                        <p style="font-size: 1.1rem; color: #2e7d32; margin: 0; text-align: center;">
+                            <strong>Total Anual: ~$24,000</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f5f5f5; padding: 1.5rem; border-radius: 10px; margin-top: 2rem; text-align: center;">
+                <p style="margin: 0; font-size: 0.95rem; color: #666;">
+                    <strong>Incluye:</strong> Container Apps · Service Bus Premium · CosmosDB · SQL Serverless · Storage · App Insights · Log Analytics · Key Vault · Managed Identities
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Slide 12: Cierre -->
     <div class="slide">
         <div class="slide-content" style="text-align: center;">
@@ -1015,7 +1071,7 @@
     <!-- Navigation Controls -->
     <div class="nav-controls">
         <button class="nav-btn" id="prevBtn" onclick="changeSlide(-1)">← Anterior</button>
-        <span class="slide-counter" id="slideCounter">1 / 11</span>
+        <span class="slide-counter" id="slideCounter">1 / 12</span>
         <button class="nav-btn" id="nextBtn" onclick="changeSlide(1)">Siguiente →</button>
     </div>
 

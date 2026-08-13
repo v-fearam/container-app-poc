@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { workers, changeFeedStatus } from '../data/mockData'
 import { StatusDot } from '../components/CounterCard'
 import { Activity } from 'lucide-react'
 
 export function HealthPage() {
+  const [fecha, setFecha] = useState('2026-08-11')
   const totalWorkers = workers.length
   const activeWorkers = workers.filter(w => w.replicas > 0).length
   const totalErrores = changeFeedStatus.reduce((sum, cf) => sum + cf.erroresHoy, 0)
@@ -39,9 +41,14 @@ export function HealthPage() {
 
       {/* Change Feed by Vertical */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Activity size={20} style={{ color: 'var(--color-brand-primary)' }} />
-          <h4 className="font-semibold">Change Feed Processors</h4>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Activity size={20} style={{ color: 'var(--color-brand-primary)' }} />
+            <h4 className="font-semibold">Change Feed Processors</h4>
+          </div>
+          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+            className="px-3 py-2 rounded-lg border text-sm cursor-pointer"
+            style={{ borderColor: 'var(--color-neutral-border)' }} />
         </div>
         <div className="space-y-2">
           {changeFeedStatus.map(cf => (

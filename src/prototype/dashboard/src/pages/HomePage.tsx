@@ -40,11 +40,11 @@ export function HomePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <CounterCard label="Creadas" value={totals.creadas} />
           <CounterCard label="Enviadas" value={totals.enviadas} color="var(--color-semantic-info)" />
+          <CounterCard label="Descartadas" value={totals.descartadas} color="var(--color-semantic-warning)" />
           <CounterCard label="Entregadas" value={totals.entregadas} color="var(--color-semantic-success)" />
           <CounterCard label="Rebotadas" value={totals.rebotadas} color="var(--color-semantic-error)" />
           <CounterCard label="Abiertas" value={totals.abiertas} />
           <CounterCard label="Clickeadas" value={totals.clickeadas} />
-          <CounterCard label="Descartadas" value={totals.descartadas} color="var(--color-semantic-warning)" />
         </div>
       </section>
 
@@ -81,10 +81,10 @@ function GenericosTab() {
             <th className="text-left px-4 py-3 font-medium">Canal</th>
             <th className="text-right px-4 py-3 font-medium">Creadas</th>
             <th className="text-right px-4 py-3 font-medium">Enviadas</th>
+            <th className="text-right px-4 py-3 font-medium">Descartadas</th>
             <th className="text-right px-4 py-3 font-medium">Entregadas</th>
             <th className="text-right px-4 py-3 font-medium">Rebotadas</th>
             <th className="text-right px-4 py-3 font-medium">Abiertas</th>
-            <th className="text-right px-4 py-3 font-medium">Descartadas</th>
           </tr>
         </thead>
         <tbody>
@@ -94,10 +94,10 @@ function GenericosTab() {
               <td className="px-4 py-3">{t.canal}</td>
               <td className="px-4 py-3 text-right">{t.counters.creadas.toLocaleString()}</td>
               <td className="px-4 py-3 text-right">{t.counters.enviadas.toLocaleString()}</td>
+              <td className="px-4 py-3 text-right text-amber-500">{t.counters.descartadas.toLocaleString()}</td>
               <td className="px-4 py-3 text-right text-green-600">{t.counters.entregadas.toLocaleString()}</td>
               <td className="px-4 py-3 text-right text-red-500">{t.counters.rebotadas.toLocaleString()}</td>
               <td className="px-4 py-3 text-right">{t.counters.abiertas.toLocaleString()}</td>
-              <td className="px-4 py-3 text-right text-amber-500">{t.counters.descartadas.toLocaleString()}</td>
             </tr>
           ))}
         </tbody>
@@ -134,11 +134,11 @@ function NegocioTab() {
             <div className="grid grid-cols-4 lg:grid-cols-7 gap-3 text-center text-xs">
               <div><p className="font-bold text-lg">{lote.counters.creadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Creadas</p></div>
               <div><p className="font-bold text-lg">{lote.counters.enviadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Enviadas</p></div>
+              <div><p className="font-bold text-lg text-amber-500">{lote.counters.descartadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Descartadas</p></div>
               <div><p className="font-bold text-lg text-green-600">{lote.counters.entregadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Entregadas</p></div>
               <div><p className="font-bold text-lg text-red-500">{lote.counters.rebotadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Rebotadas</p></div>
               <div><p className="font-bold text-lg">{lote.counters.abiertas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Abiertas</p></div>
               <div><p className="font-bold text-lg">{lote.counters.clickeadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Clickeadas</p></div>
-              <div><p className="font-bold text-lg text-amber-500">{lote.counters.descartadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Descartadas</p></div>
             </div>
           </div>
         )
@@ -176,11 +176,11 @@ function CampanasTab() {
             <div className="grid grid-cols-4 lg:grid-cols-7 gap-3 text-center text-xs">
               <div><p className="font-bold">{c.counters.creadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Creadas</p></div>
               <div><p className="font-bold">{c.counters.enviadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Enviadas</p></div>
+              <div><p className="font-bold text-amber-500">{c.counters.descartadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Descartadas</p></div>
               <div><p className="font-bold text-green-600">{c.counters.entregadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Entregadas</p></div>
               <div><p className="font-bold text-red-500">{c.counters.rebotadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Rebotadas</p></div>
               <div><p className="font-bold">{c.counters.abiertas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Abiertas</p></div>
               <div><p className="font-bold">{c.counters.clickeadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Clickeadas</p></div>
-              <div><p className="font-bold text-amber-500">{c.counters.descartadas.toLocaleString()}</p><p style={{ color: 'var(--color-neutral-muted)' }}>Descartadas</p></div>
             </div>
           </div>
         )

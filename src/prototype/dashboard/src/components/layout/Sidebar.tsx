@@ -30,7 +30,6 @@ const navGroups = [
     label: 'Administración',
     items: [
       { to: '/health', icon: HeartPulse, label: 'Health' },
-      { to: '/config', icon: Settings, label: 'Configuración' },
       { to: '/scheduler', icon: Clock, label: 'Scheduler' },
       { to: '/tratamiento-smtp', icon: Shield, label: 'Tratamiento SMTP' },
     ]
