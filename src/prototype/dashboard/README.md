@@ -5,8 +5,8 @@ Datos 100% hardcodeados, sin APIs reales. Navegación completa entre secciones.
 
 ## Stack
 
-- React 18 + TypeScript
-- Vite 6
+- React + TypeScript
+- Vite
 - Tailwind CSS 4
 - React Router 7
 - Lucide React (íconos)
