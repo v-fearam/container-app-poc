@@ -98,15 +98,16 @@ export function Sidebar() {
         <div className="p-3 relative">
           <button onClick={() => setProfileOpen(!profileOpen)}
             className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} w-full cursor-pointer hover:bg-white/5 rounded-md p-1 transition-colors`}
-            title={collapsed ? 'Fernando Aramendi' : undefined}>
+            title={collapsed ? 'Usuario Demo' : undefined}>
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
               <User size={16} className="text-white" />
             </div>
             {!collapsed && (
               <div className="text-left">
-                <p className="text-white text-sm font-medium">Fernando Aramendi</p>
+                <p className="text-white text-sm font-medium">Usuario Demo</p>
                 <p className="text-white/50 text-xs">Admin</p>
               </div>
+            )
             )}
           </button>
 
