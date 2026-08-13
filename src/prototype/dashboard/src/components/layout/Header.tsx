@@ -41,7 +41,7 @@ export function Header() {
         </div>
       </div>
       <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--color-neutral-muted)' }}>
-        <span>Fernando Aramendi</span>
+        <span>Usuario Demo</span>
       </div>
     </header>
   )
