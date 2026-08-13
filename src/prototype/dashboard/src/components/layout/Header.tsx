@@ -5,6 +5,7 @@ const routeNames: Record<string, string> = {
   '/': 'Home',
   '/colas': 'Colas',
   '/dlq': 'DLQ Manager',
+  '/eventos': 'Eventos',
   '/health': 'Health',
   '/config': 'Configuración',
   '/scheduler': 'Scheduler',
