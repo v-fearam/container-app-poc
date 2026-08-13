@@ -77,7 +77,7 @@ export function Sidebar() {
                     className={({ isActive }) =>
                       `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 min-h-[44px] rounded-md text-sm cursor-pointer transition-colors duration-200 ${
                         isActive
-                          ? 'bg-white/10 border-l-3 border-[#50FFD4] text-white'
+                          ? 'bg-white/10 border-l-[3px] border-[#50FFD4] text-white'
                           : 'text-white/70 hover:bg-white/5 hover:text-white'
                       }`
                     }
