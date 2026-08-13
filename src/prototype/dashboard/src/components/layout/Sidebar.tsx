@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ListOrdered, AlertTriangle,
   Mail, Building2, Megaphone, Shield,
-  HeartPulse, Clock, User, LogOut, ChevronLeft, ChevronRight, Download
+  HeartPulse, Clock, Settings, User, LogOut, ChevronLeft, ChevronRight, Download
 } from 'lucide-react'
 import { useSidebar } from '../../context/SidebarContext'
 import { CamuzziLogo } from '../CamuzziLogo'
