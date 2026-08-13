@@ -41,25 +41,60 @@ function parseCronToHuman(cron: string): string {
 }
 
 function calculateNextExecutions(cron: string): string[] {
-  const parts = cron.split(' ')
+  const parts = cron.trim().split(/\s+/)
   if (parts.length !== 5) return []
 
+  const [min, hour] = parts
   const now = new Date()
   const results: string[] = []
-  const [min, hour] = parts
+  const fmt = (d: Date) => d.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
 
-  for (let i = 0; i < 5; i++) {
+  if (min.startsWith('*/') && hour === '*') {
+    const step = Number(min.slice(2))
+    if (!Number.isFinite(step) || step <= 0) return []
+
+    const next = new Date(now)
+    next.setSeconds(0, 0)
+    const mod = next.getMinutes() % step
+    if (mod !== 0) next.setMinutes(next.getMinutes() + (step - mod))
+    if (next <= now) next.setMinutes(next.getMinutes() + step)
+
+    for (let i = 0; i < 3; i++) {
+      results.push(fmt(new Date(next)))
+      next.setMinutes(next.getMinutes() + step)
+    }
+    return results
+  }
+
+  if (hour === '*' && min !== '*') {
+    const minute = Number(min)
+    if (!Number.isFinite(minute) || minute < 0 || minute > 59) return []
+
+    const next = new Date(now)
+    next.setSeconds(0, 0)
+    next.setMinutes(minute)
+    if (next <= now) next.setHours(next.getHours() + 1)
+
+    for (let i = 0; i < 3; i++) {
+      results.push(fmt(new Date(next)))
+      next.setHours(next.getHours() + 1)
+    }
+    return results
+  }
+
+  const minute = min === '*' ? 0 : Number(min)
+  const hourNum = hour === '*' ? now.getHours() : Number(hour)
+  if (!Number.isFinite(minute) || !Number.isFinite(hourNum)) return []
+
+  for (let i = 0; i < 7 && results.length < 3; i++) {
     const next = new Date(now)
     next.setDate(next.getDate() + i)
-    if (hour !== '*') next.setHours(parseInt(hour))
-    if (min !== '*' && !min.startsWith('*/')) next.setMinutes(parseInt(min))
-    else next.setMinutes(0)
-    next.setSeconds(0)
-    if (next > now) {
-      results.push(next.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }))
-    }
-    if (results.length >= 3) break
+    next.setHours(hourNum)
+    next.setMinutes(minute)
+    next.setSeconds(0, 0)
+    if (next > now) results.push(fmt(next))
   }
+
   return results
 }
 
